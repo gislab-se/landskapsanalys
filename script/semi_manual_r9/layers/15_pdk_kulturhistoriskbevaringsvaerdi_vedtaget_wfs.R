@@ -1,0 +1,7 @@
+args_full <- commandArgs(trailingOnly = FALSE)
+file_arg <- grep('^--file=', args_full, value = TRUE)
+script_file <- if (length(file_arg) > 0) normalizePath(sub('^--file=', '', file_arg[1]), winslash='/', mustWork=TRUE) else normalizePath('.', winslash='/', mustWork=FALSE)
+script_dir <- dirname(script_file)
+Sys.setenv(SEMI_MANUAL_R9_HOME = normalizePath(file.path(script_dir, '..'), winslash='/', mustWork=TRUE))
+source(file.path(script_dir, '..', 'lib', 'manual_layer_aggregation.R'))
+run_single_layer(layer_index = 15)

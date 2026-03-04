@@ -1,0 +1,15 @@
+# Heavy geodata is excluded from git by default.
+# We can add selected H3 hex outputs later when needed.
+data/
+
+# R session artifacts
+.Rhistory
+.RData
+.Rproj.user/
+
+# Python artifacts
+__pycache__/
+*.pyc
+
+# VS Code local workspace artifacts
+.vscode/*.log
