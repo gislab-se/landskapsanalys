@@ -1,0 +1,75 @@
+---
+title: "Landskapsanalys R9 - Dokumentation lager 01"
+subtitle: "FastboendeBefolkningMapInfo: lager in, aggregering, lager ut"
+format:
+  html:
+    toc: true
+    number-sections: true
+    embed-resources: true
+lang: sv
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+## Syfte
+
+Detta dokument visar status for lager 01 i den semi-manuella R9-processen:
+
+- **Lager in**: punktdata med fastboende befolkning.
+- **Aggregering**: summering per hexagon (`h3.bornholm_r9`).
+- **Lager ut**: analyslager pa hexniva (`fastboendebefolkningmapinfo_count`).
+
+## Process (kort)
+
+1. Kallager lases in fran geodatakatalogen.
+2. Geometrier kvalitetssakras (`st_make_valid`, CRS-anpassning till hex-grid).
+3. Punkter raknas per hexagon med `st_intersects`.
+4. Resultat skrivs till CSV:  
+   `data/interim/geocontext_r9/layers/01_fastboendebefolkningmapinfo.csv`.
+
+## Karta: lager in + aggregerat lager ut
+
+```{r}
+repo <- normalizePath(file.path(getwd(), "..", "..", ".."), winslash = "/", mustWork = TRUE)
+```
+
+```{r}
+manual_png <- file.path(repo, "docs", "geocontext", "figures", "layer01_overview.png")
+auto_png <- file.path(repo, "docs", "geocontext", "layer01_fastboende_in_agg_out.png")
+
+if (file.exists(manual_png)) {
+  knitr::include_graphics(manual_png)
+} else if (file.exists(auto_png)) {
+  knitr::include_graphics(auto_png)
+} else {
+  cat("Ingen PNG hittades. Spara en karta som: docs/geocontext/figures/layer01_overview.png")
+}
+```
+
+## Resultat (kort sammanfattning)
+
+```{r}
+out <- read.csv(
+  file.path(repo, "data", "interim", "geocontext_r9", "layers", "01_fastboendebefolkningmapinfo.csv"),
+  stringsAsFactors = FALSE
+)
+value_col <- "fastboendebefolkningmapinfo_count"
+
+summary_df <- data.frame(
+  indikator = c("Antal hexagoner", "Antal hexagoner med > 0", "Max varde i hexagon"),
+  varde = c(
+    nrow(out),
+    sum(out[[value_col]] > 0, na.rm = TRUE),
+    max(out[[value_col]], na.rm = TRUE)
+  ),
+  stringsAsFactors = FALSE
+)
+
+knitr::kable(summary_df, align = c("l", "r"))
+```
+
+## Nästa steg
+
+Lagret ar nu klart som input till vidare analys och kan senare slas samman med ovriga lager i R9-pipelinen.

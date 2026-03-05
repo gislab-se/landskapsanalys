@@ -8,12 +8,52 @@ sf::sf_use_s2(FALSE)
 
 `%||%` <- function(a, b) if (!is.null(a) && nzchar(a)) a else b
 
-semi_manual_home <- function() {
-  h <- Sys.getenv("SEMI_MANUAL_R9_HOME", "")
-  if (nzchar(h) && dir.exists(h)) {
-    return(normalizePath(h, winslash = "/", mustWork = TRUE))
+is_truthy <- function(x) {
+  tolower(trimws(x %||% "")) %in% c("1", "true", "yes", "y", "on")
+}
+
+format_crs <- function(crs_obj) {
+  if (is.null(crs_obj)) {
+    return("NA")
   }
-  normalizePath("script/semi_manual_r9", winslash = "/", mustWork = FALSE)
+  epsg <- crs_obj$epsg
+  if (!is.null(epsg) && !is.na(epsg)) {
+    return(paste0("EPSG:", epsg))
+  }
+  input <- crs_obj$input %||% ""
+  if (nzchar(input)) {
+    return(input)
+  }
+  "NA"
+}
+
+semi_manual_home <- function() {
+  env_home <- Sys.getenv("SEMI_MANUAL_R9_HOME", "")
+  candidates <- unique(c(
+    env_home,
+    "script/semi_manual_r9",
+    "semi_manual_r9",
+    "."
+  ))
+  candidates <- candidates[nzchar(candidates)]
+
+  for (cand in candidates) {
+    if (!dir.exists(cand)) {
+      next
+    }
+    if (
+      file.exists(file.path(cand, "config", "bornholm_r9_geocontext_layers.csv")) &&
+      file.exists(file.path(cand, "lib", "manual_layer_aggregation.R"))
+    ) {
+      return(normalizePath(cand, winslash = "/", mustWork = TRUE))
+    }
+  }
+
+  stop(
+    "Could not locate semi_manual_r9 home.\n",
+    "Tried: ", paste(normalizePath(candidates, winslash = "/", mustWork = FALSE), collapse = ", "), "\n",
+    "Set SEMI_MANUAL_R9_HOME to the script/semi_manual_r9 folder."
+  )
 }
 
 repo_root <- function(home) {
@@ -97,9 +137,119 @@ load_aggregator <- function(home) {
   source(agg_path)
 }
 
+prepare_source_layer <- function(layer_sf, target_crs) {
+  layer_sf <- sf::st_zm(layer_sf, drop = TRUE, what = "ZM")
+  layer_sf <- sf::st_make_valid(layer_sf)
+  sf::st_transform(layer_sf, target_crs)
+}
+
+print_layer_diagnostics <- function(source_layer) {
+  attr_df <- sf::st_drop_geometry(source_layer)
+
+  message("Column names (", ncol(source_layer), "):")
+  for (nm in names(source_layer)) {
+    message("  - ", nm)
+  }
+
+  message("Basic summary:")
+  message("  Rows: ", nrow(source_layer))
+  message("  Attribute columns: ", ncol(attr_df))
+  message("  CRS: ", format_crs(sf::st_crs(source_layer)))
+
+  bbox <- sf::st_bbox(source_layer)
+  bbox_vals <- as.numeric(bbox)
+  if (all(is.finite(bbox_vals))) {
+    message(
+      sprintf(
+        "  BBOX: xmin=%.2f ymin=%.2f xmax=%.2f ymax=%.2f",
+        bbox_vals[1], bbox_vals[2], bbox_vals[3], bbox_vals[4]
+      )
+    )
+  }
+
+  geom_types <- sort(table(as.character(sf::st_geometry_type(source_layer, by_geometry = TRUE))), decreasing = TRUE)
+  if (length(geom_types) == 0) {
+    message("  Geometry types: none")
+  } else {
+    pairs <- paste0(names(geom_types), "=", as.integer(geom_types))
+    message("  Geometry types: ", paste(pairs, collapse = ", "))
+  }
+
+  if (ncol(attr_df) > 0) {
+    message("Attribute summary:")
+    print(summary(attr_df))
+  } else {
+    message("No non-geometry attributes to summarize.")
+  }
+}
+
+show_pre_aggregation_map <- function(hex, source_layer, display_name) {
+  if (!requireNamespace("mapview", quietly = TRUE)) {
+    warning("SHOW_MAPVIEW is enabled, but package 'mapview' is not installed.")
+    return(invisible(NULL))
+  }
+
+  message("Opening pre-aggregation mapview...")
+  pre_map <- mapview::mapview(
+    hex,
+    alpha.regions = 0,
+    color = "grey70",
+    lwd = 0.5,
+    layer.name = "Hex grid (R9)"
+  ) + mapview::mapview(
+    source_layer,
+    layer.name = paste0("Source: ", display_name)
+  )
+  print(pre_map)
+}
+
+show_post_aggregation_map <- function(hex, out, source_layer, display_name) {
+  if (!requireNamespace("mapview", quietly = TRUE)) {
+    warning("SHOW_MAPVIEW is enabled, but package 'mapview' is not installed.")
+    return(invisible(NULL))
+  }
+
+  value_cols <- setdiff(names(out), "hex_id")
+  value_col <- if (length(value_cols) > 0) value_cols[[1]] else NA_character_
+  output_alpha <- suppressWarnings(as.numeric(Sys.getenv("MAPVIEW_OUTPUT_ALPHA", "0.35")))
+  if (is.na(output_alpha) || output_alpha <= 0 || output_alpha > 1) {
+    output_alpha <- 0.35
+  }
+
+  message("Opening post-aggregation mapview...")
+  hex_after <- dplyr::left_join(hex, out, by = "hex_id")
+  source_overlay <- mapview::mapview(
+    source_layer,
+    layer.name = paste0("Source: ", display_name)
+  )
+
+  if (!is.na(value_col) && nzchar(value_col)) {
+    after_map <- mapview::mapview(
+      hex_after,
+      zcol = value_col,
+      alpha.regions = output_alpha,
+      layer.name = paste0("Aggregated: ", value_col)
+    ) + source_overlay
+  } else {
+    after_map <- mapview::mapview(
+      hex_after,
+      alpha.regions = output_alpha,
+      layer.name = "Aggregated hex output"
+    ) + source_overlay
+  }
+
+  print(after_map)
+}
+
 run_single_layer <- function(layer_index) {
   home <- semi_manual_home()
   repo <- repo_root(home)
+
+  show_mapview <- is_truthy(Sys.getenv("SHOW_MAPVIEW", "true"))
+  force_mapview <- is_truthy(Sys.getenv("FORCE_MAPVIEW", "false"))
+  do_mapview <- show_mapview && (interactive() || force_mapview)
+  show_layer_summary <- is_truthy(Sys.getenv("SHOW_LAYER_SUMMARY", if (interactive()) "true" else "false"))
+  preview_only <- is_truthy(Sys.getenv("LAYER_PREVIEW_ONLY", "false"))
 
   layer_csv <- Sys.getenv(
     "GEOCONTEXT_LAYER_CSV",
@@ -134,7 +284,41 @@ run_single_layer <- function(layer_index) {
   load_aggregator(home)
   hex <- load_hex_grid(hex_source = hex_source, schema = schema, hex_table = hex_table, home = home, hex_file = hex_file, hex_layer = hex_layer)
 
+  source_layer <- NULL
+  if (show_layer_summary || do_mapview || preview_only) {
+    source_layer <- read_layer_sf(layer_row$source_path, layer_row$layer_name, quiet = TRUE)
+    source_layer <- prepare_source_layer(source_layer, sf::st_crs(hex))
+
+    if (show_layer_summary) {
+      print_layer_diagnostics(source_layer)
+    }
+
+    if (do_mapview) {
+      show_pre_aggregation_map(hex, source_layer, layer_row$display_name)
+    }
+  }
+
+  if (preview_only) {
+    message("LAYER_PREVIEW_ONLY=true -> skipping aggregation and CSV/log write for this layer.")
+    return(invisible(
+      list(
+        status = "preview_only",
+        layer_index = layer_index,
+        layer_key = layer_row$layer_key,
+        display_name = layer_row$display_name
+      )
+    ))
+  }
+
   out <- aggregate_layer_to_hex(hex, layer_row)
+
+  if (do_mapview) {
+    if (is.null(source_layer)) {
+      source_layer <- read_layer_sf(layer_row$source_path, layer_row$layer_name, quiet = TRUE)
+      source_layer <- prepare_source_layer(source_layer, sf::st_crs(hex))
+    }
+    show_post_aggregation_map(hex, out, source_layer, layer_row$display_name)
+  }
 
   file_base <- sprintf("%02d_%s", layer_index, layer_row$layer_key)
   out_csv <- file.path(out_dir, paste0(file_base, ".csv"))
@@ -162,4 +346,13 @@ run_single_layer <- function(layer_index) {
   write.csv(log_df, log_path, row.names = FALSE, na = "")
 
   message("Wrote: ", out_csv)
+
+  invisible(
+    list(
+      status = "ok",
+      layer_index = layer_index,
+      layer_key = layer_row$layer_key,
+      output_csv = out_csv
+    )
+  )
 }

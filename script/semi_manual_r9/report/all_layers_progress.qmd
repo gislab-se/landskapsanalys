@@ -1,0 +1,316 @@
+---
+title: "Landskapsanalys R9 - Sammanstallning av alla lager"
+subtitle: "Kapitel per lagerutdata (byggs pa efterhand)"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    number-sections: true
+    embed-resources: true
+lang: sv
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+## Syfte
+
+Rapporten samlar lager som ar klara i R9-flodet. Varje klart lager far:
+
+- en kort text om vad som gjorts,
+- en karta (PNG),
+- en lokal interaktiv kontrollkarta (HTML, lager in + lager ut),
+- en kort tabell med nyckeltal.
+
+Nar lager 02, 03 osv ar klara och far en bild, dyker de upp automatiskt i rapporten.
+
+```{r, results='asis'}
+repo <- normalizePath(file.path(getwd(), "..", "..", ".."), winslash = "/", mustWork = TRUE)
+layer_csv <- file.path(repo, "script", "semi_manual_r9", "config", "bornholm_r9_geocontext_layers.csv")
+priority_csv <- file.path(repo, "script", "semi_manual_r9", "config", "bornholm_r9_priority_order_proposed.csv")
+run_order_csv <- file.path(repo, "script", "semi_manual_r9", "config", "bornholm_r9_run_order.csv")
+layer_out_dir <- file.path(repo, "data", "interim", "geocontext_r9", "layers")
+figure_dir <- file.path(repo, "docs", "geocontext", "figures")
+review_dir <- file.path(repo, "docs", "geocontext", "review")
+
+layers <- read.csv(layer_csv, stringsAsFactors = FALSE)
+layers$include <- as.logical(layers$include)
+layers <- layers[layers$include, , drop = FALSE]
+layers$layer_index <- seq_len(nrow(layers))
+
+if (file.exists(priority_csv)) {
+  pr <- read.csv(priority_csv, stringsAsFactors = FALSE)
+  pr$proposed_order <- as.integer(pr$proposed_order)
+  layers$run_order <- pr$proposed_order[match(layers$layer_key, pr$layer_key)]
+} else {
+  layers$run_order <- layers$layer_index
+}
+layers$run_order[is.na(layers$run_order)] <- layers$layer_index[is.na(layers$run_order)]
+
+layers$out_csv <- file.path(
+  layer_out_dir,
+  sprintf("%02d_%s.csv", layers$layer_index, layers$layer_key)
+)
+layers$has_output <- file.exists(layers$out_csv)
+
+completed <- layers[layers$has_output, , drop = FALSE]
+pending <- layers[!layers$has_output, , drop = FALSE]
+completed <- completed[order(completed$run_order), , drop = FALSE]
+pending <- pending[order(pending$run_order), , drop = FALSE]
+
+cat("Klart just nu: ", nrow(completed), " av ", nrow(layers), " lager.\n\n", sep = "")
+if (nrow(pending) > 0) {
+  cat("Nasta steg som saknar utdata: ", paste(head(sprintf("%02d", pending$run_order), 8), collapse = ", "), "\n\n", sep = "")
+}
+```
+
+## Aktiv korordning
+
+```{r, results='asis'}
+if (file.exists(run_order_csv)) {
+  ro <- read.csv(run_order_csv, stringsAsFactors = FALSE)
+  if (file.exists(priority_csv)) {
+    pr <- read.csv(priority_csv, stringsAsFactors = FALSE)
+    ro <- merge(
+      ro,
+      pr[, c("layer_key", "theme", "bang_reason")],
+      by = "layer_key",
+      all.x = TRUE,
+      sort = FALSE
+    )
+    ro <- ro[order(ro$run_order), , drop = FALSE]
+  }
+  show_cols <- c("run_order", "original_layer_index", "display_name", "theme", "bang_reason")
+  show_cols <- intersect(show_cols, names(ro))
+  cat(knitr::kable(ro[show_cols], format = "html", align = c("r", "r", "l", "l", "l")))
+} else {
+  cat("_Ingen korordningsfil hittades._")
+}
+```
+
+## Forslag: Saknade lager att overvaga
+
+```{r, results='asis'}
+missing_layers <- data.frame(
+  forslag = c(
+    "Jordbruksmark / markslag",
+    "Hojklassig jordbruksjord (bonitet / jordklass)",
+    "Dricksvattenintressen / grundvattenskydd",
+    "Oversvamningsrisk / lavpunkter",
+    "Lutning + exponering (DEM-derivat)",
+    "Rekreation och friluftsliv (leder, naturomraden med besokstryck)",
+    "Planlagd markanvandning (kommuneplan, lokalplan)",
+    "Arkeologiska skyddsomraden / fornlammningar"
+  ),
+  varfor = c(
+    "Baslager for markanvandningskonflikter och landskapsanalys",
+    "Visar var marken har hog produktions- och bevarandevikt",
+    "Kritisk restriktion i fysisk planering",
+    "Viktig klimat- och robusthetsdimension",
+    "Styr synlighet, erosion, tillganglighet och teknisk byggbarhet",
+    "Ger socialt bruksvarde i landskapet",
+    "Kopplar analysen till faktisk tillstandsproning",
+    "Fangar kulturarvsvarden som ofta styr lokalisering"
+  ),
+  prioritet = c("Hog", "Hog", "Hog", "Hog", "Medel", "Medel", "Hog", "Medel"),
+  stringsAsFactors = FALSE
+)
+cat(knitr::kable(missing_layers, format = "html", align = c("l", "l", "c")))
+```
+
+```{r, results='asis'}
+first_existing <- function(paths) {
+  hit <- paths[file.exists(paths)]
+  if (length(hit) == 0) return(NA_character_)
+  hit[1]
+}
+
+render_short_table <- function(out_csv) {
+  out <- read.csv(out_csv, stringsAsFactors = FALSE)
+  value_cols <- setdiff(names(out), "hex_id")
+  if (length(value_cols) == 0) {
+    tbl <- data.frame(
+      indikator = c("Antal hexagoner", "Primar utkolumn"),
+      varde = c(nrow(out), "Saknas"),
+      stringsAsFactors = FALSE
+    )
+    cat(knitr::kable(tbl, format = "html", align = c("l", "r")))
+    return(invisible(NULL))
+  }
+
+  select_primary_value_col <- function(out_df) {
+    value_cols <- setdiff(names(out_df), "hex_id")
+    if (length(value_cols) == 0) return(NA_character_)
+
+    preferred_patterns <- c(
+      "_length_m_total$",
+      "_area_share$",
+      "_count$",
+      "_sum$",
+      "_length_m($|_)"
+    )
+    for (pat in preferred_patterns) {
+      hit <- value_cols[grepl(pat, value_cols)]
+      if (length(hit) > 0) return(hit[1])
+    }
+
+    numeric_cols <- value_cols[vapply(out_df[value_cols], is.numeric, logical(1))]
+    if (length(numeric_cols) > 0) {
+      nonzero_n <- vapply(numeric_cols, function(nm) {
+        v <- suppressWarnings(as.numeric(out_df[[nm]]))
+        sum(!is.na(v) & v > 0)
+      }, numeric(1))
+      return(numeric_cols[which.max(nonzero_n)])
+    }
+
+    value_cols[1]
+  }
+
+  primary_col <- select_primary_value_col(out)
+  val <- suppressWarnings(as.numeric(out[[primary_col]]))
+  tbl <- data.frame(
+    indikator = c("Antal hexagoner", "Primar utkolumn", "Hexagoner med > 0", "Maxvarde"),
+    varde = c(
+      nrow(out),
+      primary_col,
+      sum(!is.na(val) & val > 0),
+      if (all(is.na(val))) NA_real_ else max(val, na.rm = TRUE)
+    ),
+    stringsAsFactors = FALSE
+  )
+  cat(knitr::kable(tbl, format = "html", align = c("l", "r")))
+}
+
+infer_geometry_and_treatment <- function(out_csv) {
+  out <- read.csv(out_csv, stringsAsFactors = FALSE)
+  value_cols <- setdiff(names(out), "hex_id")
+  if (length(value_cols) == 0) {
+    return(list(geometry = "Okand", treatment = "Ingen vardekolumn hittad i utdata."))
+  }
+  if (any(grepl("_length_m($|_)", value_cols))) {
+    return(list(
+      geometry = "Linje",
+      treatment = "Aggregering med st_intersection i metrisk CRS och summerad langd (meter) per hexagon, per vagklass och total."
+    ))
+  }
+  if (any(grepl("_area_share$", value_cols))) {
+    return(list(
+      geometry = "Polygon",
+      treatment = "Aggregering med st_intersection i metrisk CRS och areaandel per hexagon."
+    ))
+  }
+  if (any(grepl("_count$", value_cols)) || any(grepl("_sum$", value_cols))) {
+    return(list(
+      geometry = "Punkt",
+      treatment = "Aggregering med st_intersects: antal objekt per hexagon (och ev. numerisk summa i *_sum)."
+    ))
+  }
+  list(
+    geometry = "Auto",
+    treatment = paste0("Automatisk metod enligt aggregationsmotorn (primar utkolumn: ", primary_col, ").")
+  )
+}
+
+as_file_url <- function(path) {
+  norm <- normalizePath(path, winslash = "/", mustWork = TRUE)
+  paste0("file:///", norm)
+}
+
+if (nrow(completed) == 0) {
+  cat("## Inga klara lager annu\n\nKop minst ett lager och rendera om rapporten.\n")
+}
+
+for (i in seq_len(nrow(completed))) {
+  row <- completed[i, , drop = FALSE]
+  idx <- row$layer_index
+  step_no <- row$run_order
+  key <- row$layer_key
+  title <- row$display_name
+
+  cat("\n\n## Steg ", sprintf("%02d", step_no), ": ", title, "\n\n", sep = "")
+  cat("### Kort text\n\n")
+  cat(
+    "Lager in lastes in och kvalitetssakrades, aggregerades till R9-hexagoner, ",
+    "och skrevs till utdata for vidare analys.\n\n",
+    sep = ""
+  )
+  cat("Originalt lagerindex: `", idx, "`\n\n", sep = "")
+  cat("Script: `script/semi_manual_r9/layers/", sprintf("%02d", step_no), "_*.R`\n\n", sep = "")
+  gt <- infer_geometry_and_treatment(row$out_csv)
+  cat("Geometrityp: `", gt$geometry, "`\n\n", sep = "")
+  cat("Aggregation: ", gt$treatment, "\n\n", sep = "")
+  cat("Lager in: `", row$source_path, "`\n\n", sep = "")
+  cat("Lager ut: `", row$out_csv, "`\n\n", sep = "")
+  review_html <- file.path(review_dir, sprintf("layer%02d_review.html", step_no))
+  if (file.exists(review_html)) {
+    cat(
+      "Lokal QA (interaktiv HTML, endast intern): [Oppna karta](",
+      as_file_url(review_html),
+      ")\n\n",
+      sep = ""
+    )
+  } else {
+    cat("Lokal QA (interaktiv HTML, endast intern): _saknas_\n\n")
+  }
+
+  fig_candidates <- c(
+    file.path(figure_dir, sprintf("%02d_%s.png", idx, key)),
+    file.path(figure_dir, sprintf("layer%02d_overview.png", step_no)),
+    file.path(repo, "docs", "geocontext", sprintf("%02d_%s.png", idx, key)),
+    if (idx == 1) file.path(repo, "docs", "geocontext", "layer01_fastboende_in_agg_out.png") else NA_character_,
+    if (idx == 2) file.path(repo, "docs", "geocontext", "figures", "layer29_overview.png") else NA_character_,
+    if (idx == 2) file.path(repo, "docs", "geocontext", "figures", "layer02_overview.png") else NA_character_
+  )
+  fig_path <- first_existing(na.omit(fig_candidates))
+
+  cat("### Karta\n\n")
+  if (!is.na(fig_path)) {
+    img_uri <- knitr::image_uri(fig_path)
+    cat("![](", img_uri, ")\n\n", sep = "")
+    cat("\n\n")
+  } else {
+    cat("_Ingen bild hittad for detta lager._\n\n")
+  }
+
+  if (step_no == 28) {
+    roads_png_medium <- file.path(figure_dir, "layer28_roads_medium_overview.png")
+    roads_png_large <- file.path(figure_dir, "layer28_roads_large_overview.png")
+    roads_html <- file.path(review_dir, "layer28_roads_medium_large_review.html")
+
+    cat("### Vagar: Mellan och Stora\n\n")
+    cat("Separat redovisning av vagklass `medium` och `large` med en egen QA-karta.\n\n")
+
+    if (file.exists(roads_png_medium)) {
+      cat("#### Mellan vagar\n\n")
+      cat("![](", knitr::image_uri(roads_png_medium), ")\n\n", sep = "")
+    } else {
+      cat("#### Mellan vagar\n\n")
+      cat("_Ingen separat bild hittad for medium-vagar._\n\n")
+    }
+
+    if (file.exists(roads_png_large)) {
+      cat("#### Stora vagar\n\n")
+      cat("![](", knitr::image_uri(roads_png_large), ")\n\n", sep = "")
+    } else {
+      cat("#### Stora vagar\n\n")
+      cat("_Ingen separat bild hittad for large-vagar._\n\n")
+    }
+
+    if (file.exists(roads_html)) {
+      cat(
+        "Lokal QA (interaktiv HTML med 2 indata + 2 utdata): [Oppna karta](",
+        as_file_url(roads_html),
+        ")\n\n",
+        sep = ""
+      )
+    } else {
+      cat("Lokal QA (interaktiv HTML med 2 indata + 2 utdata): _saknas_\n\n")
+    }
+  }
+
+  cat("### Kort tabell\n\n")
+  render_short_table(row$out_csv)
+  cat("\n\n")
+}
+```
