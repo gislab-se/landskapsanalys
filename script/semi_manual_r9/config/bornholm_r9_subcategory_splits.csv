@@ -1,0 +1,3 @@
+active,parent_run_order,parent_layer_key,parent_display_name,child_order,child_key,child_display_name,split_field,split_value,metric_family,render_under_parent,notes
+TRUE,28,roads_simplified_gd_v_vej_road_merged_bol_33,Roads Simplified,1,roads_medium,Roads Simplified - Mellan vagar,vejkategor,medium,length_m,TRUE,Existing special case to keep under original layer
+TRUE,28,roads_simplified_gd_v_vej_road_merged_bol_33,Roads Simplified,2,roads_large,Roads Simplified - Stora vagar,vejkategor,large,length_m,TRUE,Existing special case to keep under original layer

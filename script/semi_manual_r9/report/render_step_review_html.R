@@ -9,8 +9,12 @@ if (!requireNamespace("mapview", quietly = TRUE) || !requireNamespace("htmlwidge
 
 args <- commandArgs(trailingOnly = TRUE)
 step_no <- suppressWarnings(as.integer(if (length(args) >= 1) args[1] else Sys.getenv("STEP_RUN_ORDER", "")))
-if (is.na(step_no) || step_no < 1 || step_no > 37) {
-  stop("Provide run step number 1..37 as argument, e.g. Rscript .../render_step_review_html.R 01")
+run_order_guard_csv <- file.path("script", "semi_manual_r9", "config", "bornholm_r9_run_order.csv")
+run_order_guard <- if (file.exists(run_order_guard_csv)) read.csv(run_order_guard_csv, stringsAsFactors = FALSE) else data.frame(run_order = 44)
+max_step <- suppressWarnings(max(as.integer(run_order_guard$run_order), na.rm = TRUE))
+if (!is.finite(max_step)) max_step <- 44
+if (is.na(step_no) || step_no < 1 || step_no > max_step) {
+  stop(sprintf("Provide run step number 1..%d as argument, e.g. Rscript .../render_step_review_html.R 01", max_step))
 }
 output_alpha <- suppressWarnings(as.numeric(Sys.getenv("MAPVIEW_OUTPUT_ALPHA", "0.35")))
 if (is.na(output_alpha) || output_alpha <= 0 || output_alpha > 1) {
@@ -28,7 +32,8 @@ choose_value_col <- function(out_df) {
     "_area_share$",
     "_count$",
     "_sum$",
-    "_length_m($|_)"
+    "_length_m($|_)",
+    "_m$"
   )
   for (pat in preferred_patterns) {
     hit <- value_cols[grepl(pat, value_cols)]
@@ -257,6 +262,17 @@ if (is.na(value_col) || !nzchar(value_col)) {
       col.regions = out$palette,
       alpha.regions = output_alpha,
       layer.name = paste0("Output: ", value_col, " (classed)")
+    )
+  } else if (grepl("_m$", value_col)) {
+    vals <- suppressWarnings(as.numeric(hex_after[[value_col]]))
+    out <- classify_length_jenks(vals)
+    hex_after$review_class <- out$class
+    output_map <- mapview::mapview(
+      hex_after,
+      zcol = "review_class",
+      col.regions = out$palette,
+      alpha.regions = max(output_alpha, 0.55),
+      layer.name = paste0("Output: ", value_col, " (classed hojdintervall)")
     )
   } else {
     output_map <- mapview::mapview(

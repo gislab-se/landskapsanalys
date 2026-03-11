@@ -149,6 +149,69 @@ aggregate_layer_to_hex <- function(hex_sf, layer_row, metric_crs = 25832) {
   is_poly <- any(grepl("POLYGON", gtypes))
 
   key <- layer_row$layer_key
+  agg_type <- tolower(trimws(ifelse(is.na(layer_row$aggregation_type), "auto", layer_row$aggregation_type)))
+  value_field <- ifelse(is.na(layer_row$value_field), "", layer_row$value_field)
+
+  if (agg_type == "point_max") {
+    if (!(nzchar(value_field) && value_field %in% names(lyr))) {
+      stop("aggregation_type=point_max requires value_field in layer: ", layer_row$display_name)
+    }
+    vals <- suppressWarnings(as.numeric(lyr[[value_field]]))
+    hits <- sf::st_intersects(hex_sf, lyr)
+    max_vals <- vapply(hits, function(idx) {
+      if (length(idx) == 0) return(0)
+      x <- vals[idx]
+      x <- x[is.finite(x)]
+      if (length(x) == 0) return(0)
+      max(x, na.rm = TRUE)
+    }, numeric(1))
+    return(
+      hex_sf %>%
+        st_drop_geometry() %>%
+        transmute(hex_id, !!paste0(key, "_m") := max_vals)
+    )
+  }
+
+  if (agg_type == "line_relief") {
+    if (!(nzchar(value_field) && value_field %in% names(lyr))) {
+      stop("aggregation_type=line_relief requires value_field in layer: ", layer_row$display_name)
+    }
+    vals <- suppressWarnings(as.numeric(lyr[[value_field]]))
+    hits <- sf::st_intersects(hex_sf, lyr)
+    relief_vals <- vapply(hits, function(idx) {
+      if (length(idx) == 0) return(0)
+      x <- vals[idx]
+      x <- x[is.finite(x)]
+      if (length(x) == 0) return(0)
+      max(x, na.rm = TRUE) - min(x, na.rm = TRUE)
+    }, numeric(1))
+    return(
+      hex_sf %>%
+        st_drop_geometry() %>%
+        transmute(hex_id, !!paste0(key, "_m") := relief_vals)
+    )
+  }
+
+
+  if (agg_type == "line_max") {
+    if (!(nzchar(value_field) && value_field %in% names(lyr))) {
+      stop("aggregation_type=line_max requires value_field in layer: ", layer_row$display_name)
+    }
+    vals <- suppressWarnings(as.numeric(lyr[[value_field]]))
+    hits <- sf::st_intersects(hex_sf, lyr)
+    max_vals <- vapply(hits, function(idx) {
+      if (length(idx) == 0) return(0)
+      x <- vals[idx]
+      x <- x[is.finite(x)]
+      if (length(x) == 0) return(0)
+      max(x, na.rm = TRUE)
+    }, numeric(1))
+    return(
+      hex_sf %>%
+        st_drop_geometry() %>%
+        transmute(hex_id, !!paste0(key, "_m") := max_vals)
+    )
+  }
 
   if (is_point) {
     hits <- sf::st_intersects(hex_sf, lyr)

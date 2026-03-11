@@ -7,9 +7,11 @@ format:
     toc-depth: 2
     number-sections: true
     embed-resources: true
+    code-fold: true
+    code-summary: "Visa kod"
 lang: sv
 execute:
-  echo: false
+  echo: true
   warning: false
   message: false
 ---
@@ -48,6 +50,10 @@ if (file.exists(priority_csv)) {
 }
 layers$run_order[is.na(layers$run_order)] <- layers$layer_index[is.na(layers$run_order)]
 
+report_min_step <- 1L
+report_max_step <- 40L
+layers <- layers[layers$run_order >= report_min_step & layers$run_order <= report_max_step, , drop = FALSE]
+
 layers$out_csv <- file.path(
   layer_out_dir,
   sprintf("%02d_%s.csv", layers$layer_index, layers$layer_key)
@@ -70,6 +76,7 @@ if (nrow(pending) > 0) {
 ```{r, results='asis'}
 if (file.exists(run_order_csv)) {
   ro <- read.csv(run_order_csv, stringsAsFactors = FALSE)
+  ro <- ro[ro$run_order >= report_min_step & ro$run_order <= report_max_step, , drop = FALSE]
   if (file.exists(priority_csv)) {
     pr <- read.csv(priority_csv, stringsAsFactors = FALSE)
     ro <- merge(
@@ -89,12 +96,31 @@ if (file.exists(run_order_csv)) {
 }
 ```
 
-## Forslag: Saknade lager att overvaga
+## Forslagstatus: Nya lager i denna revision
+
+```{r, results='asis'}
+implemented_layers <- data.frame(
+  lager = c(
+    "DHM relief (hojdskillnad inom hex)",
+    "DHM hogsta punkt (fran hojdkurvor)",
+    "Markblokke 2026 (Bornholm)"
+  ),
+  status = c("Kord", "Kord", "Kord"),
+  utkolumn = c(
+    "dhm_hoejdekurver_relief_m",
+    "dhm_hoejdekurver_highest_point_m",
+    "markblokke_2026_bornholm_area_share"
+  ),
+  stringsAsFactors = FALSE
+)
+cat(knitr::kable(implemented_layers, format = "html", align = c("l", "c", "l")))
+```
+
+## Kvar att overvaga
 
 ```{r, results='asis'}
 missing_layers <- data.frame(
   forslag = c(
-    "Jordbruksmark / markslag",
     "Hojklassig jordbruksjord (bonitet / jordklass)",
     "Dricksvattenintressen / grundvattenskydd",
     "Oversvamningsrisk / lavpunkter",
@@ -104,7 +130,6 @@ missing_layers <- data.frame(
     "Arkeologiska skyddsomraden / fornlammningar"
   ),
   varfor = c(
-    "Baslager for markanvandningskonflikter och landskapsanalys",
     "Visar var marken har hog produktions- och bevarandevikt",
     "Kritisk restriktion i fysisk planering",
     "Viktig klimat- och robusthetsdimension",
@@ -113,7 +138,7 @@ missing_layers <- data.frame(
     "Kopplar analysen till faktisk tillstandsproning",
     "Fangar kulturarvsvarden som ofta styr lokalisering"
   ),
-  prioritet = c("Hog", "Hog", "Hog", "Hog", "Medel", "Medel", "Hog", "Medel"),
+  prioritet = c("Hog", "Hog", "Hog", "Medel", "Medel", "Hog", "Medel"),
   stringsAsFactors = FALSE
 )
 cat(knitr::kable(missing_layers, format = "html", align = c("l", "l", "c")))
@@ -148,7 +173,8 @@ render_short_table <- function(out_csv) {
       "_area_share$",
       "_count$",
       "_sum$",
-      "_length_m($|_)"
+      "_length_m($|_)",
+      "_m$"
     )
     for (pat in preferred_patterns) {
       hit <- value_cols[grepl(pat, value_cols)]
@@ -185,6 +211,7 @@ render_short_table <- function(out_csv) {
 infer_geometry_and_treatment <- function(out_csv) {
   out <- read.csv(out_csv, stringsAsFactors = FALSE)
   value_cols <- setdiff(names(out), "hex_id")
+  primary_col <- if (length(value_cols) > 0) value_cols[1] else "saknas"
   if (length(value_cols) == 0) {
     return(list(geometry = "Okand", treatment = "Ingen vardekolumn hittad i utdata."))
   }
@@ -204,6 +231,12 @@ infer_geometry_and_treatment <- function(out_csv) {
     return(list(
       geometry = "Punkt",
       treatment = "Aggregering med st_intersects: antal objekt per hexagon (och ev. numerisk summa i *_sum)."
+    ))
+  }
+  if (any(grepl("_m$", value_cols))) {
+    return(list(
+      geometry = "Hojdindikator",
+      treatment = "Custom aggregering av hojdvardeskolumn (*_m), t.ex. relief (max-min) eller hogsta punkt per hexagon."
     ))
   }
   list(
@@ -314,3 +347,5 @@ for (i in seq_len(nrow(completed))) {
   cat("\n\n")
 }
 ```
+
+

@@ -36,3 +36,6 @@ TRUE,"gc_high_voltage_line_osm_high_voltage_lin_len_02e11c","high_voltage_line_o
 TRUE,"gc_biogas_facility_point_pdk_kpr_v_biogas_cnt_032854","biogas_facility_point_pdk_kpr_v_biogasanl_centroid_bor_32_count","cnt",1,1,"log1p",""
 TRUE,"gc_solarparks_point_pdk_kpr_v_solcellspar_cnt_02fa07","solarparks_point_pdk_kpr_v_solcellspark_centroid_bor_32_count","cnt",1,1,"log1p",""
 TRUE,"gc_windturbine_rated_power_kw_ens_vindkra_cnt_02c35a","windturbine_rated_power_kw_ens_vindkraftanlaeg_bol_33_count","cnt",1,1,"log1p",""
+FALSE,"gc_dhm_hojdekurver_relief_m_val_007b8d","dhm_hojdekurver_relief_m","val",1,1,"none","Topografi: aktivera nar rakolumn finns (hex max-min fran DHM topolines)"
+FALSE,"gc_dhm_hojdekurver_highest_point_m_val_00cf33","dhm_hojdekurver_highest_point_m","val",1,1,"none","Topografi: aktivera nar rakolumn finns (hex max fran DHM Highest-Point)"
+FALSE,"gc_markblokke_2026_bornholm_shr_00f57b","markblokke_2026_bornholm_area_share","shr",1,1,"none","Jordbruk: aktivera nar rakolumn finns (andel markblock i Bornholm-hex)"

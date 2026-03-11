@@ -1,38 +1,45 @@
-proposed_order,current_index,layer_key,display_name,theme,bang_reason
-1,30,protected_areas_fredede_omrader_miljostyrelsen_st_mp_arealdata_fredede_omr_121224_diss_bor_32,Protected Areas - Fredede Omrader,Legal constraints,Strong legal restriction and clear no-go areas
-2,29,strandbeskyttelse_miljostyrelsen_gds_mat2_strandbeskyttelse_merge_bor_32,Strandbeskyttelse,Legal constraints,Strong coastal restriction relevant for many decisions
-3,20,natura_2000_specially_designated_land_areas,Natura 2000 - Specially Designated Land Areas,Legal constraints,High conservation weight in planning
-4,22,natura_2000_habitat_areas_dai,Natura 2000 - Habitat Areas,Legal constraints,Core biodiversity protection driver
-5,21,natura_2000_bird_protection,Natura 2000 - Bird Protection,Legal constraints,Seasonal and habitat sensitivity
-6,23,coastal_zone_kystnarhedszonen_3_km_miljoministeriet_plst_pdk_kystnaerhedszone_polygon_bor_32,Coastal zone - Kystnaerhedszonen 3 km,Planning constraints,High strategic impact near coast
-7,31,protected_watercourses_miljostyrelsen,Protected Watercourses,Hydrology constraints,Water corridor protection and permitting impact
-8,12,fredskov_miljostyrelsen_gds_mat2_fredskov_bor_32,Fredskov,Forest protection,Strong legal forest safeguard
-9,18,ecology_connectivity_pdk_oekologiskforbindelse_bor_32,Ecology - Connectivity,Ecology network,Important for landscape continuity
-10,19,landscapes_worthy_of_preservation_pdk_bevaringsvaerdigelandskaber_bol_32,Landscapes Worthy of Preservation,Landscape value,High communication value for stakeholders
-11,16,bes_naturtyper,BES_NATURTYPER,Nature quality,Detailed habitat sensitivity
-12,17,kortlaeg_naturtyper_fl,KORTLAEG_NATURTYPER_FL,Nature quality,Complements nature type detail
-13,13,forest_gd_v_skov_forest_bol_33,Forest,Land cover baseline,Major land-cover component
-14,11,moor_hede_gd_v_hede_moor_bol_33,Moor/Hede,Land cover baseline,Sensitive open habitat
-15,9,wetland_gd_v_vaadomr_wetland_bol_33,Wetland,Land cover baseline,High ecological and hydrological value
-16,8,lake_gd_v_soe_lake_bol_33,Lake,Land cover baseline,Hydrological core areas
-17,7,river_gd_v_vand_river_centre_bol_33,River,Land cover baseline,Connectivity and water impact
-18,10,sandklit_gd_v_sandklit_sanddune_bol_33,Sandklit,Land cover baseline,Coastal dune sensitivity
-19,24,coastline_gd_v_kyst_coast_line_bol_33,Coastline,Reference layer,Useful geographic frame for communication
-20,15,pdk_kulturhistoriskbevaringsvaerdi_vedtaget_wfs,Kulturhistorisk bevaringsvaerdi (vedtaget),Cultural heritage,Planning and identity relevance
-21,27,cultural_and_historical_conservation_values_kulturhistoriske_bevaringsvardier_pdk_kulturhistoriskebevaringsvardier_bor_32,Cultural and Historical Conservation Values,Cultural heritage,Policy-sensitive conservation layer
-22,26,valuable_cultural_environment_slks,Valuable Cultural Environment,Cultural heritage,Context layer for place quality
-23,1,fastboendebefolkningmapinfo,FastboendeBefolkningMapInfo,Exposure baseline,Shows where people are affected
-24,4,built_centre_gd_v_bykerne_built_centre_bol_33,Built - Centre,Built environment,Urban concentration footprint
-25,5,buildings_high_gd_v_buildings_high_bol_33,Buildings-High,Built environment,Intensity of built form
-26,6,buildings_low_gd_v_buildings_low_bol_33,Buildings-Low,Built environment,Settlement spread
-27,3,built_low_gd_v_buildings_low_selection_by_bol_33,Built - Low (Selection),Built environment,Refines low-density areas
-28,14,roads_simplified_gd_v_vej_road_merged_bol_33,Roads Simplified,Infrastructure,Accessibility and fragmentation driver
-29,2,industry_business_gd_v_erhverv_business_industry_bol_33,Industry/Business,Land use pressure,Potential conflict and opportunity zones
-30,28,militara_omraden_plst,Militara omraden,Special constraints,Hard-use restrictions
-31,25,aviation_approach_zones_tst,Aviation Approach Zones,Special constraints,Height and safety constraints
-32,34,high_voltage_line_osm_high_voltage_line_jf_181224_bor,High Voltage Line,Energy network,Linear constraint corridor
-33,33,underground_cable_osm_underground_cable_land_jf_181224_bor,Underground Cable,Energy network,Subsurface utility corridor
-34,32,power_substation_osm_power_substation_edit_jf_1812_bor_33,Power Substation,Energy network,Grid node relevance
-35,37,windturbine_rated_power_kw_ens_vindkraftanlaeg_bol_33,Windturbine Rated Power,Energy assets,Existing renewable footprint
-36,36,solarparks_point_pdk_kpr_v_solcellspark_centroid_bor_32,SolarParks Point,Energy assets,Existing renewable footprint
-37,35,biogas_facility_point_pdk_kpr_v_biogasanl_centroid_bor_32,Biogas Facility Point,Energy assets,Existing renewable footprint
+"proposed_order","current_index","layer_key","display_name","theme","bang_reason"
+1,30,"protected_areas_fredede_omrader_miljostyrelsen_st_mp_arealdata_fredede_omr_121224_diss_bor_32","Protected Areas - Fredede Omrader","Legal constraints","Strong legal restriction and clear no-go areas"
+2,29,"strandbeskyttelse_miljostyrelsen_gds_mat2_strandbeskyttelse_merge_bor_32","Strandbeskyttelse","Legal constraints","Strong coastal restriction relevant for many decisions"
+3,20,"natura_2000_specially_designated_land_areas","Natura 2000 - Specially Designated Land Areas","Legal constraints","High conservation weight in planning"
+4,22,"natura_2000_habitat_areas_dai","Natura 2000 - Habitat Areas","Legal constraints","Core biodiversity protection driver"
+5,21,"natura_2000_bird_protection","Natura 2000 - Bird Protection","Legal constraints","Seasonal and habitat sensitivity"
+6,23,"coastal_zone_kystnarhedszonen_3_km_miljoministeriet_plst_pdk_kystnaerhedszone_polygon_bor_32","Coastal zone - Kystnaerhedszonen 3 km","Planning constraints","High strategic impact near coast"
+7,31,"protected_watercourses_miljostyrelsen","Protected Watercourses","Hydrology constraints","Water corridor protection and permitting impact"
+8,12,"fredskov_miljostyrelsen_gds_mat2_fredskov_bor_32","Fredskov","Forest protection","Strong legal forest safeguard"
+9,18,"ecology_connectivity_pdk_oekologiskforbindelse_bor_32","Ecology - Connectivity","Ecology network","Important for landscape continuity"
+10,19,"landscapes_worthy_of_preservation_pdk_bevaringsvaerdigelandskaber_bol_32","Landscapes Worthy of Preservation","Landscape value","High communication value for stakeholders"
+11,16,"bes_naturtyper","BES_NATURTYPER","Nature quality","Detailed habitat sensitivity"
+12,17,"kortlaeg_naturtyper_fl","KORTLAEG_NATURTYPER_FL","Nature quality","Complements nature type detail"
+13,13,"forest_gd_v_skov_forest_bol_33","Forest","Land cover baseline","Major land-cover component"
+14,11,"moor_hede_gd_v_hede_moor_bol_33","Moor/Hede","Land cover baseline","Sensitive open habitat"
+15,9,"wetland_gd_v_vaadomr_wetland_bol_33","Wetland","Land cover baseline","High ecological and hydrological value"
+16,8,"lake_gd_v_soe_lake_bol_33","Lake","Land cover baseline","Hydrological core areas"
+17,7,"river_gd_v_vand_river_centre_bol_33","River","Land cover baseline","Connectivity and water impact"
+18,10,"sandklit_gd_v_sandklit_sanddune_bol_33","Sandklit","Land cover baseline","Coastal dune sensitivity"
+19,24,"coastline_gd_v_kyst_coast_line_bol_33","Coastline","Reference layer","Useful geographic frame for communication"
+20,15,"pdk_kulturhistoriskbevaringsvaerdi_vedtaget_wfs","Kulturhistorisk bevaringsvaerdi (vedtaget)","Cultural heritage","Planning and identity relevance"
+21,27,"cultural_and_historical_conservation_values_kulturhistoriske_bevaringsvardier_pdk_kulturhistoriskebevaringsvardier_bor_32","Cultural and Historical Conservation Values","Cultural heritage","Policy-sensitive conservation layer"
+22,26,"valuable_cultural_environment_slks","Valuable Cultural Environment","Cultural heritage","Context layer for place quality"
+23,1,"fastboendebefolkningmapinfo","FastboendeBefolkningMapInfo","Exposure baseline","Shows where people are affected"
+24,4,"built_centre_gd_v_bykerne_built_centre_bol_33","Built - Centre","Built environment","Urban concentration footprint"
+25,5,"buildings_high_gd_v_buildings_high_bol_33","Buildings-High","Built environment","Intensity of built form"
+26,6,"buildings_low_gd_v_buildings_low_bol_33","Buildings-Low","Built environment","Settlement spread"
+27,3,"built_low_gd_v_buildings_low_selection_by_bol_33","Built - Low (Selection)","Built environment","Refines low-density areas"
+28,14,"roads_simplified_gd_v_vej_road_merged_bol_33","Roads Simplified","Infrastructure","Accessibility and fragmentation driver"
+29,2,"industry_business_gd_v_erhverv_business_industry_bol_33","Industry/Business","Land use pressure","Potential conflict and opportunity zones"
+30,28,"militara_omraden_plst","Militara omraden","Special constraints","Hard-use restrictions"
+31,25,"aviation_approach_zones_tst","Aviation Approach Zones","Special constraints","Height and safety constraints"
+32,34,"high_voltage_line_osm_high_voltage_line_jf_181224_bor","High Voltage Line","Energy network","Linear constraint corridor"
+33,33,"underground_cable_osm_underground_cable_land_jf_181224_bor","Underground Cable","Energy network","Subsurface utility corridor"
+34,32,"power_substation_osm_power_substation_edit_jf_1812_bor_33","Power Substation","Energy network","Grid node relevance"
+35,37,"windturbine_rated_power_kw_ens_vindkraftanlaeg_bol_33","Windturbine Rated Power","Energy assets","Existing renewable footprint"
+36,36,"solarparks_point_pdk_kpr_v_solcellspark_centroid_bor_32","SolarParks Point","Energy assets","Existing renewable footprint"
+37,35,"biogas_facility_point_pdk_kpr_v_biogasanl_centroid_bor_32","Biogas Facility Point","Energy assets","Existing renewable footprint"
+38,38,"dhm_hoejdekurver_relief","DHM Hojdekurver Relief","Topografi","Visar terrangvariation inom hex (byggbarhet och landskapskaraktar)"
+39,39,"dhm_hoejdekurver_highest_point","DHM Hojdekurver Highest Point","Topografi","Identifierar topografiska toppunkter och synlighetspotensial"
+40,40,"markblokke_2026_bornholm","Markblokke 2026 (Bornholm)","Jordbruk","Baslager for jordbruksmark i markkonfliktsanalys"
+41,41,"natur_vildt_reservat","Natur- og vildtreservater","Skyddad natur","Kompletterar skyddsbilden med reservat i praktisk forvaltning"
+42,42,"natura_2000_ramsar","Natura 2000 - Ramsar","Skyddad natur","Internationellt skydd av vatmarker med hog planeringsrelevans"
+43,43,"ferry_routes_osm_route_ferry_extract101224_bol_ns","Ferry routes (OSM)","Tillganglighet","Maritim tillganglighet och logistiska kopplingar till/on Bornholm"
+44,44,"aviation_bird_collision_zones_tst","Aviation Bird-collision Zones","Restriktioner","Flygsakerhet och biologiska konfliktytor"

@@ -8,8 +8,12 @@ source("script/semi_manual_r9/lib/manual_layer_aggregation.R")
 
 args <- commandArgs(trailingOnly = TRUE)
 step_no <- suppressWarnings(as.integer(if (length(args) >= 1) args[1] else Sys.getenv("STEP_RUN_ORDER", "")))
-if (is.na(step_no) || step_no < 1 || step_no > 37) {
-  stop("Provide run step number 1..37, e.g. Rscript .../render_step_overview_png.R 28")
+run_order_guard_csv <- file.path("script", "semi_manual_r9", "config", "bornholm_r9_run_order.csv")
+run_order_guard <- if (file.exists(run_order_guard_csv)) read.csv(run_order_guard_csv, stringsAsFactors = FALSE) else data.frame(run_order = 44)
+max_step <- suppressWarnings(max(as.integer(run_order_guard$run_order), na.rm = TRUE))
+if (!is.finite(max_step)) max_step <- 44
+if (is.na(step_no) || step_no < 1 || step_no > max_step) {
+  stop(sprintf("Provide run step number 1..%d, e.g. Rscript .../render_step_overview_png.R 28", max_step))
 }
 
 choose_value_col <- function(out_df) {
@@ -23,7 +27,8 @@ choose_value_col <- function(out_df) {
     "_area_share$",
     "_count$",
     "_sum$",
-    "_length_m($|_)"
+    "_length_m($|_)",
+    "_m$"
   )
   for (pat in preferred_patterns) {
     hit <- value_cols[grepl(pat, value_cols)]
@@ -160,6 +165,11 @@ classify_values <- function(vals, value_col) {
   if (grepl("_length_m($|_)", value_col)) {
     out <- classify_length_jenks(vals)
     return(list(class = out$class, palette = out$palette, legend = "Vaglangd per hex"))
+  }
+
+  if (grepl("_m$", value_col)) {
+    out <- classify_length_jenks(vals)
+    return(list(class = out$class, palette = out$palette, legend = "Hojdintervall (m)"))
   }
 
   cls <- rep(NA_character_, length(vals))

@@ -36,3 +36,6 @@
 "biogas_facility_point_pdk_kpr_v_biogasanl_centroid_bor_32_count","gc_biogas_facility_point_pdk_kpr_v_biogas_cnt_032854","cnt"
 "solarparks_point_pdk_kpr_v_solcellspark_centroid_bor_32_count","gc_solarparks_point_pdk_kpr_v_solcellspar_cnt_02fa07","cnt"
 "windturbine_rated_power_kw_ens_vindkraftanlaeg_bol_33_count","gc_windturbine_rated_power_kw_ens_vindkra_cnt_02c35a","cnt"
+"dhm_hojdekurver_relief_m","gc_dhm_hojdekurver_relief_m_val_007b8d","val"
+"dhm_hojdekurver_highest_point_m","gc_dhm_hojdekurver_highest_point_m_val_00cf33","val"
+"markblokke_2026_bornholm_area_share","gc_markblokke_2026_bornholm_shr_00f57b","shr"
