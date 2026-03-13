@@ -1,0 +1,693 @@
+---
+title: "Landskapsanalys: Bornholm R9"
+lang: sv
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: true
+    code-summary: "Visa kod"
+    embed-resources: true
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: setup
+suppressPackageStartupMessages({
+  library(sf)
+  library(dplyr)
+  library(tidyr)
+  library(stringr)
+  library(purrr)
+  library(ggplot2)
+  library(leaflet)
+  library(scales)
+  library(knitr)
+  library(htmlwidgets)
+  library(htmltools)
+})
+
+repo_root <- "C:/gislab/landskapsanalys"
+analysis_id <- Sys.getenv("LANDSKAPSANALYS_ANALYSIS_ID", unset = "landskapsanalys_9lager_res9")
+data_dir <- Sys.getenv(
+  "LANDSKAPSANALYS_DATA_DIR",
+  unset = file.path(repo_root, "data/interim/landskapsanalys_versions", analysis_id)
+)
+archive_dir <- file.path(repo_root, "docs/geocontext/archive")
+report_dir <- file.path(repo_root, "docs/geocontext")
+map_dir <- file.path(report_dir, "maps")
+dir.create(map_dir, recursive = TRUE, showWarnings = FALSE)
+cluster_map_href <- paste0("maps/", analysis_id, "_cluster_map.html")
+cluster_map_path <- file.path(map_dir, paste0(analysis_id, "_cluster_map.html"))
+factor_map_href <- paste0("maps/", analysis_id, "_factor_mapview.html")
+factor_map_path <- file.path(map_dir, paste0(analysis_id, "_factor_mapview.html"))
+
+metadata_path <- file.path(data_dir, paste0(analysis_id, "_metadata.csv"))
+indicator_catalog_path <- file.path(data_dir, paste0(analysis_id, "_indicator_catalog.csv"))
+hex_path <- file.path(data_dir, paste0(analysis_id, "_hex.gpkg"))
+loadings_path <- file.path(data_dir, paste0(analysis_id, "_factor_loadings.csv"))
+k_scores_path <- file.path(data_dir, paste0(analysis_id, "_k_scores.csv"))
+cluster_profile_path <- file.path(data_dir, paste0(analysis_id, "_cluster_profile.csv"))
+cluster_sizes_path <- file.path(data_dir, paste0(analysis_id, "_cluster_sizes.csv"))
+run_summary_path <- file.path(data_dir, paste0(analysis_id, "_run_summary.csv"))
+variance_path <- file.path(data_dir, paste0(analysis_id, "_factor_variance.csv"))
+
+analysis_meta <- read.csv(metadata_path, stringsAsFactors = FALSE)
+indicator_catalog <- read.csv(indicator_catalog_path, stringsAsFactors = FALSE)
+hex <- st_read(hex_path, layer = analysis_id, quiet = TRUE)
+hex_wgs84 <- st_transform(hex, 4326)
+loadings_df <- read.csv(loadings_path, stringsAsFactors = FALSE)
+k_scores <- read.csv(k_scores_path, stringsAsFactors = FALSE)
+cluster_profile <- read.csv(cluster_profile_path, stringsAsFactors = FALSE)
+cluster_sizes <- read.csv(cluster_sizes_path, stringsAsFactors = FALSE)
+run_summary <- read.csv(run_summary_path, stringsAsFactors = FALSE)
+variance_df <- read.csv(variance_path, stringsAsFactors = FALSE)
+
+factor_cols <- grep("^F[0-9]+$", names(hex), value = TRUE)
+input_cols <- indicator_catalog$gc_name
+layer_count <- nrow(indicator_catalog)
+
+indicator_key <- function(x) {
+  case_when(
+    str_detect(x, "roads") ~ "Vägar",
+    str_detect(x, "fastboende|population") ~ "Befolkning",
+    str_detect(x, "ecology") ~ "Ekologi",
+    str_detect(x, "cultural|historical") ~ "Kulturmiljö",
+    str_detect(x, "fredskov|forest") ~ "Skog",
+    str_detect(x, "agricultural|markblokke") ~ "Jordbruk",
+    str_detect(x, "relief") ~ "Relief",
+    str_detect(x, "watercourses") ~ "Vattendrag",
+    TRUE ~ "Övrigt"
+  )
+}
+
+indicator_palette <- c(
+  "Vägar" = "#1f78b4",
+  "Befolkning" = "#d7301f",
+  "Ekologi" = "#33a02c",
+  "Kulturmiljö" = "#ff7f00",
+  "Skog" = "#1b7837",
+  "Jordbruk" = "#c2a83e",
+  "Relief" = "#8c6d31",
+  "Vattendrag" = "#1d91c0",
+  "Övrigt" = "#6a3d9a"
+)
+
+class_palette <- c(
+  "1" = "#8dd3c7",
+  "2" = "#fdb462",
+  "3" = "#bebada",
+  "4" = "#fccde5",
+  "5" = "#b3de69",
+  "6" = "#ffed6f",
+  "7" = "#bc80bd",
+  "8" = "#80b1d3",
+  "9" = "#fb8072",
+  "10" = "#ccebc5"
+)
+
+indicator_lookup <- setNames(indicator_catalog$display_name, indicator_catalog$gc_name)
+
+series_from_variable <- function(variable) {
+  variable |>
+    str_replace("^(mean_|std_)", "") |>
+    str_remove("_k[0-9]+$")
+}
+
+pretty_variable <- function(variable) {
+  stat_type <- ifelse(str_detect(variable, "^mean_"), "medel", "std")
+  series <- series_from_variable(variable)
+  k <- str_extract(variable, "(?<=_k)[0-9]+$")
+  series_label <- dplyr::coalesce(unname(indicator_lookup[series]), series)
+  paste0(series_label, " (", stat_type, ", k=", k, ")")
+}
+```
+
+## Läs detta först
+
+Det här är den aktiva R9-versionen av projektets landskapsanalys. Den dokumenterar modellen `r analysis_id`, som använder `r layer_count` ingångslager på samma `R9`-hexgrid som tidigare, men bygger vidare på den arkiverade bryggkörningen `r analysis_meta$archived_previous_version[[1]]`.
+
+Den här versionen gör två viktiga saker jämfört med GC4-bryggan:
+
+- total väglängd ersätts av två separata väglager: `medium` och `large`
+- fyra nya lager läggs till: fredskov, jordbruksmark, relief och skyddade vattendrag
+
+Ingångslager i denna version:
+
+```{r}
+#| label: input-layer-bullets
+cat(paste0("- ", indicator_catalog$display_name, collapse = "\n"))
+```
+
+Syftet är att gå från en ren bryggmodell till en första bredare och mer landskapsrelevant R9-analys, utan att hoppa direkt till alla 40+ lager.
+
+## Versioner och arkiv
+
+Rapporthistorik sparas i:
+
+- `r archive_dir`
+
+I arkivet finns nu:
+
+- `landskapsanalys_gc4_res9` för den första 4-lagers bryggkörningen
+- `r analysis_id` för den här 9-lagersversionen
+
+Det aktiva arbetsnamnet i rotmappen är fortsatt bara `landskapsanalys`.
+
+## Metodisk inspiration och proveniens
+
+Två källor är särskilt viktiga för denna körning.
+
+### 1. Ursprunglig geocontext-idé
+
+Det här arbetet bygger vidare på den geocontext-idé och tidiga implementation som publicerats av Pontus Hennerdal:
+
+- `https://github.com/PonHen/geocontext`
+
+Som verifierat `2026-03-13` visar upstream-repot en notebookbaserad implementation (`geocontext.ipynb`) och en `MIT`-licens.
+
+### 2. Multiskalär typologi av bostadsområden i Sverige
+
+Den andra viktiga referensen är Stockholm University-arbetet om en multiskalär typologi av bostadsområden i Sverige:
+
+- Figshare dataset/material: `https://su.figshare.com/articles/dataset/Multiscalar_typology_of_residential_areas_in_Sweden/14753826?file=28351917`
+- DiVA record: `https://www.diva-portal.org/smash/record.jsf?pid=diva2:1624901`
+- Fulltext PDF: `https://www.diva-portal.org/smash/get/diva2:1624901/FULLTEXT01.pdf`
+
+Parafraserad kärna från DiVA-abstraktet: studien bygger en typologi genom att kombinera lokala områden med omgivande rumslig kontext på flera skalor. Kontextvariabler aggregeras över flera grannskapsstorlekar, och resultaten används för att identifiera större typer via klustring.
+
+### Är det vetenskapligt acceptabelt att använda den metoden för landskapsanalys?
+
+Ja, som metodöverföring är det vetenskapligt rimligt, under några tydliga villkor:
+
+- vi ska beskriva det som en anpassning, inte som en direkt replikation
+- vi ska vara öppna med att originalarbetet gäller `residential areas`, medan vårt case gäller `landskapsanalys på Bornholm`
+- vi ska visa vilka datalager och tolkningar som är naturgeografiska respektive kulturgeografiska
+- vi ska validera att faktor- och klusterresultat faktiskt blir begripliga i ett landskapsperspektiv
+
+Parallellen är stark därför att båda arbetena bygger på samma grundidé: platser ska inte bara beskrivas av sina lokala egenskaper, utan också av sin multiskalära omgivning.
+
+Skillnaden är att Bornholm-projektet använder den logiken för att fånga landskapskaraktär, med större vikt på kulturgeografi, rumslig struktur och planeringsrelevans.
+
+## Steg 1. R9-hex och de `r layer_count` ingångslagren
+
+```{r}
+#| label: input-layer-table
+knitr::kable(indicator_catalog, digits = 3)
+```
+
+```{r}
+#| label: run-summary
+knitr::kable(run_summary, digits = 3)
+```
+
+```{r}
+#| label: raw-layer-summary
+raw_summary <- hex |>
+  st_drop_geometry() |>
+  select(all_of(input_cols)) |>
+  summary()
+raw_summary
+```
+
+```{r}
+#| label: raw-layer-density
+raw_long <- hex |>
+  st_drop_geometry() |>
+  select(all_of(input_cols)) |>
+  pivot_longer(everything(), names_to = "variable", values_to = "value") |>
+  mutate(indicator = indicator_key(variable))
+
+ggplot(raw_long, aes(x = value, fill = indicator)) +
+  geom_histogram(bins = 50, alpha = 0.8, show.legend = FALSE) +
+  facet_wrap(~ variable, scales = "free") +
+  scale_fill_manual(values = indicator_palette, drop = FALSE) +
+  labs(x = "Råvärde per hex", y = "Antal hex") +
+  theme_minimal(base_size = 11)
+```
+
+**Tolkning:** Den här versionen använder nio lager med blandade geometrier och betydelser, men alla ligger på samma R9-grid. Det ger en bredare analys än GC4-bryggan, samtidigt som tolkningen fortfarande går att följa lager för lager.
+
+## Steg 2. Multiskalär kontextualisering
+
+Vi beräknar grannskapskontext kring varje hexagon för `k = 10, 50, 100, 250, 1000`.
+
+För varje av de `r layer_count` lagren skapas:
+
+- `mean_*_k...`
+- `std_*_k...`
+
+Det ger totalt `r run_summary$value[run_summary$metric == "n_context_columns"]` kontextvariabler.
+
+```{r}
+#| label: k-trends-overall
+mean_long <- hex |>
+  st_drop_geometry() |>
+  select(matches("^mean_.*_k[0-9]+$")) |>
+  mutate(row_id = row_number()) |>
+  pivot_longer(-row_id, names_to = "variable", values_to = "value") |>
+  mutate(
+    k = as.integer(str_extract(variable, "(?<=_k)[0-9]+$")),
+    series = series_from_variable(variable),
+    indicator = indicator_key(series)
+  )
+
+mean_long |>
+  group_by(series, indicator, k) |>
+  summarise(mean_value = mean(value, na.rm = TRUE), .groups = "drop") |>
+  ggplot(aes(x = k, y = mean_value, color = indicator, group = series)) +
+  geom_line(linewidth = 0.9) +
+  geom_point(size = 1.5) +
+  scale_color_manual(values = indicator_palette, drop = FALSE) +
+  scale_x_continuous(breaks = c(10, 50, 100, 250, 1000)) +
+  labs(x = "k (närmsta grannar)", y = "Medelvärde i kontext", color = "Tema") +
+  theme_minimal(base_size = 12)
+```
+
+```{r}
+#| label: top-scale-change
+scale_change <- mean_long |>
+  group_by(series, indicator, k) |>
+  summarise(mean_value = mean(value, na.rm = TRUE), .groups = "drop") |>
+  group_by(series, indicator) |>
+  summarise(delta = mean_value[k == max(k)] - mean_value[k == min(k)], .groups = "drop") |>
+  mutate(series_label = dplyr::coalesce(unname(indicator_lookup[series]), series)) |>
+  arrange(desc(abs(delta))) |>
+  select(series = series_label, indicator, delta)
+knitr::kable(scale_change, digits = 3)
+```
+
+**Tolkning:** Kontextsteget gör att varje hexagon inte bara beskriver sitt eget innehåll, utan också sin omgivning på flera skalor. I den här versionen blir det särskilt intressant att se hur relief, jordbruksmark och de två väglagren beter sig när grannskapsstorleken ökar.
+
+## Steg 3. Faktoranalys
+
+Faktoranalysen körs på den z-standardiserade matrisen av `mean_*` och `std_*`-variabler.
+
+```{r}
+#| label: factor-variance
+knitr::kable(variance_df, digits = 3)
+```
+
+```{r}
+#| label: factor-summary
+hex |>
+  st_drop_geometry() |>
+  select(all_of(factor_cols)) |>
+  summary()
+```
+
+```{r}
+#| label: factor-spread
+hex |>
+  st_drop_geometry() |>
+  summarise(across(all_of(factor_cols), ~sd(.x, na.rm = TRUE))) |>
+  pivot_longer(everything(), names_to = "factor", values_to = "sd_val") |>
+  ggplot(aes(x = reorder(factor, -sd_val), y = sd_val, fill = factor)) +
+  geom_col(show.legend = FALSE) +
+  scale_y_continuous(labels = number_format(accuracy = 0.01)) +
+  labs(x = "Faktor", y = "Standardavvikelse") +
+  theme_minimal(base_size = 12)
+```
+
+### Faktorladdningar
+
+```{r}
+#| label: loadings-table
+loadings_pretty <- loadings_df |>
+  mutate(pretty_variable = pretty_variable(variable)) |>
+  select(pretty_variable, all_of(factor_cols))
+knitr::kable(loadings_pretty, digits = 3, col.names = c("Variabel", factor_cols))
+```
+
+```{r}
+#| label: loadings-heatmap
+loadings_long <- loadings_df |>
+  mutate(pretty_variable = pretty_variable(variable)) |>
+  pivot_longer(cols = all_of(factor_cols), names_to = "factor", values_to = "loading")
+
+ggplot(loadings_long, aes(x = factor, y = pretty_variable, fill = loading)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "#2166AC", mid = "white", high = "#B2182B", midpoint = 0) +
+  labs(x = "Faktor", y = "Variabel", fill = "Laddning") +
+  theme_minimal(base_size = 10) +
+  theme(axis.text.y = element_text(size = 6))
+```
+
+```{r}
+#| label: top-loadings
+factor_top <- purrr::map_dfr(factor_cols, function(f) {
+  loadings_df |>
+    transmute(
+      factor = f,
+      variable,
+      pretty_variable = pretty_variable(variable),
+      loading = .data[[f]],
+      abs_loading = abs(loading)
+    ) |>
+    arrange(desc(abs_loading)) |>
+    slice_head(n = 5)
+})
+knitr::kable(factor_top |> select(factor, variable = pretty_variable, loading, abs_loading), digits = 3)
+```
+
+```{r}
+#| label: factor-takeaway
+factor_headline <- factor_top |>
+  group_by(factor) |>
+  slice_head(n = 1) |>
+  ungroup() |>
+  transmute(text = paste0(factor, " ", pretty_variable, " (", round(loading, 3), ")"))
+cat(paste0(
+  "**Snabb läsning:** starkaste enskilda laddning per faktor är ",
+  paste(factor_headline$text, collapse = "; "),
+  "."
+))
+```
+
+```{r}
+#| label: loadings-vs-k
+#| fig-width: 13
+#| fig-height: 8.5
+#| out-width: 100%
+#| fig-align: center
+loadings_mean_long <- loadings_df |>
+  filter(str_detect(variable, "^mean_")) |>
+  mutate(
+    k = as.integer(str_extract(variable, "(?<=_k)[0-9]+$")),
+    series = series_from_variable(variable),
+    series_label = dplyr::coalesce(unname(indicator_lookup[series]), series),
+    indicator = indicator_key(series)
+  ) |>
+  pivot_longer(cols = all_of(factor_cols), names_to = "factor", values_to = "loading") |>
+  mutate(factor = factor(factor, levels = factor_cols))
+
+ggplot(loadings_mean_long, aes(x = k, y = loading, color = indicator, group = series_label)) +
+  geom_hline(yintercept = 0, linewidth = 0.3, color = "grey30") +
+  geom_line(linewidth = 0.95) +
+  geom_point(size = 1.9) +
+  facet_wrap(~ factor, ncol = 2) +
+  scale_color_manual(values = indicator_palette, drop = FALSE) +
+  scale_x_continuous(breaks = c(10, 50, 100, 250, 1000)) +
+  labs(x = "k", y = "Laddning", color = "Tema") +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position = "bottom",
+    panel.spacing = grid::unit(1.1, "lines"),
+    strip.text = element_text(face = "bold", size = 12)
+  ) +
+  guides(color = guide_legend(nrow = 2, byrow = TRUE))
+```
+
+**Tolkning:** Med nio lager blir faktorstrukturen mer sammansatt än i GC4-bryggan. Det är därför extra viktigt att läsa både laddningsmatrisen och kartorna tillsammans, inte bara lita på en enskild faktor eller ett enskilt kluster.
+
+## Steg 4. Val av antal kluster
+
+Precis som tidigare testar vi `K = 5..10` och väljer bästa lösning via silhouette.
+
+Silhouette är ett enkelt sätt att fråga varje hexagon: **passar jag bättre i min egen grupp än i den närmaste alternativa gruppen?**
+
+- `a` = genomsnittligt avstånd till andra hexagoner i samma kluster
+- `b` = genomsnittligt avstånd till det närmaste konkurrerande klustret
+- `silhouette = (b - a) / max(a, b)`
+
+Så kan man läsa värdet:
+
+- nära `1`: hexagonen passar tydligt i sitt kluster
+- nära `0`: hexagonen ligger nära gränsen mellan två kluster
+- under `0`: hexagonen verkar sannolikt ligga i "fel" kluster
+
+I praktiken räknar vi ut detta för alla hexagoner och tar sedan **medelvärdet**. Det betyder att silhouette inte säger att klustringen är "sann", men den hjälper oss välja en lösning där grupperna är mer sammanhållna inuti och mer åtskilda från varandra.
+
+```{r}
+#| label: k-score-table
+knitr::kable(k_scores, digits = 3)
+```
+
+```{r}
+#| label: k-score-plot
+ggplot(k_scores, aes(x = factor(K), y = silhouette)) +
+  geom_col(fill = "#4E79A7") +
+  geom_text(aes(label = round(silhouette, 3)), vjust = -0.3, size = 3) +
+  labs(x = "Antal kluster (K)", y = "Silhouette") +
+  theme_minimal(base_size = 12)
+```
+
+```{r}
+#| label: k-best-text
+#| results: asis
+best_row <- k_scores |> slice(1)
+runner_up <- k_scores |> slice(2)
+cat(paste0(
+  "**Vald lösning:** `K = ", best_row$K,
+  "` med silhouette `", round(best_row$silhouette, 3),
+  "`. Tvåan är `K = ", runner_up$K,
+  "` på `", round(runner_up$silhouette, 3),
+  "`, alltså en skillnad på `", round(best_row$silhouette - runner_up$silhouette, 3),
+  "`. Det betyder att valet är rimligt, men inte absolut."
+))
+```
+
+## Steg 5. Klustertilldelning
+
+```{r}
+#| label: cluster-size-table
+knitr::kable(cluster_sizes, digits = 3)
+```
+
+```{r}
+#| label: cluster-size-plot
+ggplot(cluster_sizes, aes(x = factor(class_km), y = n_hex, fill = factor(class_km))) +
+  geom_col(show.legend = FALSE) +
+  scale_fill_manual(values = class_palette, drop = FALSE) +
+  scale_y_continuous(labels = comma) +
+  labs(x = "class_km", y = "Antal hex") +
+  theme_minimal(base_size = 12)
+```
+
+```{r}
+#| label: cluster-profile-heatmap
+cluster_profile_long <- cluster_profile |>
+  pivot_longer(cols = all_of(factor_cols), names_to = "factor", values_to = "mean_score")
+
+ggplot(cluster_profile_long, aes(x = factor, y = factor(class_km), fill = mean_score)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "#2166AC", mid = "white", high = "#B2182B", midpoint = 0) +
+  labs(x = "Faktor", y = "Kluster", fill = "Medelvärde") +
+  theme_minimal(base_size = 12)
+```
+
+```{r}
+#| label: cluster-map
+#| fig-width: 13
+#| fig-height: 8
+#| out-width: 100%
+#| fig-align: center
+class_vals <- sort(unique(as.character(hex_wgs84$class_km)))
+pal <- colorFactor(unname(class_palette[class_vals]), domain = class_vals)
+
+cluster_map_widget <- leaflet(hex_wgs84, options = leafletOptions(zoomSnap = 0.25)) |>
+  addProviderTiles("CartoDB.Positron") |>
+  addPolygons(
+    fillColor = ~pal(as.character(class_km)),
+    fillOpacity = 0.7,
+    color = "#444444",
+    opacity = 0.7,
+    weight = 0.25,
+    popup = ~paste0(
+      "hex: ", hex_id,
+      "<br>class_km: ", class_km,
+      "<br>F1: ", round(F1, 3),
+      "<br>F2: ", round(F2, 3),
+      "<br>F3: ", round(F3, 3),
+      "<br>F4: ", round(F4, 3),
+      "<br>F5: ", round(F5, 3)
+    )
+  ) |>
+  addLegend("bottomright", pal = pal, values = ~as.character(class_km), title = "class_km") |>
+  addScaleBar(position = "bottomleft")
+
+htmlwidgets::saveWidget(
+  cluster_map_widget,
+  cluster_map_path,
+  selfcontained = TRUE,
+  title = paste("Klustertilldelning", analysis_id)
+)
+
+cluster_map_widget
+```
+
+```{r}
+#| label: cluster-map-link
+#| results: asis
+cat(paste0(
+  '<p><a class="btn btn-outline-primary btn-sm" href="', cluster_map_href,
+  '" target="_blank" rel="noopener">Öppna klusterkartan i egen flik / helskärm</a></p>'
+))
+```
+
+```{r}
+#| label: cluster-takeaway
+largest_cluster <- cluster_sizes |>
+  arrange(desc(n_hex)) |>
+  slice(1)
+cat(paste0(
+  "**Största klustret:** `", largest_cluster$class_km,
+  "` med ", percent(largest_cluster$share, accuracy = 0.1),
+  " av alla hexagoner."
+))
+```
+
+## Steg 6. Faktorernas geografi
+
+```{r}
+#| label: factor-maps
+#| fig-width: 11.5
+#| fig-height: 8.5
+#| out-width: 100%
+#| fig-align: center
+hex_factor_long <- hex |>
+  select(hex_id, all_of(factor_cols)) |>
+  pivot_longer(cols = all_of(factor_cols), names_to = "factor", values_to = "value") |>
+  mutate(factor = factor(factor, levels = factor_cols))
+
+ggplot(hex_factor_long) +
+  geom_sf(aes(fill = value), color = NA) +
+  facet_wrap(~ factor, ncol = 2) +
+  scale_fill_gradient2(low = "#2166AC", mid = "#F7F7F7", high = "#B2182B", midpoint = 0) +
+  labs(fill = "Faktorscore") +
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.spacing = grid::unit(1.1, "lines"),
+    strip.text = element_text(face = "bold", size = 12)
+  )
+```
+
+Kartvyn nedan visar samma faktorresultat som ett interaktivt lager per faktor. Där kan du slå på en faktor i taget, zooma och öppna kartan i egen flik.
+
+```{r}
+#| label: factor-mapview
+#| fig-width: 13
+#| fig-height: 8.5
+#| out-width: 100%
+#| fig-align: center
+factor_limit <- hex_wgs84 |>
+  st_drop_geometry() |>
+  select(all_of(factor_cols)) |>
+  unlist(use.names = FALSE) |>
+  abs() |>
+  max(na.rm = TRUE)
+
+factor_pal <- colorNumeric(
+  palette = c("#2166AC", "#F7F7F7", "#B2182B"),
+  domain = c(-factor_limit, factor_limit),
+  na.color = "transparent"
+)
+
+factor_map_widget <- leaflet(options = leafletOptions(zoomSnap = 0.25)) |>
+  addProviderTiles("CartoDB.Positron")
+
+for (f in factor_cols) {
+  data_factor <- hex_wgs84
+  data_factor$map_value <- data_factor[[f]]
+  data_factor$factor_label <- f
+
+  factor_map_widget <- factor_map_widget |>
+    addPolygons(
+      data = data_factor,
+      group = f,
+      fillColor = ~factor_pal(map_value),
+      fillOpacity = 0.72,
+      color = "#666666",
+      opacity = 0.5,
+      weight = 0.15,
+      popup = ~paste0(
+        "hex: ", hex_id,
+        "<br>faktor: ", factor_label,
+        "<br>score: ", round(map_value, 3)
+      )
+    )
+}
+
+if (length(factor_cols) > 1) {
+  factor_map_widget <- factor_map_widget |>
+    hideGroup(factor_cols[-1])
+}
+
+factor_map_widget <- factor_map_widget |>
+  addLayersControl(
+    overlayGroups = factor_cols,
+    options = layersControlOptions(collapsed = FALSE)
+  ) |>
+  addLegend(
+    "bottomright",
+    pal = factor_pal,
+    values = c(-factor_limit, factor_limit),
+    title = "Faktorscore"
+  ) |>
+  addScaleBar(position = "bottomleft")
+
+htmlwidgets::saveWidget(
+  factor_map_widget,
+  factor_map_path,
+  selfcontained = TRUE,
+  title = paste("Faktorernas geografi", analysis_id)
+)
+
+factor_map_widget
+```
+
+```{r}
+#| label: factor-map-link
+#| results: asis
+cat(paste0(
+  '<p><a class="btn btn-outline-primary btn-sm" href="', factor_map_href,
+  '" target="_blank" rel="noopener">Öppna faktorkartan i egen flik / helskärm</a></p>'
+))
+```
+
+**Tolkning:** Kartorna hjälper oss se om faktorerna bildar sammanhängande landskapsmönster eller mer fragmenterade fickor. När fler lager tas in blir det ännu viktigare att bedöma om faktorerna bildar begripliga zoner eller bara statistiska kombinationer.
+
+## Paralleller till Bornholm-arbetet
+
+Den svenska referensstudien och Bornholm-arbetet delar tre centrala drag:
+
+1. båda ser omgivningen som en del av platsens identitet
+2. båda arbetar multiskalärt, inte bara med direkt lokala värden
+3. båda syftar till att skapa tolkningsbara typer, inte bara enskilda indikatorer
+
+Men Bornholm-projektet skiljer sig också på viktiga sätt:
+
+- vi analyserar landskap snarare än bostadsområden
+- våra ingångslager kombinerar naturgeografiska och kulturgeografiska signaler
+- vår slutliga tolkning är tänkt att vara planerings- och landskapsrelevant, inte enbart deskriptiv
+
+Därför är det metodiskt rimligt att låna logiken, men inte att behandla den som ett färdigt facit. Vi behöver fortfarande testa robusthet, jämföra alternativa feature-set och granska klustrens begriplighet.
+
+## Viktig nästa fråga
+
+När denna version är verifierad bör nästa steg vara att jämföra minst tre modeller:
+
+1. `landskapsanalys_gc4_res9` som bryggreferens
+2. den här 9-lagersversionen `r analysis_id`
+3. `med / utan` lagret `landscapes_worthy_of_preservation`, eftersom det kan både berika modellen och delvis koda in svaret i förväg
+
+Senare i projektet bör vi också testa en separat:
+
+- naturgeografisk körning
+- kulturgeografisk körning
+
+## Utdata från denna körning
+
+Standardutdata skrivs till:
+
+- `r data_dir`
+
+Viktigaste filer:
+
+- `r file.path(data_dir, paste0(analysis_id, "_points_with_context.csv"))`
+- `r file.path(data_dir, paste0(analysis_id, "_factor_scores.csv"))`
+- `r file.path(data_dir, paste0(analysis_id, "_factor_loadings.csv"))`
+- `r file.path(data_dir, paste0(analysis_id, "_hex.gpkg"))`
