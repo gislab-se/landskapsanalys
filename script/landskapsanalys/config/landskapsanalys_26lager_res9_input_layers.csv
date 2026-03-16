@@ -1,0 +1,27 @@
+gc_name,source_name,display_name,geometry_type,theme,selection_note
+gc_fastboende_count,fastboendebefolkningmapinfo_count,Permanent population,Point count,Settlement,Retained from 17-layer baseline to capture settlement intensity
+gc_roads_medium_length_m,roads_simplified_gd_v_vej_road_merged_bol_33_length_m_medium,Road length (medium),Line length,Access,Retained from 17-layer baseline to capture intermediate road structure
+gc_roads_large_length_m,roads_simplified_gd_v_vej_road_merged_bol_33_length_m_large,Road length (large),Line length,Access,Retained from 17-layer baseline to capture major access corridors
+gc_ecology_connectivity_share,ecology_connectivity_pdk_oekologiskforbindelse_bor_32_area_share,Ecological connectivity,Polygon area share,Blue-green,Retained from 17-layer baseline to represent ecological structure
+gc_cultural_historical_conservation_share,cultural_and_historical_conservation_values_kulturhistoriske_bevaringsvardier_pdk_kulturhistoriskebevaringsvardier_bor_32_area_share,Cultural and historical conservation values,Polygon area share,Culture,Retained from 17-layer baseline as core cultural landscape signal
+gc_fredskov_share,fredskov_miljostyrelsen_gds_mat2_fredskov_bor_32_area_share,Fredskov,Polygon area share,Vegetation,Retained from 17-layer baseline as protected forest structure
+gc_agricultural_land_share,markblokke_2026_bornholm_area_share,Agricultural land (Markblokke),Polygon area share,Land use,Retained from 17-layer baseline as open productive landscape signal
+gc_relief_m,dhm_hoejdekurver_relief_m,Relief,Continuous metric,Topography,Retained from 17-layer baseline as terrain variation
+gc_protected_watercourses_length_m,protected_watercourses_miljostyrelsen_length_m,Protected watercourses,Line length,Blue-green,Retained from 17-layer baseline to capture linear hydrological structure
+gc_lake_share,lake_gd_v_soe_lake_bol_33_area_share,Lake,Polygon area share,Blue-green,Retained from 17-layer baseline to capture still-water landscape elements
+gc_wetland_share,wetland_gd_v_vaadomr_wetland_bol_33_area_share,Wetland,Polygon area share,Blue-green,Retained from 17-layer baseline to capture wet lowland structure and moisture gradients
+gc_moor_hede_share,moor_hede_gd_v_hede_moor_bol_33_area_share,Moor and hede,Polygon area share,Blue-green,Retained from 17-layer baseline to represent open semi-natural landscape
+gc_forest_share,forest_gd_v_skov_forest_bol_33_area_share,Forest,Polygon area share,Vegetation,Retained from 17-layer baseline as actual forest cover beyond fredskov
+gc_coastal_zone_share,coastal_zone_kystnarhedszonen_3_km_miljoministeriet_plst_pdk_kystnaerhedszone_polygon_bor_32_area_share,Coastal zone (3 km),Polygon area share,Coast,Retained from 17-layer baseline to capture broad coastal influence
+gc_coastline_length_m,coastline_gd_v_kyst_coast_line_bol_33_length_m,Coastline,Line length,Coast,Retained from 17-layer baseline to capture direct land-sea edge structure
+gc_valuable_cultural_environment_share,valuable_cultural_environment_slks_area_share,Valuable cultural environment,Polygon area share,Culture,Retained from 17-layer baseline as complementary cultural-geographic signal
+gc_highest_point_m,dhm_hoejdekurver_highest_point_m,Highest contour value,Continuous metric,Topography,Retained from 17-layer baseline to distinguish elevated terrain from locally rough terrain
+gc_river_length_m,river_gd_v_vand_river_centre_bol_33_length_m,River length,Line length,Blue-green,Added to capture actual flowing-water structure beyond the protected-watercourse layer
+gc_sand_dune_share,sandklit_gd_v_sandklit_sanddune_bol_33_area_share,Sand dune,Polygon area share,Coast,Added to represent coastal geomorphology that is missing from the 17-layer baseline
+gc_bes_naturtyper_share,bes_naturtyper_area_share,Protected nature types,Polygon area share,Blue-green,Added to capture semi-natural habitats not well represented by the broad wetland-forest-agriculture signals
+gc_mapped_nature_types_share,kortlaeg_naturtyper_fl_area_share,Mapped nature types,Polygon area share,Blue-green,Added as a complementary habitat mosaic signal with broader ecological coverage
+gc_industry_business_share,industry_business_gd_v_erhverv_business_industry_bol_33_area_share,Industry and business land,Polygon area share,Settlement,Added to capture non-residential built landscape character
+gc_built_centre_share,built_centre_gd_v_bykerne_built_centre_bol_33_area_share,Built centre,Polygon area share,Settlement,Added to distinguish dense historic or urban cores from dispersed settlement
+gc_buildings_high_share,buildings_high_gd_v_buildings_high_bol_33_area_share,Buildings high,Polygon area share,Settlement,Added to capture vertical building intensity in the built landscape
+gc_buildings_low_share,buildings_low_gd_v_buildings_low_bol_33_area_share,Buildings low,Polygon area share,Settlement,Added to capture dispersed low-rise built form outside centres
+gc_strand_protection_share,strandbeskyttelse_miljostyrelsen_gds_mat2_strandbeskyttelse_merge_bor_32_area_share,Strand protection,Polygon area share,Coast,Added to strengthen the read of protected coastal edge and littoral transition zones

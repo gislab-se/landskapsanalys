@@ -11,10 +11,22 @@ suppressPackageStartupMessages({
 
 repo_root <- Sys.getenv("LANDSKAPSANALYS_REPO_ROOT", unset = "C:/gislab/landskapsanalys")
 analysis_id <- Sys.getenv("LANDSKAPSANALYS_ANALYSIS_ID", unset = "landskapsanalys_17lager_res9")
+analysis_subtitle <- Sys.getenv("LANDSKAPSANALYS_ANALYSIS_SUBTITLE", unset = "17 lager, R9")
+archived_previous_version <- Sys.getenv("LANDSKAPSANALYS_ARCHIVED_PREVIOUS_VERSION", unset = "landskapsanalys_9lager_res9")
+source_model_note <- Sys.getenv(
+  "LANDSKAPSANALYS_SOURCE_MODEL_NOTE",
+  unset = paste(
+    "9-lagersbaslinjen utokad med kust, sjo, vatmark, hede, faktisk skog,",
+    "hogsta hojd och ett kompletterande kulturmiljolager."
+  )
+)
 input_csv <- file.path(repo_root, "data/interim/geocontext_r9/bornholm_r9_geocontext_raw_manual.csv")
 hex_gpkg <- file.path(repo_root, "data/interim/geocontext_r9/bornholm_r9_hex_44_combined.gpkg")
 hex_layer <- "r9_hex_44_combined"
-config_csv <- file.path(repo_root, "script/landskapsanalys/config/landskapsanalys_17lager_res9_input_layers.csv")
+config_csv <- Sys.getenv(
+  "LANDSKAPSANALYS_CONFIG_CSV",
+  unset = file.path(repo_root, "script/landskapsanalys/config/landskapsanalys_17lager_res9_input_layers.csv")
+)
 out_dir <- Sys.getenv(
   "LANDSKAPSANALYS_OUT_DIR",
   unset = file.path(repo_root, "data/interim/landskapsanalys_versions", analysis_id)
@@ -38,18 +50,15 @@ write.csv(
 analysis_metadata <- tibble::tibble(
   analysis_id = analysis_id,
   analysis_title = "Landskapsanalys: Bornholm R9",
-  analysis_subtitle = "17 lager, R9",
-  archived_previous_version = "landskapsanalys_9lager_res9",
+  analysis_subtitle = analysis_subtitle,
+  archived_previous_version = archived_previous_version,
   n_input_layers = nrow(indicator_catalog),
   purpose_statement = paste(
     "Analysen ska beskriva vilken landskapskaraktar Bornholm har idag",
     "och pa langre sikt ge ett robust underlag for acceptansbedomning",
     "vid etablering av vindkraft och solenergi."
   ),
-  source_model_note = paste(
-    "9-lagersbaslinjen utokad med kust, sjo, vatmark, hede, faktisk skog,",
-    "hogsta hojd och ett kompletterande kulturmiljolager."
-  ),
+  source_model_note = source_model_note,
   analysis_unit_mask = "Hexagoner med total signal > 0 behalls som analysenheter; rena havshex tas bort fore kontextmatris och faktoranalys.",
   context_k_values = paste(k_values, collapse = ","),
   factor_method = "psych::fa fm=minres rotate=varimax scores=tenBerge",

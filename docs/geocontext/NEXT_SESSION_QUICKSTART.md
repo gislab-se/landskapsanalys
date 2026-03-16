@@ -3,14 +3,15 @@
 ## Open These First
 1. `SESSION_HANDOFF.md`
 2. `docs/geocontext/landskapsanalys.qmd`
-3. `script/landskapsanalys/03_build_bornholm_r9_landskapsanalys_17lager_res9.R`
+3. `script/landskapsanalys/04_build_bornholm_r9_landskapsanalys_26lager_res9.R`
 
 ## Current Baseline
-- Active model: `landskapsanalys_17lager_res9`
-- Previous baseline: `landskapsanalys_9lager_res9`
+- Active model: `landskapsanalys_26lager_res9`
+- Previous baseline: `landskapsanalys_17lager_res9`
+- Earlier baseline: `landskapsanalys_9lager_res9`
 - Archived bridge model: `landskapsanalys_gc4_res9`
 - Hex resolution: `R9`
-- Current chosen cluster count: `K = 5`
+- Current chosen cluster count: `K = 8`
 - Sea hex without any selected signal are now excluded before context modeling and factor analysis
 - Current context scales `10, 50, 100, 250, 1000` are weighted thresholds, not fixed hex-ring counts
 
@@ -32,11 +33,20 @@
 15. coastline
 16. valuable cultural environment
 17. highest contour value
+18. river
+19. sand dune
+20. protected nature types
+21. mapped nature types
+22. industry and business land
+23. built centre
+24. buildings high
+25. buildings low
+26. strand protection
 
 ## Rerun Commands
 ```powershell
 cd C:\gislab\landskapsanalys
-Rscript script\landskapsanalys\03_build_bornholm_r9_landskapsanalys_17lager_res9.R
+Rscript script\landskapsanalys\04_build_bornholm_r9_landskapsanalys_26lager_res9.R
 quarto render docs\geocontext\landskapsanalys.qmd
 ```
 
@@ -46,14 +56,15 @@ quarto render docs\geocontext\landskapsanalys.qmd
 - Rendered report:
   - `docs/geocontext/landskapsanalys.html`
 - Standalone interactive maps:
-  - `docs/geocontext/maps/landskapsanalys_17lager_res9_cluster_map.html`
-  - `docs/geocontext/maps/landskapsanalys_17lager_res9_factor_mapview.html`
+  - `docs/geocontext/maps/landskapsanalys_26lager_res9_cluster_map.html`
+  - `docs/geocontext/maps/landskapsanalys_26lager_res9_factor_mapview.html`
 - Versioned run output:
-  - `data/interim/landskapsanalys_versions/landskapsanalys_17lager_res9/`
+  - `data/interim/landskapsanalys_versions/landskapsanalys_26lager_res9/`
 
 ## What To Do Next
-1. Use the 17-layer run as the active landscape-character baseline.
+1. Use the 26-layer run as the active landscape-character baseline.
 2. Compare it against:
+   - `landskapsanalys_17lager_res9`
    - `landskapsanalys_9lager_res9`
    - `data/Landskapstyper Bornholm.pdf`
 3. Check whether the new factors and clusters actually match Bornholm's known coast, inland forest, mosaic and agricultural structures.

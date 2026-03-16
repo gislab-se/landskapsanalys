@@ -31,7 +31,7 @@ suppressPackageStartupMessages({
 })
 
 repo_root <- "C:/gislab/landskapsanalys"
-analysis_id <- Sys.getenv("LANDSKAPSANALYS_ANALYSIS_ID", unset = "landskapsanalys_17lager_res9")
+analysis_id <- Sys.getenv("LANDSKAPSANALYS_ANALYSIS_ID", unset = "landskapsanalys_26lager_res9")
 report_lang <- Sys.getenv("LANDSKAPSANALYS_REPORT_LANG", unset = "sv")
 data_dir <- Sys.getenv(
   "LANDSKAPSANALYS_DATA_DIR",
@@ -210,6 +210,8 @@ wrap_axis <- function(width = 18) {
 
 cluster_fill_opacity_default <- 0.34
 cluster_line_opacity_default <- 0.16
+factor_fill_opacity_default <- 0.58
+factor_line_opacity_default <- 0.22
 ```
 
 ## 1. Syfte och huvudfråga
@@ -483,28 +485,47 @@ factor_limit <- hex_wgs84 |>
   abs() |>
   max(na.rm = TRUE)
 
+factor_limit_robust <- hex_wgs84 |>
+  st_drop_geometry() |>
+  select(all_of(factor_cols)) |>
+  unlist(use.names = FALSE) |>
+  abs() |>
+  quantile(0.995, na.rm = TRUE) |>
+  unname()
+
 factor_pal <- colorNumeric(
   palette = c("#2166AC", "#F7F7F7", "#B2182B"),
-  domain = c(-factor_limit, factor_limit),
+  domain = c(-factor_limit_robust, factor_limit_robust),
   na.color = "transparent"
 )
 
 factor_map_widget <- leaflet(options = leafletOptions(zoomSnap = 0.25)) |>
-  addProviderTiles("CartoDB.Positron")
+  addProviderTiles(
+    "Esri.WorldImagery",
+    group = txt("Satellitbild", "Satellite imagery")
+  ) |>
+  addProviderTiles(
+    "CartoDB.Positron",
+    group = txt("Ljus baskarta", "Light basemap")
+  )
 
 for (f in factor_cols) {
   data_factor <- hex_wgs84
   data_factor$map_value <- data_factor[[f]]
+  data_factor$map_value_clipped <- pmax(
+    pmin(data_factor$map_value, factor_limit_robust),
+    -factor_limit_robust
+  )
   data_factor$factor_label <- factor_label(f)
 
   factor_map_widget <- factor_map_widget |>
     addPolygons(
       data = data_factor,
       group = factor_label(f),
-      fillColor = ~factor_pal(map_value),
-      fillOpacity = 0.72,
+      fillColor = ~factor_pal(map_value_clipped),
+      fillOpacity = factor_fill_opacity_default,
       color = "#666666",
-      opacity = 0.5,
+      opacity = factor_line_opacity_default,
       weight = 0.15,
       popup = ~paste0(
         "hex: ", hex_id,
@@ -521,16 +542,76 @@ if (length(factor_cols) > 1) {
 
 factor_map_widget <- factor_map_widget |>
   addLayersControl(
+    baseGroups = c(
+      txt("Satellitbild", "Satellite imagery"),
+      txt("Ljus baskarta", "Light basemap")
+    ),
     overlayGroups = factor_label(factor_cols),
     options = layersControlOptions(collapsed = FALSE)
   ) |>
   addLegend(
     "bottomright",
     pal = factor_pal,
-    values = c(-factor_limit, factor_limit),
+    values = c(-factor_limit_robust, factor_limit_robust),
     title = "Faktorscore"
   ) |>
   addScaleBar(position = "bottomleft")
+
+factor_map_widget <- htmlwidgets::onRender(
+  factor_map_widget,
+  sprintf(
+    "
+function(el, x) {
+  var map = this;
+  var baseFill = %s;
+  var baseStroke = %s;
+  var control = L.control({position: 'topright'});
+
+  control.onAdd = function() {
+    var div = L.DomUtil.create('div', 'factor-opacity-control leaflet-bar');
+    div.style.background = 'rgba(255,255,255,0.94)';
+    div.style.padding = '10px 12px';
+    div.style.borderRadius = '8px';
+    div.style.boxShadow = '0 1px 6px rgba(0,0,0,0.22)';
+    div.style.minWidth = '180px';
+    div.innerHTML = '<div style=\"font-weight:600;margin-bottom:6px;\">Faktorernas opacitet</div>' +
+      '<input id=\"factor-opacity-slider\" type=\"range\" min=\"0.05\" max=\"1.00\" step=\"0.05\" value=\"' + baseFill + '\" style=\"width:100%%;\">' +
+      '<div id=\"factor-opacity-value\" style=\"margin-top:4px;font-size:12px;\">' + Math.round(baseFill * 100) + '%%</div>';
+    L.DomEvent.disableClickPropagation(div);
+    L.DomEvent.disableScrollPropagation(div);
+    return div;
+  };
+
+  control.addTo(map);
+
+  function updateOpacity(value) {
+    var fill = Number(value);
+    var stroke = Math.max(0.10, Math.min(0.8, fill * 0.45));
+    map.eachLayer(function(layer) {
+      if (layer instanceof L.Polygon) {
+        layer.setStyle({fillOpacity: fill, opacity: stroke});
+      }
+    });
+    var label = document.getElementById('factor-opacity-value');
+    if (label) {
+      label.textContent = Math.round(fill * 100) + '%%';
+    }
+  }
+
+  var slider = document.getElementById('factor-opacity-slider');
+  if (slider) {
+    slider.addEventListener('input', function(evt) {
+      updateOpacity(evt.target.value);
+    });
+  }
+
+  updateOpacity(baseFill);
+}
+",
+    factor_fill_opacity_default,
+    factor_line_opacity_default
+  )
+)
 
 htmlwidgets::saveWidget(
   factor_map_widget,
