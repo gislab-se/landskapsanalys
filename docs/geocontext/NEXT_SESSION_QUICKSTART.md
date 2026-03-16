@@ -3,13 +3,16 @@
 ## Open These First
 1. `SESSION_HANDOFF.md`
 2. `docs/geocontext/landskapsanalys.qmd`
-3. `script/landskapsanalys/02_build_bornholm_r9_landskapsanalys_9lager_res9.R`
+3. `script/landskapsanalys/03_build_bornholm_r9_landskapsanalys_17lager_res9.R`
 
 ## Current Baseline
-- Active model: `landskapsanalys_9lager_res9`
+- Active model: `landskapsanalys_17lager_res9`
+- Previous baseline: `landskapsanalys_9lager_res9`
 - Archived bridge model: `landskapsanalys_gc4_res9`
 - Hex resolution: `R9`
-- Current chosen cluster count: `K = 8`
+- Current chosen cluster count: `K = 5`
+- Sea hex without any selected signal are now excluded before context modeling and factor analysis
+- Current context scales `10, 50, 100, 250, 1000` are weighted thresholds, not fixed hex-ring counts
 
 ## Current Input Layers
 1. permanent population
@@ -21,11 +24,19 @@
 7. agricultural land / Markblokke
 8. relief
 9. protected watercourses
+10. lake
+11. wetland
+12. moor / hede
+13. forest
+14. coastal zone
+15. coastline
+16. valuable cultural environment
+17. highest contour value
 
 ## Rerun Commands
 ```powershell
 cd C:\gislab\landskapsanalys
-Rscript script\landskapsanalys\02_build_bornholm_r9_landskapsanalys_9lager_res9.R
+Rscript script\landskapsanalys\03_build_bornholm_r9_landskapsanalys_17lager_res9.R
 quarto render docs\geocontext\landskapsanalys.qmd
 ```
 
@@ -35,23 +46,19 @@ quarto render docs\geocontext\landskapsanalys.qmd
 - Rendered report:
   - `docs/geocontext/landskapsanalys.html`
 - Standalone interactive maps:
-  - `docs/geocontext/maps/landskapsanalys_9lager_res9_cluster_map.html`
-  - `docs/geocontext/maps/landskapsanalys_9lager_res9_factor_mapview.html`
+  - `docs/geocontext/maps/landskapsanalys_17lager_res9_cluster_map.html`
+  - `docs/geocontext/maps/landskapsanalys_17lager_res9_factor_mapview.html`
 - Versioned run output:
-  - `data/interim/landskapsanalys_versions/landskapsanalys_9lager_res9/`
+  - `data/interim/landskapsanalys_versions/landskapsanalys_17lager_res9/`
 
 ## What To Do Next
-1. Use the 9-layer run as the baseline.
-2. Run a sensitivity test with and without:
+1. Use the 17-layer run as the active landscape-character baseline.
+2. Compare it against:
+   - `landskapsanalys_9lager_res9`
+   - `data/Landskapstyper Bornholm.pdf`
+3. Check whether the new factors and clusters actually match Bornholm's known coast, inland forest, mosaic and agricultural structures.
+4. After that, run the planned sensitivity test with and without:
    - `landscapes_worthy_of_preservation_pdk_bevaringsvaerdigelandskaber_bol_32`
-3. Compare:
-   - factor loadings
-   - factor interpretability
-   - cluster geography
-   - whether the planning layer enriches the model or pre-codes the answer
-4. After that, prepare two parallel experiments:
-   - `naturgeografisk`
-   - `kulturgeografisk`
 
 ## Key Interpretation Reminders
 - Equal factor-score standard deviations are expected because the factor-score columns are normalized.
