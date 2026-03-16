@@ -345,6 +345,10 @@ Med `r layer_count` lager ger det `r n_context_columns` kontextvariabler. Det ä
 
 Poängen med det steget är att ett landskap sällan kan förstås enbart genom vad som ligger i en enskild ruta. En hexagon med lite skog kan ligga i ett stort skogligt sammanhang, ett kustnära sammanhang eller i en mosaik av små skogsfragment. Kontextmatrisen är det som gör att modellen kan skilja sådana situationer åt.
 
+Samtidigt finns här en metodsvaghet som är viktig nog att lyfta öppet. Den nuvarande viktkolumnen byggs upp genom att flera typer av indikatorer summeras i samma `total`: ytor som andelar, linjer som längder och punktlager som aggregerade antal eller intensiteter. När denna blandade `total` sedan används för att styra hur långt nearest-neighbour-sökningen går och hur omgivningsvärden viktas, behandlas mått som inte delar samma enhet som om de vore direkt jämförbara. Det innebär att lager med stora numeriska tal kan få oproportionerligt inflytande över kontextmatrisen, även om de inte borde vara landskapsmässigt viktigare.
+
+Detta är sannolikt en av modellens största kvarvarande svagheter. Standardiseringen i faktoranalysen löser inte problemet fullt ut, eftersom snedvridningen uppstår tidigare, redan när grannskap, räckvidd och viktade omgivningsmått byggs.
+
 De fem skalorna är inte satta i sten. De är en pragmatisk avvägning mellan lokal, mellanliggande och bred kontext utan att explodera antalet variabler. Med `r layer_count` lager och två kontextmått ger fem skalor redan `r n_context_columns` kontextvariabler. Tio skalor skulle ge det dubbla och tjugo skalor fyra gånger så många kolumner, vilket snabbt ökar kollinearitet och gör faktorstrukturen svårare att tolka.
 
 Om analysen i stället ska följa hexgridens topologi mer direkt går det att byta logik och arbeta med fasta grannskapsringar, till exempel `6, 18, 36 ...` eller ringavstånd `1, 2, 3 ...`. Det är fullt möjligt, men det är en annan modell än den nuvarande viktstyrda kontexten och bör därför testas som en explicit metodvariant, inte bara som en kosmetisk parameterändring.
@@ -369,6 +373,7 @@ Det finns också en viktig begränsning här: om datagrunden är sned eller om c
 - Faktoranalysen bygger på `r n_context_columns` kontextvariabler, inte på de `r layer_count` rålagren direkt.
 - `r comma(excluded_zero_signal_hex)` rena havshex utan signal har tagits bort före kontextmatris, faktoranalys och klustring.
 - `r comma(zero_total_hex)` hexagoner saknar total signal i viktkolumnen. De är inte borttagna ur geografin, men de visar att modellen fortfarande har tunna delar.
+- Den nuvarande viktlogiken blandar ytor, linjelängder och punktvärden i samma `total`, vilket riskerar att ge metodisk slagsida redan innan faktoranalysen börjar.
 - De fem faktorerna förklarar bara cirka `r percent(var_explained, accuracy = 0.1)` av den totala variansen. Det är normalt för en komplex landskapsmodell, men det betyder att rapporten ska läsas som en stark förenkling, inte som en fullständig landskapsbeskrivning.
 - Klustren är analytiska grupper i faktorrummet. De är inte automatiskt "sanna" landskapstyper för planeringsbeslut.
 
@@ -838,6 +843,7 @@ De viktigaste osäkerheterna i denna version är:
 - fem faktorer förklarar bara cirka `r percent(var_explained, accuracy = 0.1)` av totalvariansen
 - kustens visuella exponering, geologi och maritima sammanhang är fortfarande svagt representerade
 - flera lager är juridiska eller administrativa avgränsningar och inte rena landskapsprocesser
+- viktkolumnen för kontextsteget blandar olika geometriers måttenheter och kan därför snedvrida både grannskap och faktorstruktur
 - `r percent(zero_total_share, accuracy = 0.1)` av hexagonerna har ingen signal i totalvikten och bör därför läsas försiktigt
 
 Därför bör rapporten användas så här:
@@ -860,7 +866,21 @@ Som extern verklighetskontroll finns en befintlig skrivelse i projektet:
 
 Den bör inte behandlas som facit, men den är viktig som jämförelsematerial. Om den befintliga Bornholmsanalysen tydligt skiljer mellan kustlandskap, jordbrukslandskap och skogligt sprickdalslandskap, då ska denna modell kunna visa motsvarande huvudmönster i faktor- och klusterkartorna. Om den inte gör det är det ett tecken på att datagrund eller modellval fortfarande är för svaga.
 
-Den viktigaste uppgiften i nästa steg är därför inte att omedelbart lägga till fler klasser, utan att kontrollera om den nya 17-lagersmodellen faktiskt börjar likna Bornholms verkliga landskapsstruktur när den jämförs med existerande kunskap.
+Den viktigaste uppgiften i nästa steg är därför inte att omedelbart lägga till fler klasser, utan att pröva själva viktlogiken i kontextsteget. Först därefter går det att avgöra om modellen verkligen närmar sig Bornholms verkliga landskapsstruktur.
+
+Ett starkt nästa test är att dela upp analysen i tre separata delmodeller:
+
+1. en ytmodell där bara polygonlager används
+2. en linjemodell där bara linjelager används
+3. en punktmodell där bara punkt- eller punktaggregerade lager används
+
+Poängen med en sådan uppdelning är inte att slutprodukten ska bli tre olika landskapsanalyser, utan att pröva om olika geometrityper driver olika faktorlogiker. Om yt-, linje- och punktmodellerna producerar tydliga men olika gradienter blir det ett starkt tecken på att den nuvarande sammanslagna viktkolumnen maskerar viktiga skillnader. Om de däremot visar liknande huvudmönster stärks förtroendet för den sammanslagna modellen.
+
+Den mest robusta fortsättningen är därför sannolikt:
+
+- först köra ytor, linjer och punkter var för sig
+- sedan jämföra faktorernas stabilitet, klustrens geografi och likheten med den befintliga Bornholmsanalysen
+- först därefter bygga en reviderad samlad modell där viktningen mellan geometrier är explicit och motiverad
 
 ## Utdata från denna körning
 

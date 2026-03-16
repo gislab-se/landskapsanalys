@@ -62,13 +62,18 @@ quarto render docs\geocontext\landskapsanalys.qmd
   - `data/interim/landskapsanalys_versions/landskapsanalys_26lager_res9/`
 
 ## What To Do Next
-1. Use the 26-layer run as the active landscape-character baseline.
-2. Compare it against:
+1. Use the 26-layer run as the active landscape-character baseline, but treat the current context weighting as provisional.
+2. Test the geometry-mixing weakness explicitly:
+   - run one model for polygon layers only
+   - run one model for line layers only
+   - run one model for point / point-aggregated layers only
+   - compare factor stability, cluster geography and similarity to known Bornholm landscape structure
+3. Compare the current model against:
    - `landskapsanalys_17lager_res9`
    - `landskapsanalys_9lager_res9`
    - `data/Landskapstyper Bornholm.pdf`
-3. Check whether the new factors and clusters actually match Bornholm's known coast, inland forest, mosaic and agricultural structures.
-4. After that, run the planned sensitivity test with and without:
+4. Check whether the new factors and clusters actually match Bornholm's known coast, inland forest, mosaic and agricultural structures.
+5. After that, run the planned sensitivity test with and without:
    - `landscapes_worthy_of_preservation_pdk_bevaringsvaerdigelandskaber_bol_32`
 
 ## Key Interpretation Reminders
