@@ -1,0 +1,53 @@
+name: Publish geocontext report
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/publish-geocontext-pages.yml
+      - docs/geocontext/index.html
+      - docs/geocontext/robots.txt
+      - docs/geocontext/landskapsanalys.html
+      - docs/geocontext/maps/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Prepare Pages artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          site_dir="$RUNNER_TEMP/pages-site"
+          mkdir -p "$site_dir"
+          cp docs/geocontext/index.html "$site_dir/index.html"
+          cp docs/geocontext/landskapsanalys.html "$site_dir/landskapsanalys.html"
+          cp docs/geocontext/robots.txt "$site_dir/robots.txt"
+          cp -R docs/geocontext/maps "$site_dir/maps"
+          touch "$site_dir/.nojekyll"
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ runner.temp }}/pages-site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
