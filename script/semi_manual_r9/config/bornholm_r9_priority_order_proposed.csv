@@ -43,3 +43,5 @@
 42,42,"natura_2000_ramsar","Natura 2000 - Ramsar","Skyddad natur","Internationellt skydd av vatmarker med hog planeringsrelevans"
 43,43,"ferry_routes_osm_route_ferry_extract101224_bol_ns","Ferry routes (OSM)","Tillganglighet","Maritim tillganglighet och logistiska kopplingar till/on Bornholm"
 44,44,"aviation_bird_collision_zones_tst","Aviation Bird-collision Zones","Restriktioner","Flygsakerhet och biologiska konfliktytor"
+45,45,"jordart_25000_v7_1","Jordart 1:25 000 v7.1","Geologi","Ytgeologiskt baslager fran manual extra layers; kandidat for senare subtype-splits"
+46,46,"prekvart_bornholm","Prekvart Bornholm","Geologi","Berggrundsbaslager fran manual extra layers; kandidat for senare subtype-splits"

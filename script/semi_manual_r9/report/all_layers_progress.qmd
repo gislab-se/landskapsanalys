@@ -35,6 +35,8 @@ run_order_csv <- file.path(repo, "script", "semi_manual_r9", "config", "bornholm
 layer_out_dir <- file.path(repo, "data", "interim", "geocontext_r9", "layers")
 figure_dir <- file.path(repo, "docs", "geocontext", "figures")
 review_dir <- file.path(repo, "docs", "geocontext", "review")
+source(file.path(repo, "script", "semi_manual_r9", "lib", "subcategory_splits.R"))
+split_cfg <- read_subcategory_splits(file.path(repo, "script", "semi_manual_r9"), active_only = TRUE)
 
 layers <- read.csv(layer_csv, stringsAsFactors = FALSE)
 layers$include <- as.logical(layers$include)
@@ -51,7 +53,7 @@ if (file.exists(priority_csv)) {
 layers$run_order[is.na(layers$run_order)] <- layers$layer_index[is.na(layers$run_order)]
 
 report_min_step <- 1L
-report_max_step <- 40L
+report_max_step <- max(layers$run_order, na.rm = TRUE)
 layers <- layers[layers$run_order >= report_min_step & layers$run_order <= report_max_step, , drop = FALSE]
 
 layers$out_csv <- file.path(
@@ -151,7 +153,7 @@ first_existing <- function(paths) {
   hit[1]
 }
 
-render_short_table <- function(out_csv) {
+render_short_table <- function(out_csv, value_col = NULL) {
   out <- read.csv(out_csv, stringsAsFactors = FALSE)
   value_cols <- setdiff(names(out), "hex_id")
   if (length(value_cols) == 0) {
@@ -193,7 +195,12 @@ render_short_table <- function(out_csv) {
     value_cols[1]
   }
 
-  primary_col <- select_primary_value_col(out)
+  primary_col <- if (!is.null(value_col) && nzchar(value_col) && value_col %in% names(out)) {
+    value_col
+  } else {
+    select_primary_value_col(out)
+  }
+
   val <- suppressWarnings(as.numeric(out[[primary_col]]))
   tbl <- data.frame(
     indikator = c("Antal hexagoner", "Primar utkolumn", "Hexagoner med > 0", "Maxvarde"),
@@ -306,46 +313,73 @@ for (i in seq_len(nrow(completed))) {
     cat("_Ingen bild hittad for detta lager._\n\n")
   }
 
-  if (step_no == 28) {
-    roads_png_medium <- file.path(figure_dir, "layer28_roads_medium_overview.png")
-    roads_png_large <- file.path(figure_dir, "layer28_roads_large_overview.png")
-    roads_html <- file.path(review_dir, "layer28_roads_medium_large_review.html")
-
-    cat("### Vagar: Mellan och Stora\n\n")
-    cat("Separat redovisning av vagklass `medium` och `large` med en egen QA-karta.\n\n")
-
-    if (file.exists(roads_png_medium)) {
-      cat("#### Mellan vagar\n\n")
-      cat("![](", knitr::image_uri(roads_png_medium), ")\n\n", sep = "")
-    } else {
-      cat("#### Mellan vagar\n\n")
-      cat("_Ingen separat bild hittad for medium-vagar._\n\n")
-    }
-
-    if (file.exists(roads_png_large)) {
-      cat("#### Stora vagar\n\n")
-      cat("![](", knitr::image_uri(roads_png_large), ")\n\n", sep = "")
-    } else {
-      cat("#### Stora vagar\n\n")
-      cat("_Ingen separat bild hittad for large-vagar._\n\n")
-    }
-
-    if (file.exists(roads_html)) {
+  step_splits <- split_cfg[split_cfg$render_under_parent & split_cfg$parent_run_order == step_no, , drop = FALSE]
+  step_children <- collapse_split_children(step_splits)
+  if (nrow(step_children) > 0) {
+    combined_child_html <- file.path(review_dir, sprintf("layer%02d_subcategories_review.html", step_no))
+    cat("### Underkategorier\n\n")
+    if (file.exists(combined_child_html)) {
       cat(
-        "Lokal QA (interaktiv HTML med 2 indata + 2 utdata): [Oppna karta](",
-        as_file_url(roads_html),
+        "Samlad underkategorikarta (interaktiv HTML): [Oppna karta](",
+        as_file_url(combined_child_html),
         ")\n\n",
         sep = ""
       )
-    } else {
-      cat("Lokal QA (interaktiv HTML med 2 indata + 2 utdata): _saknas_\n\n")
+    }
+    for (j in seq_len(nrow(step_children))) {
+      srow <- step_children[j, , drop = FALSE]
+      child_values <- unique(step_splits$split_value[step_splits$child_key == srow$child_key])
+      child_png <- file.path(figure_dir, sprintf("layer%02d_%s_overview.png", step_no, srow$child_key))
+      child_html <- file.path(review_dir, sprintf("layer%02d_%s_review.html", step_no, srow$child_key))
+
+      cat("#### ", srow$child_display_name, "\n\n", sep = "")
+      if (length(child_values) == 1) {
+        cat(
+          "Uppdelat under originallagret via faltet `", srow$split_field,
+          "` = `", child_values, "`.\n\n",
+          sep = ""
+        )
+      } else {
+        cat(
+          "Uppdelat under originallagret via faltet `", srow$split_field,
+          "` grupperat fran foljande vardekategorier: `",
+          paste(child_values, collapse = "`, `"),
+          "`.\n\n",
+          sep = ""
+        )
+      }
+      cat("Utdata-kolumn: `", srow$child_output_column, "`\n\n", sep = "")
+
+      if (!is.na(child_png) && file.exists(child_png)) {
+        cat("![](", knitr::image_uri(child_png), ")\n\n", sep = "")
+      } else {
+        cat("_Ingen separat bild hittad for denna underkategori._\n\n")
+      }
+
+      if (!is.na(child_html) && file.exists(child_html)) {
+        cat(
+          "Lokal QA (interaktiv HTML for underkategori): [Oppna karta](",
+          as_file_url(child_html),
+          ")\n\n",
+          sep = ""
+        )
+      } else {
+        cat("Lokal QA (interaktiv HTML for underkategori): _saknas_\n\n")
+      }
+
+      cat("##### Kort tabell\n\n")
+      render_short_table(row$out_csv, value_col = srow$child_output_column)
+      cat("\n\n")
     }
   }
 
   cat("### Kort tabell\n\n")
+
   render_short_table(row$out_csv)
   cat("\n\n")
 }
 ```
+
+
 
 

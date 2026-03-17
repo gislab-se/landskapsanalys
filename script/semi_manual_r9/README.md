@@ -1,6 +1,6 @@
 # Semi-Manual R9 Geocontext Pipeline
 
-This folder is a fresh-start pipeline for aggregating all 37 geocontext layers to hexagons, one layer at a time.
+This folder is a fresh-start pipeline for aggregating all 46 geocontext layers to hexagons, one layer at a time.
 
 ## Why this setup
 - One script per layer gives transparent, inspectable runs.
@@ -14,7 +14,7 @@ This folder is a fresh-start pipeline for aggregating all 37 geocontext layers t
 ## Scripts
 - `00_check_hex_grid_r9.R`
   - Verifies that the R9 hex table exists in Postgres.
-- `layers/01_*.R` ... `layers/37_*.R`
+- `layers/01_*.R` ... `layers/46_*.R`
   - Runs one layer per script, in prioritized run order (not original catalog order).
   - Mapping file:
     - `script/semi_manual_r9/config/bornholm_r9_run_order.csv`
@@ -49,7 +49,7 @@ This folder is a fresh-start pipeline for aggregating all 37 geocontext layers t
 
 ## Typical run order
 1. Run `00_check_hex_grid_r9.R`.
-2. For each script in `layers/01` to `layers/37`, run a preview pass (`LAYER_PREVIEW_ONLY=true`) to inspect map, columns, and summary.
+2. For each script in `layers/01` to `layers/46`, run a preview pass (`LAYER_PREVIEW_ONLY=true`) to inspect map, columns, and summary.
 3. Re-run that same script with `LAYER_PREVIEW_ONLY=false` to write the aggregated CSV output.
 4. Create/update local review HTML for that step:
    - `Rscript script/semi_manual_r9/report/render_step_review_html.R NN`

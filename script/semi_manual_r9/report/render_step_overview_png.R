@@ -16,6 +16,11 @@ if (is.na(step_no) || step_no < 1 || step_no > max_step) {
   stop(sprintf("Provide run step number 1..%d, e.g. Rscript .../render_step_overview_png.R 28", max_step))
 }
 
+value_col_override <- Sys.getenv("VALUE_COL", "")
+output_path_override <- Sys.getenv("OUTPUT_PATH", "")
+plot_title_override <- Sys.getenv("PLOT_TITLE", "")
+plot_subtitle_override <- Sys.getenv("PLOT_SUBTITLE", "")
+
 choose_value_col <- function(out_df) {
   value_cols <- setdiff(names(out_df), "hex_id")
   if (length(value_cols) == 0) {
@@ -230,7 +235,10 @@ hex <- load_hex_grid(
 )
 
 out <- read.csv(out_csv, stringsAsFactors = FALSE)
-value_col <- choose_value_col(out)
+value_col <- if (nzchar(value_col_override)) value_col_override else choose_value_col(out)
+if (!value_col %in% names(out)) {
+  stop("Requested VALUE_COL not found in output CSV: ", value_col)
+}
 if (is.na(value_col) || !nzchar(value_col)) {
   stop("No value column found in output CSV: ", out_csv)
 }
@@ -260,8 +268,8 @@ legend_palette <- class_info$palette[match(legend_levels, levels(hex_after$class
 
 bbox_hex <- sf::st_bbox(hex_after)
 
-plot_title <- sprintf("Steg %02d: %s", step_no, run_row$display_name)
-plot_subtitle <- paste0("Aggregerat till R9-hexagoner (", value_col, ")")
+plot_title <- if (nzchar(plot_title_override)) plot_title_override else sprintf("Steg %02d: %s", step_no, run_row$display_name)
+plot_subtitle <- if (nzchar(plot_subtitle_override)) plot_subtitle_override else paste0("Aggregerat till R9-hexagoner (", value_col, ")")
 
 p <- ggplot() +
   geom_sf(data = hex_zero, fill = "white", color = "white", alpha = 0.06, linewidth = 0.08) +
@@ -294,9 +302,10 @@ p <- ggplot() +
 
 out_dir <- file.path(repo, "docs", "geocontext", "figures")
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
-out_png_step <- file.path(out_dir, sprintf("layer%02d_overview.png", step_no))
+out_png_step <- if (nzchar(output_path_override)) output_path_override else file.path(out_dir, sprintf("layer%02d_overview.png", step_no))
 out_png_orig <- file.path(out_dir, sprintf("%02d_%s.png", orig_idx, layer_row$layer_key))
 
+dir.create(dirname(out_png_step), recursive = TRUE, showWarnings = FALSE)
 ggsave(
   filename = out_png_step,
   plot = p,
@@ -306,9 +315,11 @@ ggsave(
   bg = "#b7c6cf"
 )
 
-if (!identical(out_png_orig, out_png_step)) {
+if (!nzchar(output_path_override) && !identical(out_png_orig, out_png_step)) {
   file.copy(out_png_step, out_png_orig, overwrite = TRUE)
 }
 
 message("Wrote PNG: ", out_png_step)
-message("Wrote PNG: ", out_png_orig)
+if (!nzchar(output_path_override)) {
+  message("Wrote PNG: ", out_png_orig)
+}

@@ -19,7 +19,7 @@ Applies to:
 
 ## Run order
 
-- Script order `layers/01` to `layers/37` is the active priority order.
+- Script order `layers/01` to `layers/46` is the active priority order.
 - Mapping to original catalog index is stored in:
   - `script/semi_manual_r9/config/bornholm_r9_run_order.csv`
 
@@ -88,6 +88,7 @@ When changing scripts:
 
 ## What not to do
 
-- Do not run all 37 layers in one bulk command unless explicitly requested.
+- Do not run all 46 layers in one bulk command unless explicitly requested.
 - Do not skip preview to "save time".
 - Do not silently change run order or layer mapping.
+

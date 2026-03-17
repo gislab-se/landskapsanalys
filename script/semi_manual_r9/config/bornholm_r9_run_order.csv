@@ -43,3 +43,5 @@
 42,"42_natura2000_ramsar.R",42,"natura_2000_ramsar","Natura 2000 - Ramsar"
 43,"43_ferry_routes.R",43,"ferry_routes_osm_route_ferry_extract101224_bol_ns","Ferry routes (OSM)"
 44,"44_aviation_bird_collision_zones.R",44,"aviation_bird_collision_zones_tst","Aviation Bird-collision Zones"
+45,"45_jordart_25000_v7_1.R",45,"jordart_25000_v7_1","Jordart 1:25 000 v7.1"
+46,"46_prekvart_bornholm.R",46,"prekvart_bornholm","Prekvart Bornholm"

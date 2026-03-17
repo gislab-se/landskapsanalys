@@ -16,6 +16,14 @@ if (!is.finite(max_step)) max_step <- 44
 if (is.na(step_no) || step_no < 1 || step_no > max_step) {
   stop(sprintf("Provide run step number 1..%d as argument, e.g. Rscript .../render_step_review_html.R 01", max_step))
 }
+value_col_override <- Sys.getenv("VALUE_COL", "")
+output_path_override <- Sys.getenv("OUTPUT_PATH", "")
+input_filter_field <- Sys.getenv("INPUT_FILTER_FIELD", "")
+input_filter_value <- Sys.getenv("INPUT_FILTER_VALUE", "")
+input_filter_mode <- Sys.getenv("INPUT_FILTER_MODE", "field_equals")
+subcategory_child_key <- Sys.getenv("SUBCATEGORY_CHILD_KEY", "")
+input_layer_name_override <- Sys.getenv("INPUT_LAYER_NAME", "")
+output_layer_name_override <- Sys.getenv("OUTPUT_LAYER_NAME", "")
 output_alpha <- suppressWarnings(as.numeric(Sys.getenv("MAPVIEW_OUTPUT_ALPHA", "0.35")))
 if (is.na(output_alpha) || output_alpha <= 0 || output_alpha > 1) {
   output_alpha <- 0.35
@@ -137,7 +145,27 @@ classify_length_jenks <- function(vals, zero_level = "0", n_target = 5L) {
   )
 }
 
+format_area_share_percent <- function(x) {
+  x <- suppressWarnings(as.numeric(x))
+  out <- rep(NA_character_, length(x))
+  ok <- !is.na(x)
+  out[ok] <- paste0(format(round(x[ok] * 100, 1), trim = TRUE, scientific = FALSE, nsmall = 1), "%")
+  out
+}
+
+format_area_share_columns <- function(sf_obj) {
+  share_cols <- names(sf_obj)[grepl("_area_share($|_)", names(sf_obj))]
+  if (length(share_cols) == 0) {
+    return(sf_obj)
+  }
+  for (nm in share_cols) {
+    sf_obj[[nm]] <- format_area_share_percent(sf_obj[[nm]])
+  }
+  sf_obj
+}
+
 source("script/semi_manual_r9/lib/manual_layer_aggregation.R")
+source("script/semi_manual_r9/lib/subcategory_splits.R")
 
 home <- semi_manual_home()
 repo <- repo_root(home)
@@ -192,16 +220,34 @@ out <- read.csv(out_csv, stringsAsFactors = FALSE)
 hex_after <- dplyr::left_join(hex, out, by = "hex_id")
 source_layer <- read_layer_sf(layer_row$source_path, layer_row$layer_name, quiet = TRUE)
 source_layer <- prepare_source_layer(source_layer, sf::st_crs(hex_after))
+if (nzchar(subcategory_child_key)) {
+  split_rows <- read_subcategory_splits(home, parent_run_order = step_no)
+  source_layer <- subset_source_by_child(
+    source_layer,
+    split_rows = split_rows,
+    child_key = subcategory_child_key
+  )
+} else if (nzchar(input_filter_field) && nzchar(input_filter_value)) {
+  source_layer <- subset_source_by_split(
+    source_layer,
+    split_field = input_filter_field,
+    split_value = input_filter_value,
+    input_filter_mode = input_filter_mode
+  )
+}
 
 bbox_hex <- sf::st_bbox(hex_after)
 bbox_poly <- sf::st_as_sfc(bbox_hex)
 inside_bbox <- lengths(sf::st_intersects(source_layer, bbox_poly)) > 0
 source_layer <- source_layer[inside_bbox, , drop = FALSE]
 
-value_col <- choose_value_col(out)
+value_col <- if (nzchar(value_col_override)) value_col_override else choose_value_col(out)
+if (!value_col %in% names(out)) {
+  stop("Requested VALUE_COL not found in output CSV: ", value_col)
+}
 if (is.na(value_col) || !nzchar(value_col)) {
   output_map <- mapview::mapview(
-    hex_after,
+    format_area_share_columns(hex_after),
     alpha.regions = 0.10,
     color = "grey65",
     layer.name = "Output: no value column"
@@ -225,11 +271,11 @@ if (is.na(value_col) || !nzchar(value_col)) {
       ordered = TRUE
     )
     output_map <- mapview::mapview(
-      hex_after,
+    format_area_share_columns(hex_after),
       zcol = "review_class",
       col.regions = c("#ffffff10", "#fee08b", "#fdae61", "#f46d43", "#d53e4f", "#9e0142", "#5e4fa2", "#3288bd", "#66c2a5"),
       alpha.regions = output_alpha,
-      layer.name = paste0("Output: ", value_col, " (classed)")
+      layer.name = if (nzchar(output_layer_name_override)) output_layer_name_override else paste0("Output: ", value_col, " (classed)")
     )
   } else if (grepl("_area_share$", value_col)) {
     vals <- suppressWarnings(as.numeric(hex_after[[value_col]]))
@@ -246,40 +292,40 @@ if (is.na(value_col) || !nzchar(value_col)) {
       ordered = TRUE
     )
     output_map <- mapview::mapview(
-      hex_after,
+    format_area_share_columns(hex_after),
       zcol = "review_class",
       col.regions = c("#ffffff10", "#e5f5e0", "#a1d99b", "#74c476", "#31a354", "#006d2c"),
       alpha.regions = output_alpha,
-      layer.name = paste0("Output: ", value_col, " (classed)")
+      layer.name = if (nzchar(output_layer_name_override)) output_layer_name_override else paste0("Output: ", value_col, " (classed)")
     )
   } else if (grepl("_length_m($|_)", value_col)) {
     vals <- suppressWarnings(as.numeric(hex_after[[value_col]]))
     out <- classify_length_jenks(vals)
     hex_after$review_class <- out$class
     output_map <- mapview::mapview(
-      hex_after,
+    format_area_share_columns(hex_after),
       zcol = "review_class",
       col.regions = out$palette,
       alpha.regions = output_alpha,
-      layer.name = paste0("Output: ", value_col, " (classed)")
+      layer.name = if (nzchar(output_layer_name_override)) output_layer_name_override else paste0("Output: ", value_col, " (classed)")
     )
   } else if (grepl("_m$", value_col)) {
     vals <- suppressWarnings(as.numeric(hex_after[[value_col]]))
     out <- classify_length_jenks(vals)
     hex_after$review_class <- out$class
     output_map <- mapview::mapview(
-      hex_after,
+    format_area_share_columns(hex_after),
       zcol = "review_class",
       col.regions = out$palette,
       alpha.regions = max(output_alpha, 0.55),
-      layer.name = paste0("Output: ", value_col, " (classed hojdintervall)")
+      layer.name = if (nzchar(output_layer_name_override)) output_layer_name_override else paste0("Output: ", value_col, " (classed hojdintervall)")
     )
   } else {
     output_map <- mapview::mapview(
-      hex_after,
+    format_area_share_columns(hex_after),
       zcol = value_col,
       alpha.regions = output_alpha,
-      layer.name = paste0("Output: ", value_col)
+      layer.name = if (nzchar(output_layer_name_override)) output_layer_name_override else paste0("Output: ", value_col)
     )
   }
 }
@@ -287,13 +333,13 @@ if (is.na(value_col) || !nzchar(value_col)) {
 input_map <- mapview::mapview(
   source_layer,
   alpha.regions = 0.25,
-  layer.name = paste0("Input: ", layer_row$display_name)
+  layer.name = if (nzchar(input_layer_name_override)) input_layer_name_override else paste0("Input: ", layer_row$display_name)
 )
 
 review_map <- output_map + input_map
 review_leaflet <- mapview:::mapview2leaflet(review_map)
 
-out_html <- file.path(repo, "docs", "geocontext", "review", sprintf("layer%02d_review.html", step_no))
+out_html <- if (nzchar(output_path_override)) output_path_override else file.path(repo, "docs", "geocontext", "review", sprintf("layer%02d_review.html", step_no))
 dir.create(dirname(out_html), recursive = TRUE, showWarnings = FALSE)
 htmlwidgets::saveWidget(review_leaflet, file = out_html, selfcontained = FALSE)
 message("Wrote HTML: ", out_html)
