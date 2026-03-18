@@ -1,0 +1,824 @@
+---
+title: "Landskapsanalys v2: Bornholm R9 (lättversion)"
+lang: sv
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: true
+    code-summary: "Visa kod"
+    embed-resources: false
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: setup
+suppressPackageStartupMessages({
+  library(sf)
+  library(dplyr)
+  library(tidyr)
+  library(stringr)
+  library(purrr)
+  library(ggplot2)
+  library(scales)
+  library(knitr)
+})
+
+repo_root <- "C:/gislab/landskapsanalys"
+analysis_id <- Sys.getenv("LANDSKAPSANALYS_ANALYSIS_ID", unset = "landskapsanalys_v2_baseline58_res9")
+report_lang <- Sys.getenv("LANDSKAPSANALYS_REPORT_LANG", unset = "sv")
+data_dir <- Sys.getenv(
+  "LANDSKAPSANALYS_DATA_DIR",
+  unset = file.path(repo_root, "data/interim/landskapsanalys_versions", analysis_id)
+)
+current_input_path <- knitr::current_input(dir = TRUE)
+report_dir <- if (nzchar(current_input_path)) {
+  normalizePath(dirname(current_input_path), winslash = "/", mustWork = FALSE)
+} else {
+  file.path(repo_root, "docs/geocontext")
+}
+map_dir <- file.path(report_dir, "maps")
+dir.create(map_dir, recursive = TRUE, showWarnings = FALSE)
+cluster_map_href <- paste0("maps/", analysis_id, "_cluster_map.html")
+cluster_map_path <- file.path(map_dir, paste0(analysis_id, "_cluster_map.html"))
+factor_map_href <- paste0("maps/", analysis_id, "_factor_mapview.html")
+factor_map_path <- file.path(map_dir, paste0(analysis_id, "_factor_mapview.html"))
+reference_pdf_href <- "https://github.com/gislab-se/landskapsanalys/blob/main/data/Landskapstyper%20Bornholm.pdf"
+
+metadata_path <- file.path(data_dir, paste0(analysis_id, "_metadata.csv"))
+indicator_catalog_path <- file.path(data_dir, paste0(analysis_id, "_indicator_catalog.csv"))
+hex_path <- file.path(data_dir, paste0(analysis_id, "_hex.gpkg"))
+loadings_path <- file.path(data_dir, paste0(analysis_id, "_factor_loadings.csv"))
+k_scores_path <- file.path(data_dir, paste0(analysis_id, "_k_scores.csv"))
+cluster_profile_path <- file.path(data_dir, paste0(analysis_id, "_cluster_profile.csv"))
+cluster_sizes_path <- file.path(data_dir, paste0(analysis_id, "_cluster_sizes.csv"))
+run_summary_path <- file.path(data_dir, paste0(analysis_id, "_run_summary.csv"))
+variance_path <- file.path(data_dir, paste0(analysis_id, "_factor_variance.csv"))
+raw_geocontext_path <- file.path(repo_root, "data/interim/geocontext_r9/bornholm_r9_geocontext_raw_manual.csv")
+
+analysis_meta <- read.csv(metadata_path, stringsAsFactors = FALSE)
+indicator_catalog <- read.csv(indicator_catalog_path, stringsAsFactors = FALSE)
+hex <- st_read(hex_path, layer = analysis_id, quiet = TRUE)
+hex_wgs84 <- st_transform(hex, 4326)
+loadings_df <- read.csv(loadings_path, stringsAsFactors = FALSE)
+k_scores <- read.csv(k_scores_path, stringsAsFactors = FALSE)
+cluster_profile <- read.csv(cluster_profile_path, stringsAsFactors = FALSE)
+cluster_sizes <- read.csv(cluster_sizes_path, stringsAsFactors = FALSE)
+run_summary <- read.csv(run_summary_path, stringsAsFactors = FALSE)
+variance_df <- read.csv(variance_path, stringsAsFactors = FALSE)
+
+factor_cols <- grep("^F[0-9]+$", names(hex), value = TRUE)
+input_cols <- indicator_catalog$gc_name
+layer_count <- nrow(indicator_catalog)
+n_hex <- as.numeric(run_summary$value[run_summary$metric == "n_hex"])
+n_context_columns <- as.numeric(run_summary$value[run_summary$metric == "n_context_columns"])
+k_best <- as.numeric(run_summary$value[run_summary$metric == "k_best"])
+zero_total_hex <- as.numeric(run_summary$value[run_summary$metric == "zero_total_hex"])
+excluded_zero_signal_hex <- as.numeric(run_summary$value[run_summary$metric == "excluded_zero_signal_hex"])
+if (length(excluded_zero_signal_hex) == 0 || is.na(excluded_zero_signal_hex)) {
+  excluded_zero_signal_hex <- 0
+}
+zero_total_share <- zero_total_hex / n_hex
+var_explained <- variance_df |>
+  filter(metric == "Cumulative Var") |>
+  select(all_of(factor_cols)) |>
+  unlist(use.names = FALSE) |>
+  max()
+
+txt <- function(sv, en) {
+  if (tolower(report_lang) == "en") en else sv
+}
+
+factor_labels <- c(
+  F1 = txt("Skogligt och skyddat inland", "Forested and protected interior"),
+  F2 = txt("Kustnära randzoner och skyddsbälten", "Coastal edge zones and protection belts"),
+  F3 = txt("Naturkärnor och habitatvärden", "Nature cores and habitat values"),
+  F4 = txt("Bosättning och gles bebyggelsestruktur", "Settlement and low-density built structure"),
+  F5 = txt("Låglänta kust- och sandmiljöer", "Low-lying coastal and sandy environments")
+)
+
+factor_axis_labels <- c(
+  F1 = txt("Skogligt och\nskyddat inland", "Forested and\nprotected interior"),
+  F2 = txt("Kustnära\nrandzoner", "Coastal\nedge zones"),
+  F3 = txt("Naturkärnor och\nhabitatvärden", "Nature cores and\nhabitat values"),
+  F4 = txt("Bosättning och\ngles bebyggelse", "Settlement and\nlow-density built"),
+  F5 = txt("Låglänta kust-\noch sandmiljöer", "Low-lying coast\nand sandy environments")
+)
+
+factor_explanations <- c(
+  F1 = txt(
+    "Domineras av faktisk skog och fredskov på alla skalor och beskriver Bornholms större skogliga och skyddade inlandssammanhang.",
+    "Dominated by actual forest and protected forest across scales and describes Bornholm's larger wooded and protected interior contexts."
+  ),
+  F2 = txt(
+    "Drivs av kustlinje, kustzon, strandskydd och variation i kustnära skyddslager och beskriver randzoner där kust, gräns och skyddsbälten möts.",
+    "Driven by coastline, coastal zone, shoreline protection and variation in coastal protection layers, describing edge zones where coast, boundary and protection belts meet."
+  ),
+  F3 = txt(
+    "Domineras av kartlagda naturtyper, Natura-designationer och annan skyddad natur och beskriver naturkärnor där habitatvärden och formellt skydd samverkar.",
+    "Dominated by mapped nature types, Natura designations and other protected nature, describing nature cores where habitat values and formal protection reinforce each other."
+  ),
+  F4 = txt(
+    "Drivs främst av fastboende, selected built low och annan låg bebyggelse och beskriver bosättningsmönster snarare än enskilda tätorter.",
+    "Driven mainly by permanent population, selected low buildings and other low-rise settlement structure, describing settlement patterns rather than individual town centres."
+  ),
+  F5 = txt(
+    "Kopplar låg topografi och flygsandspräglad jordart till kustnära geologi och beskriver låga, sandiga och kustbundna marksystem.",
+    "Links low topography and aeolian sand geology to coastal settings and describes low, sandy and coast-bound terrain systems."
+  )
+)
+
+cluster_labels <- c(
+  "1" = txt("Skyddade kustens randzoner", "Protected coastal edge zones"),
+  "2" = txt("Naturkärnor med höga habitatvärden", "Nature cores with high habitat values"),
+  "3" = txt("Vardagslandskap med blandad karaktär", "Everyday landscape with mixed character"),
+  "4" = txt("Bebyggda låglänta kustmiljöer", "Built low-lying coastal environments"),
+  "5" = txt("Skogligt och skyddat inland", "Forested and protected interior")
+)
+
+cluster_explanations <- c(
+  "1" = txt(
+    "Mycket hög F2 och positiv F5 visar kustnära randmiljöer där skydd, kant och låglänt sandig kustmiljö samverkar medan bosättningssignalen är svag.",
+    "Very high F2 and positive F5 indicate coastal edge zones where protection, boundary effects and low sandy coastal terrain coincide while settlement remains weak."
+  ),
+  "2" = txt(
+    "Mycket hög F3 visar naturkärnor med starka habitat- och skyddssignaler. Klustret är inte nödvändigtvis obebott, men natursignalen dominerar tydligt.",
+    "Very high F3 marks habitat-rich and high-nature-value areas. The cluster is not necessarily uninhabited, but the nature signal is clearly dominant."
+  ),
+  "3" = txt(
+    "Låga eller svagt negativa värden på alla faktorer visar öns breda bakgrundslandskap där flera signaler blandas utan stark specialisering i någon riktning.",
+    "Low or slightly negative scores on all factors indicate the island's broad background landscape without strong specialization in any one direction."
+  ),
+  "4" = txt(
+    "Hög F4 och F5 pekar mot bebyggda, låglänta kust- och sandmiljöer där bosättning och geologi samverkar.",
+    "High F4 and F5 point to built, low-lying coastal and sandy environments where settlement structure and geology reinforce each other."
+  ),
+  "5" = txt(
+    "Mycket hög F1 markerar Bornholms tydligaste skogliga och skyddade inlandsmiljöer.",
+    "Very high F1 marks Bornholm's clearest wooded and protected interior environments."
+  )
+)
+indicator_key <- function(x) {
+  case_when(
+    str_detect(x, "roads|coastline|watercourses") ~ "Linjeelement",
+    str_detect(x, "fastboende|population") ~ "Befolkning",
+    str_detect(x, "forest|fredskov|moor|wetland|lake|ecology") ~ "Blågrön struktur",
+    str_detect(x, "cultural|valuable_cultural") ~ "Kulturmiljö",
+    str_detect(x, "agricultural") ~ "Markanvändning",
+    str_detect(x, "relief|highest") ~ "Topografi",
+    str_detect(x, "coastal_zone") ~ "Kustzon",
+    TRUE ~ "Övrigt"
+  )
+}
+
+indicator_palette <- c(
+  "Linjeelement" = "#355C7D",
+  "Befolkning" = "#C06C84",
+  "Blågrön struktur" = "#2F7D32",
+  "Kulturmiljö" = "#D95F02",
+  "Markanvändning" = "#B8A038",
+  "Topografi" = "#6C5B3B",
+  "Kustzon" = "#1D91C0",
+  "Övrigt" = "#7B6888"
+)
+
+class_palette <- c(
+  "1" = "#355C7D",
+  "2" = "#C06C84",
+  "3" = "#F67280",
+  "4" = "#99B898",
+  "5" = "#E5D97B",
+  "6" = "#6C5B7B",
+  "7" = "#F8B195",
+  "8" = "#80B1D3",
+  "9" = "#B3DE69",
+  "10" = "#BC80BD"
+)
+
+indicator_lookup <- setNames(indicator_catalog$display_name, indicator_catalog$gc_name)
+
+series_from_variable <- function(variable) {
+  variable |>
+    str_replace("^(mean_|std_)", "") |>
+    str_remove("_k[0-9]+$")
+}
+
+pretty_variable <- function(variable) {
+  stat_type <- ifelse(str_detect(variable, "^mean_"), "medel", "std")
+  series <- series_from_variable(variable)
+  k <- str_extract(variable, "(?<=_k)[0-9]+$")
+  series_label <- dplyr::coalesce(unname(indicator_lookup[series]), series)
+  paste0(series_label, " (", stat_type, ", k=", k, ")")
+}
+
+factor_label <- function(f) dplyr::coalesce(unname(factor_labels[f]), f)
+factor_axis_label <- function(f) dplyr::coalesce(unname(factor_axis_labels[f]), factor_label(f))
+cluster_label <- function(k) dplyr::coalesce(unname(cluster_labels[as.character(k)]), paste("Kluster", k))
+cluster_display_label <- function(k) {
+  k_chr <- as.character(k)
+  paste(k_chr, cluster_label(k_chr))
+}
+wrap_axis <- function(width = 18) {
+  function(x) stringr::str_wrap(x, width = width)
+}
+
+cluster_fill_opacity_default <- 0.34
+cluster_line_opacity_default <- 0.16
+factor_fill_opacity_default <- 0.58
+factor_line_opacity_default <- 0.22
+```
+
+> Detta är lättviktsversionen i v2-spåret. Den frysta jämförelsebaslinjen är `landskapsanalys_58lager_geologi_restriktioner_res9`, medan interaktiva HTML-kartor och separata kartfiler har utelämnats här.
+
+## 1. Syfte och huvudfråga
+
+Denna rapport dokumenterar den aktiva modellen `r analysis_id`. Rapporten ska läsas som en **samlad och nästan färdig arbetsrapport** för Bornholms landskapskaraktär, inte som en experimentlogg över tidigare versioner. Målet är att ge ett tillräckligt tydligt och spårbart underlag för att beskriva hur öns landskap är uppbyggt, var olika landskapssammanhang dominerar och vilka mönster som återkommer på flera skalor.
+
+Huvudfrågan är:
+
+**Vilken landskapskaraktär har Bornholm när ön beskrivs med ett multiskalärt, hexagonbaserat analysramverk som kombinerar natur, bebyggelse, tillgänglighet, skydd, restriktioner och geologi?**
+
+Rapporten har tre konkreta uppgifter:
+
+- att dokumentera vilken data som faktiskt ingår i modellen
+- att steg för steg förklara hur rådata blir till faktorer och preliminära landskapstyper
+- att ge en tolkning som är begriplig även för läsare som inte arbetar dagligen med faktoranalys och klustring
+
+På längre sikt ska samma analyskedja kunna vara ett av flera underlag i ett acceptanslager för vindkraft och solenergi. Den här rapporten är dock fortfarande **en landskapskaraktärsrapport**, inte ett färdigt planeringsbeslut. Den säger något viktigt om struktur, mönster och landskapstyper, men gör ännu inte hela avvägningen mellan landskapsvärden, juridik, teknik och social acceptans.
+
+Det centrala värdet i nuläget är att modellen nu täcker stora delar av Bornholms relevanta landskapsinnehåll och därför kan bedömas som en mogen typologisk arbetsmodell. Kvarvarande arbete handlar mer om validering, namnsättning och vissa kompletterande lager än om att bygga om logiken från grunden.
+
+## 2. Studieområde, skala och avgränsning
+
+Analysen omfattar Bornholm på samma R9-hexgrid som tidigare körningar. Den fasta analysenheten är alltså en regelbunden hexagon, medan landskapskaraktären uppstår genom att varje hexagon beskrivs både lokalt och genom sin omgivning.
+
+```{r}
+#| label: scope-summary
+scope_table <- tibble::tibble(
+  aspekt = c(
+    "Studieområde",
+    "Grundupplösning",
+    "Antal analyshexagoner",
+    "Exkluderade havshex utan signal",
+    "Antal ingångslager",
+    "Antal kontextvariabler",
+    "Valt klusterantal",
+    "Hex utan signal i totalvikten"
+  ),
+  varde = c(
+    "Bornholm",
+    "R9-hex",
+    comma(n_hex),
+    comma(excluded_zero_signal_hex),
+    layer_count,
+    n_context_columns,
+    k_best,
+    paste0(comma(zero_total_hex), " (", percent(zero_total_share, accuracy = 0.1), ")")
+  )
+)
+knitr::kable(scope_table)
+```
+
+Skalvalet har tre konsekvenser:
+
+- analysen är bra på att beskriva regionala och mellanskaliga mönster
+- den är svagare för mycket små lokala kvaliteter som bara finns i några få hektar
+- den får inte läsas som om varje enskild hexagon redan vore ett landskapsområde i sig
+
+## 3. Datagrund
+
+Den aktiva modellen bygger på `r layer_count` lagersignaler. Datagrunden är därför bred nog för att fånga Bornholm som både naturgeografiskt och kulturgeografiskt landskap: skog, jordbruk, topografi, kust, vatten, kulturmiljö, bebyggelse, skydd, restriktioner och geologi finns nu i samma analysram.
+
+Särskilt viktigt i denna version är att två tidigare provisoriska geologilager nu har ersatts av **21 tolkbara underkategorier** från Jordart och Prekvart. Det gör att geologi inte längre bara finns som nästan heltäckande bakgrund, utan som faktisk landskapssignal som går att läsa och jämföra med andra teman.
+
+I stora drag består datagrunden av följande grupper:
+
+- bosättning och tillgänglighet: befolkning, vägar, färjerutter och flera bebyggelselager
+- blågröna strukturer: sjöar, våtmarker, hede, skog, ekologiska samband, naturtyper och vattendrag
+- kustsammanhang: kustlinje, kustzon, sanddyner och strandskydd
+- kultur och markanvändning: kulturmiljövärden, värdefulla kulturmiljöer och jordbruksmark
+- topografi och geologi: relief, högsta höjd, jordartsunderlag och prekvartär berggrund
+- skydd och restriktioner: Natura, fredade områden, reservat, militära ytor och flygrestriktionslager
+
+Tabellen nedan är den viktigaste referensen för exakt innehåll och bör läsas som modellens officiella lagerlista.
+
+```{r}
+#| label: input-layer-table
+knitr::kable(
+  indicator_catalog |>
+    select(display_name, geometry_type, theme, selection_note),
+  col.names = c("Lager", "Geometri", "Tema", "Urvalsnotering")
+)
+```
+
+```{r}
+#| label: theme-summary
+theme_summary <- indicator_catalog |>
+  group_by(theme) |>
+  summarise(
+    n_lager = n(),
+    exempel = paste(head(display_name, 3), collapse = ", "),
+    .groups = "drop"
+  ) |>
+  arrange(desc(n_lager), theme)
+knitr::kable(theme_summary, col.names = c("Tema", "Antal lager", "Exempel"))
+```
+
+Tabellen ovan visar hur brett den aktiva modellen faktiskt täcker ön. Den ska läsas som en snabb översikt: vissa teman består av många lager därför att de har splittrats i mer tolkbara undergrupper, medan andra teman representeras av färre men mycket starka signaler.
+
+```{r}
+#| label: omitted-layer-summary
+raw_source_names <- setdiff(
+  names(read.csv(raw_geocontext_path, nrows = 1, stringsAsFactors = FALSE)),
+  c("hex_id", "total")
+)
+
+omitted_layers <- tibble::tibble(
+  source_name = setdiff(raw_source_names, indicator_catalog$source_name)
+) |>
+  mutate(
+    kategori = case_when(
+      str_detect(source_name, "^river_gd_v_vand_river_centre_bol_33_length_m_(0_2_5|2_5_12|ukendt)$") ~ "Vattendrag: underkategorier",
+      str_detect(source_name, "^roads_simplified_gd_v_vej_road_merged_bol_33_length_m_(small|other|total)$") ~ "Vägar: ej använda varianter",
+      str_detect(source_name, "^bes_naturtyper_area_share_(overdrev|hede|eng|so|mose|strandeng)$") ~ "Skyddade naturtyper: underkategorier",
+      str_detect(source_name, "power_substation|underground_cable|high_voltage_line|biogas_facility|solarparks|windturbine") ~ "Energiinfrastruktur",
+      str_detect(source_name, "landscapes_worthy_of_preservation") ~ "Bevaringsvärda landskap",
+      str_detect(source_name, "pdk_kulturhistoriskbevaringsvaerdi_vedtaget_wfs") ~ "Dubbel kulturmiljösignal",
+      str_detect(source_name, "^jordart_25000_v7_1_area_share$|^prekvart_bornholm_area_share$") ~ "Parentgeologi ersatt av underkategorier",
+      TRUE ~ "Övrigt"
+    ),
+    lager = case_when(
+      str_detect(source_name, "0_2_5$") ~ "River 0-2.5 m",
+      str_detect(source_name, "2_5_12$") ~ "River 2.5-12 m",
+      str_detect(source_name, "ukendt$") ~ "River okänd bredd",
+      str_detect(source_name, "_small$") ~ "Vägar small",
+      str_detect(source_name, "_other$") ~ "Vägar other",
+      str_detect(source_name, "_total$") ~ "Vägar total",
+      str_detect(source_name, "overdrev") ~ "BES naturtyper: overdrev",
+      str_detect(source_name, "hede") ~ "BES naturtyper: hede",
+      str_detect(source_name, "_eng$") ~ "BES naturtyper: eng",
+      str_detect(source_name, "_so$") ~ "BES naturtyper: sø",
+      str_detect(source_name, "mose") ~ "BES naturtyper: mose",
+      str_detect(source_name, "strandeng") ~ "BES naturtyper: strandeng",
+      str_detect(source_name, "landscapes_worthy_of_preservation") ~ "Bevaringsvärdiga landskap",
+      str_detect(source_name, "power_substation") ~ "Transformatorstationer",
+      str_detect(source_name, "underground_cable") ~ "Markkablar",
+      str_detect(source_name, "high_voltage_line") ~ "Högspänningsledningar",
+      str_detect(source_name, "biogas_facility") ~ "Biogasanläggningar",
+      str_detect(source_name, "solarparks") ~ "Solparker",
+      str_detect(source_name, "windturbine") ~ "Vindkraftverk",
+      str_detect(source_name, "pdk_kulturhistoriskbevaringsvaerdi_vedtaget_wfs") ~ "Kulturhistorisk bevaringsværdi vedtaget",
+      str_detect(source_name, "^jordart_25000_v7_1_area_share$") ~ "Jordart parentlager",
+      str_detect(source_name, "^prekvart_bornholm_area_share$") ~ "Prekvart parentlager",
+      TRUE ~ source_name
+    )
+  )
+
+omitted_summary <- omitted_layers |>
+  group_by(kategori) |>
+  summarise(
+    antal = n(),
+    exempel = paste(head(lager, 3), collapse = ", "),
+    .groups = "drop"
+  ) |>
+  arrange(desc(antal), kategori)
+
+knitr::kable(omitted_summary, col.names = c("Ej aktiv grupp", "Antal lager", "Exempel"))
+```
+
+**Styrka i datagrunden:** modellen täcker nu Bornholms huvudsakliga landskapssystem på ett sätt som gör den användbar som sammanhållen typologi och inte bara som en preliminär testkörning.
+
+**Det som fortfarande står utanför den aktiva 58-lagersmodellen:** totalt `r nrow(omitted_layers)` lager finns i den sammanfogade råmatrisen men används inte i den aktiva analysen. Vissa av dessa är medvetet ersatta av bättre representationer, till exempel att parentlagren för Jordart och Prekvart har bytts ut mot mer tolkbara underkategorier. Andra är rimliga kandidater för nästa prövning, särskilt energiinfrastruktur, bevaringsvärda landskap samt finare uppdelningar av vattendrag och naturtyper.
+
+## 4. Metod och transparens
+
+Metoden följer samma grundidé som i Jutas och Malmbergs multiskalära typologiarbete: en plats ska inte bara beskrivas av vad som finns **i själva rutan**, utan också av **vilket sammanhang rutan ligger i** när omgivningen läses på flera skalor. I deras fall gäller det bostadsområden; här överförs samma logik till landskapstyper på Bornholm.
+
+Översatt till denna rapport betyder det:
+
+- först samlas många olika landskapssignaler i samma hexagonala analysenhet
+- sedan beskrivs varje hexagon både lokalt och genom sin omgivning på flera skalor
+- därefter komprimeras den stora mängden mönster till ett mindre antal faktorer
+- slutligen grupperas hexagoner med liknande faktorprofiler till preliminära landskapstyper
+
+Analysen följer därmed en tydlig kedja från rådata till tolkning. Det gör också att varje steg kan granskas för sig: dataurvalet, kontextbyggandet, faktoranalysen, klustringen och den slutliga karttolkningen.
+
+```{r}
+#| label: analysis-chain-table
+analysis_chain <- tibble::tibble(
+  steg = 1:6,
+  analyssteg = c(
+    "Aggregera rådata till hexagoner",
+    "Bygg multiskalig kontext",
+    "Rensa och standardisera analysmatrisen",
+    "Extrahera faktorer",
+    "Beräkna faktorscore per hexagon",
+    "Gruppera hexagoner till preliminära landskapstyper"
+  ),
+  vad_det_betyder = c(
+    "Punkter, linjer och polygoner översätts till jämförbara signaler i samma R9-hexgrid.",
+    "Varje hexagon får inte bara sitt lokala värde utan också information om sin omgivning på flera skalor.",
+    "Kolumner utan faktisk variation eller med tekniska problem tas bort så att modellen arbetar med meningsfull signal.",
+    "Återkommande samvariationer mellan många lager komprimeras till ett mindre antal tydliga gradienter.",
+    "Varje hexagon får ett värde på varje faktor och kan därmed beskrivas i samma faktorrum som resten av ön.",
+    "Hexagoner med liknande faktorprofiler samlas till kluster som tolkas som preliminära landskapstyper."
+  )
+)
+knitr::kable(analysis_chain, col.names = c("Steg", "Analyssteg", "Vad det betyder i praktiken"))
+```
+
+```{r}
+#| label: method-table
+method_table <- tibble::tibble(
+  metodsteg = c(
+    "Analysenheter",
+    "Kontextskalor",
+    "Skallogik",
+    "Kontextmått per lager",
+    "Faktoranalys",
+    "Rotation",
+    "Faktorscore",
+    "Klusterprövning",
+    "Klusterval"
+  ),
+  val = c(
+    "Hex med total signal > 0",
+    "k = 10, 50, 100, 250, 1000",
+    "kumulativ vikt, inte fasta hexringar",
+    "mean och std",
+    "minres",
+    "varimax",
+    "tenBerge",
+    "K = 5..10",
+    paste0("högst silhouette, nu K = ", k_best)
+  )
+)
+knitr::kable(method_table, col.names = c("Metodsteg", "Val"))
+```
+
+### 4.1 Från rådata till kontext
+
+Varje ingångslager aggregeras först till R9-hexagoner. Därefter byggs en **kontextmatris** där varje hexagon får information om sin omgivning vid `k = 10, 50, 100, 250, 1000`.
+
+Två mått beräknas för varje lager och varje skala:
+
+- `mean`: hur mycket av signalen som i genomsnitt finns i omgivningen
+- `std`: hur jämn eller splittrad signalen är i omgivningen
+
+Detta steg är avgörande. En hexagon med lite skog kan ligga mitt i ett stort skogligt inland, i en kustnära övergångszon eller i ett jordbrukslandskap med små skogsöar. Lokalt värde räcker därför inte; det är kombinationen av lokalt innehåll och omgivande struktur som gör tolkningen landskaplig.
+
+I denna modell är `k` inte samma sak som antal hexringar. I stället anger `k` hur mycket kumulativ totalvikt som ska fångas upp när modellen går utåt genom närmaste grannar. Det betyder att samma `k` kan motsvara olika geografiska utbredningar i olika delar av ön beroende på hur stark signalstrukturen är.
+
+Med `r layer_count` lager och två kontextmått över fem skalor får modellen `r n_context_columns` kontextvariabler. Det är dessa variabler, inte de råa lagren ensamma, som utgör den egentliga analysmatrisen.
+
+### 4.2 Vad en faktor är, och vad den inte är
+
+Faktoranalys kan lätt uppfattas som abstrakt. I den här rapporten är det därför viktigt att definiera begreppet tydligt:
+
+- en **faktor** är inte ett färdigt område på kartan
+- en faktor är inte heller ett juridiskt eller administrativt lager
+- en faktor är i stället en **återkommande gradient** i datan: ett sätt på vilket flera lager och flera skalor tenderar att samvariera
+
+Om exempelvis skog, fredskov och vissa natur- eller geologisignaler ofta förekommer tillsammans på flera skalor, kommer faktoranalysen att försöka fånga detta som en sammanhållen riktning. Varje hexagon får sedan ett faktorscore som visar hur starkt den hör ihop med just den gradienten.
+
+I denna körning görs faktoranalysen i fyra steg:
+
+1. kontextmatrisen standardiseras så att olika enheter blir jämförbara
+2. kolumner med nollvarians, bara saknade värden eller infinita värden tas bort
+3. endast rader med komplett faktorinput används i själva faktorberäkningen
+4. `minres` med `varimax` används för att få en tolkbar uppsättning relativt ortogonala faktorer
+
+Resultatet ska läsas som en komprimerad beskrivning av Bornholms viktigaste återkommande landskapssamband, inte som ett facit över färdiga landskapsrum.
+
+### 4.3 Vad ett kluster är, och vad det inte är
+
+Efter faktoranalysen grupperas hexagoner med liknande faktorprofiler. Det är detta som ger rapportens **preliminära landskapstyper**.
+
+Även här behövs en tydlig definition:
+
+- ett **kluster** är en grupp hexagoner som liknar varandra i faktorrummet
+- ett kluster behöver inte vara sammanhängande som en enda polygon på kartan
+- klustret blir meningsfullt först när dess faktorprofil jämförs med kartläge, datainnehåll och Bornholms kända landskapsstruktur
+
+Klustren är alltså modellens bästa försök att översätta abstrakta faktorer till läsbara landskapstyper. Därför är klusterkartan mer konkret än faktorernas kartor, men den bygger fortfarande på en statistisk typologi och måste tolkas med landskapskunskap.
+
+### 4.4 Viktiga metodiska förbehåll
+
+- Faktoranalysen bygger på `r n_context_columns` kontextvariabler, inte direkt på de `r layer_count` rålagren.
+- `r comma(excluded_zero_signal_hex)` rena havshex utan signal har tagits bort före kontextmatris, faktoranalys och klustring.
+- `r comma(zero_total_hex)` hexagoner saknar total signal i viktkolumnen. De ligger kvar i geografin men visar att vissa delar av modellen fortfarande är tunna.
+- Den nuvarande viktlogiken blandar ytor, linjelängder och punktvärden i samma `total`, vilket kan ge slagsida redan före faktoranalysen.
+- De fem faktorerna förklarar cirka `r percent(var_explained, accuracy = 0.1)` av totalvariansen. Det är användbart men innebär att rapporten fortfarande är en förenkling av verkligheten.
+- Flera lager är skydds- eller restriktionslager snarare än direkta landskapsprocesser. De är viktiga för planeringsrelevans, men kräver försiktig tolkning i den rena landskapstypologin.
+
+## 5. Resultat: faktorernas landskapsgradienter
+
+```{r}
+#| label: factor-variance
+variance_pretty <- variance_df |>
+  mutate(metric = recode(
+    metric,
+    "SS loadings" = "SS loadings",
+    "Proportion Var" = "Andel av total varians",
+    "Cumulative Var" = "Kumulativ andel av total varians",
+    "Proportion Explained" = "Andel av forklarad varians",
+    "Cumulative Proportion" = "Kumulativ andel av forklarad varians"
+  ))
+knitr::kable(variance_pretty, digits = 3, col.names = c("Metrik", factor_cols))
+```
+
+```{r}
+#| label: factor-names
+factor_top_summary <- purrr::map_chr(factor_cols, function(f) {
+  loadings_df |>
+    transmute(
+      variable,
+      pretty_variable = pretty_variable(variable),
+      loading = .data[[f]],
+      abs_loading = abs(loading)
+    ) |>
+    arrange(desc(abs_loading)) |>
+    slice_head(n = 3) |>
+    pull(pretty_variable) |>
+    paste(collapse = ", ")
+})
+
+factor_name_table <- tibble::tibble(
+  faktor = factor_cols,
+  aktuell_tolkning = unname(factor_labels[factor_cols]),
+  starkaste_signaler = factor_top_summary,
+  tolkning = unname(factor_explanations[factor_cols])
+)
+knitr::kable(
+  factor_name_table,
+  col.names = c("Faktor", "Aktuell tolkning", "Starkaste signaler", "Hur faktorn ska läsas")
+)
+```
+
+Tabellen ovan är den enklaste vägen in i faktorresultatet. Om en läsare bara ska ta med sig en sak från faktorsteget är det att varje faktor får sin mening av **vilka signaler som drar åt samma håll över flera skalor**, inte av ett enda kartlager.
+
+Den sakliga tolkningen av faktorerna ska i första hand styras av deras starkaste och mest sammanhängande laddningar. Tabellen nedan visar därför de `6` största absoluta laddningarna per faktor och är den primära läsnyckeln till faktorernas innehåll.
+
+```{r}
+#| label: top-loadings
+factor_top <- purrr::map_dfr(factor_cols, function(f) {
+  loadings_df |>
+    transmute(
+      factor = f,
+      factor_label = factor_label(f),
+      variable,
+      pretty_variable = pretty_variable(variable),
+      loading = .data[[f]],
+      abs_loading = abs(loading)
+    ) |>
+    arrange(desc(abs_loading)) |>
+    slice_head(n = 6)
+})
+knitr::kable(
+  factor_top |>
+    select(factor = factor_label, variabel = pretty_variable, loading),
+  digits = 3
+)
+```
+
+Den kompletta laddningsmatrisen finns kvar som diagnostik och rimlighetskontroll, men den ska inte vara rapportens huvudsakliga tolkningsyta.
+
+```{r}
+#| label: loadings-heatmap
+#| fig-width: 18
+#| fig-height: 34
+loadings_long <- loadings_df |>
+  mutate(pretty_variable = pretty_variable(variable)) |>
+  pivot_longer(cols = all_of(factor_cols), names_to = "factor", values_to = "loading") |>
+  mutate(
+    factor = factor(factor, levels = factor_cols, labels = factor_axis_label(factor_cols)),
+    pretty_variable = factor(pretty_variable, levels = rev(unique(pretty_variable)))
+  )
+
+ggplot(loadings_long, aes(x = factor, y = pretty_variable, fill = loading)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "#2166AC", mid = "white", high = "#B2182B", midpoint = 0) +
+  scale_y_discrete(labels = wrap_axis(34)) +
+  labs(
+    x = txt("Faktor", "Factor"),
+    y = txt("Variabel", "Variable"),
+    fill = txt("Laddning", "Loading")
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.grid = element_blank(),
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.5, lineheight = 0.95),
+    axis.text.y = element_text(size = 4.2, lineheight = 0.92, margin = margin(r = 12)),
+    axis.ticks.y = element_blank(),
+    plot.margin = margin(5.5, 18, 5.5, 5.5)
+  )
+```
+
+```{r}
+#| label: factor-maps
+#| fig-width: 12
+#| fig-height: 9
+hex_factor_long <- hex |>
+  select(hex_id, all_of(factor_cols)) |>
+  pivot_longer(cols = all_of(factor_cols), names_to = "factor", values_to = "value") |>
+  mutate(factor = factor(factor, levels = factor_cols, labels = factor_label(factor_cols)))
+
+ggplot(hex_factor_long) +
+  geom_sf(aes(fill = value), color = NA) +
+  facet_wrap(~ factor, ncol = 2) +
+  scale_fill_gradient2(low = "#2166AC", mid = "#F7F7F7", high = "#B2182B", midpoint = 0) +
+  labs(fill = "Faktorscore") +
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.spacing = grid::unit(1.1, "lines"),
+    strip.text = element_text(face = "bold", size = 11)
+  )
+```
+
+> Lättversion: den interaktiva faktorkartan och den separata HTML-kartfilen är utelämnade för att hålla rapporten liten och snabb att öppna.
+
+**Vad som är viktigast i faktorsteget:** modellen skiljer nu tydligt mellan minst fem olika logiker i Bornholms landskap: skogligt och skyddat inland, kustnära randzoner, naturkärnor med höga habitatvärden, bosättningsmönster samt låglänta kust- och sandmiljöer. Ingen faktor är ensam en landskapstyp, men tillsammans beskriver de vad som återkommer på ön som stabila gradienter.
+
+## 6. Resultat: preliminära landskapstyper
+
+```{r}
+#| label: k-score-table
+knitr::kable(k_scores, digits = 3, col.names = c("K", "Silhouette", "Beräkningsbas"))
+```
+
+```{r}
+#| label: k-score-plot
+ggplot(k_scores, aes(x = factor(K), y = silhouette)) +
+  geom_col(fill = "#4E79A7") +
+  geom_text(aes(label = round(silhouette, 3)), vjust = -0.3, size = 3) +
+  labs(x = "Antal kluster (K)", y = "Silhouette") +
+  theme_minimal(base_size = 12)
+```
+
+Klustren är rapportens mest konkreta resultat. För en läsare utan förkunskaper är det därför ofta bäst att börja här: ett kluster är helt enkelt en grupp hexagoner som liknar varandra i faktorprofil och därför kan tolkas som en preliminär landskapstyp.
+
+```{r}
+#| label: cluster-reading-table
+cluster_reading <- cluster_profile |>
+  rowwise() |>
+  mutate(
+    kluster = cluster_display_label(class_km),
+    andel = cluster_sizes$share[match(class_km, cluster_sizes$class_km)],
+    dominerande_faktor = factor_label(factor_cols[which.max(c_across(all_of(factor_cols)))]),
+    nasta_tydliga_faktor = factor_label(factor_cols[order(c_across(all_of(factor_cols)), decreasing = TRUE)[2]]),
+    kort_lasning = unname(cluster_explanations[as.character(class_km)])
+  ) |>
+  ungroup() |>
+  select(kluster, andel, dominerande_faktor, nasta_tydliga_faktor, kort_lasning)
+
+knitr::kable(
+  cluster_reading,
+  digits = 3,
+  col.names = c("Kluster", "Andel", "Dominerande faktor", "Nästa tydliga faktor", "Kort läsning")
+)
+```
+
+```{r}
+#| label: cluster-summary
+cluster_named <- cluster_profile |>
+  mutate(
+    kluster = cluster_display_label(class_km),
+    tolkning = unname(cluster_explanations[as.character(class_km)])
+  ) |>
+  left_join(cluster_sizes, by = "class_km") |>
+  select(kluster, share, all_of(factor_cols), tolkning)
+
+knitr::kable(
+  cluster_named,
+  digits = 3,
+  col.names = c("Kluster", "Andel", factor_cols, "Tolkning")
+)
+```
+
+I tabellen ovan betyder positiva värden att klustret har mer av en viss faktor än ö-genomsnittet, medan negativa värden betyder att faktorn är svagare där än i Bornholms typiska bakgrundslandskap. Man ska därför inte läsa siffrorna som absoluta mängder, utan som riktning och styrka i relation till resten av ön.
+
+```{r}
+#| label: cluster-profile-heatmap
+#| fig-width: 13
+#| fig-height: 9
+cluster_profile_long <- cluster_profile |>
+  pivot_longer(cols = all_of(factor_cols), names_to = "factor", values_to = "mean_score") |>
+  mutate(
+    factor = factor(factor, levels = factor_cols, labels = factor_axis_label(factor_cols)),
+    cluster_name = factor(
+      cluster_display_label(class_km),
+      levels = cluster_display_label(sort(unique(cluster_profile$class_km)))
+    )
+  )
+
+ggplot(cluster_profile_long, aes(x = factor, y = cluster_name, fill = mean_score)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "#2166AC", mid = "white", high = "#B2182B", midpoint = 0) +
+  labs(
+    x = txt("Faktor", "Factor"),
+    y = txt("Preliminär landskapstyp", "Preliminary landscape type"),
+    fill = txt("Medelvärde", "Mean value")
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.grid = element_blank(),
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.5, lineheight = 0.95, size = 10.5),
+    axis.text.y = element_text(size = 11, lineheight = 1.0),
+    plot.margin = margin(5.5, 12, 5.5, 5.5)
+  )
+```
+
+```{r}
+#| label: cluster-map
+#| fig-width: 13
+#| fig-height: 8
+class_vals <- sort(unique(as.character(hex$class_km)))
+cluster_labels_ordered <- cluster_display_label(class_vals)
+cluster_palette <- setNames(unname(class_palette[class_vals]), cluster_labels_ordered)
+
+hex_cluster_plot <- hex |>
+  mutate(
+    cluster_name = factor(
+      cluster_display_label(class_km),
+      levels = cluster_labels_ordered
+    )
+  )
+
+ggplot(hex_cluster_plot) +
+  geom_sf(aes(fill = cluster_name), color = NA) +
+  scale_fill_manual(values = cluster_palette, drop = FALSE) +
+  labs(fill = "Kluster") +
+  theme_minimal(base_size = 11) +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_text(face = "bold")
+  )
+```
+
+> Lättversion: den interaktiva klusterkartan och den separata HTML-kartfilen är utelämnade. Här visas i stället en statisk översiktskarta.
+
+I denna version väljs `K = r k_best`. Det viktigaste med det valet är att det ger fem tydligt olika typer utan att splittra resultatet i många små restkluster. Samtidigt visar fördelningen att kluster `3` fungerar som en bred vardagsmatris för stora delar av ön, medan övriga kluster fångar mer specialiserade kust-, natur-, bebyggelse- och inlandsmönster.
+
+## 7. Tolkning, osäkerheter och begränsningar
+
+Den här versionen kan beskrivas som en **mogen arbetsmodell**. Den är tillräckligt bred och sammanhängande för att ge en meningsfull typologi av Bornholm, men den kräver fortfarande slutlig validering och viss komplettering innan den bör behandlas som helt stabil referensmodell.
+
+Det starkaste i nuläget är att modellen kan skilja mellan flera olika landskapssammanhang som också är begripliga i kartan:
+
+- skogligt och skyddat inland
+- kustnära randzoner med tydlig gräns- och skyddslogik
+- habitatrika naturkärnor och större naturvärdespräglade miljöer
+- bosättningspräglade vardagsmiljöer
+- låglänta kust- och sandbundna marksystem
+
+De viktigaste kvarvarande osäkerheterna är däremot fortfarande tydliga:
+
+- viktkolumnen i kontextsteget blandar flera måttenheter och kan därför påverka grannskap och faktorstruktur
+- vissa ännu ej använda underkategorier, energilager och bevarandelager kan förändra delar av bilden
+- skydds- och restriktionslager bidrar till planeringsrelevans men är inte alltid samma sak som egen landskapsprocess
+- faktor- och klusternamn är fortfarande tolkningar och bör ses som arbetsnamn tills de har verklighetskontrollerats mot kartor och Bornholmskännedom
+
+Rapporten bör därför användas som:
+
+- en transparent beskrivning av Bornholms landskapstyper i flera skalor
+- ett arbetsunderlag för fortsatt expertgranskning, karttolkning och typologisk namnsättning
+- en möjlig grund för senare acceptans- eller känslighetsbedömningar
+
+Rapporten bör ännu inte användas som ensam beslutsgrund för lokalisering, tillstånd eller slutlig värdering av enskilda platser.
+
+## 8. Typologisk tolkning och nästa steg
+
+Som tolkningsram är två referenser särskilt viktiga för denna rapport. Den första är Jutas och Malmbergs multiskalära typologitänkande: platser ska beskrivas både av sina lokala egenskaper och av sin omgivning på flera skalor. Här används det som en **metodisk anpassning**, inte som en direkt kopia av deras bostadstypologi. Den andra är den befintliga Bornholmsanalysen i [Landskapstyper Bornholm (PDF)](`r reference_pdf_href`), som fungerar som verklighetskontroll för hur översiktliga landskapsrum faktiskt brukar beskrivas på ön.
+
+För Jutas/Malmberg används följande primärreferenser i rapportens tolkningsram:
+
+- [Figshare dataset/material](https://su.figshare.com/articles/dataset/Multiscalar_typology_of_residential_areas_in_Sweden/14753826?file=28351917)
+- [DiVA-post](https://www.diva-portal.org/smash/record.jsf?pid=diva2:1624901)
+- [Fulltext PDF](https://www.diva-portal.org/smash/get/diva2:1624901/FULLTEXT01.pdf)
+
+Det viktiga är inte att denna modell ska kopiera någon tidigare typologi exakt. Det viktiga är att den ska återge huvuddragen i Bornholms landskap på ett sätt som är både statistiskt hållbart och geografiskt begripligt. Om kust, skogligt inland, naturpräglade kärnor, vardagslandskap och bebyggda kustmiljöer går att läsa tydligt i samma modell, då är typologin på väg att gå i mål.
+
+Nästa steg är därför framför allt kvalitativa och validerande, inte bara tekniska:
+
+1. kontrollera att faktor- och klusternamn stämmer med kartornas faktiska geografi
+2. pröva om vissa ännu ej använda lager förändrar typologin på ett meningsfullt sätt
+3. jämföra huvudmönstren mot Bornholms befintliga landskapstypologi och lokal kunskap
+4. därefter låsa en slutlig aktiv modell för fortsatt planeringsanvändning
+
+Det betyder att rapporten nu bör läsas som en nästan färdig landskapstypologi: tillräckligt utvecklad för att diskuteras som huvudmodell, men fortfarande öppen för en sista omgång tolkning, kalibrering och expertkontroll.
+
+## Utdata från denna körning
+
+Standardutdata skrivs till:
+
+- `r data_dir`
+
+Viktigaste filer:
+
+- `r file.path(data_dir, paste0(analysis_id, "_points_with_context.csv"))`
+- `r file.path(data_dir, paste0(analysis_id, "_factor_scores.csv"))`
+- `r file.path(data_dir, paste0(analysis_id, "_factor_loadings.csv"))`
+- `r file.path(data_dir, paste0(analysis_id, "_hex.gpkg"))`

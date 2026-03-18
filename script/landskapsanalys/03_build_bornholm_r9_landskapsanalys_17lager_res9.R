@@ -32,8 +32,40 @@ out_dir <- Sys.getenv(
   unset = file.path(repo_root, "data/interim/landskapsanalys_versions", analysis_id)
 )
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
+weight_strategy <- Sys.getenv("LANDSKAPSANALYS_WEIGHT_STRATEGY", unset = "raw_sum")
+weight_quantile <- suppressWarnings(as.numeric(Sys.getenv("LANDSKAPSANALYS_WEIGHT_QUANTILE", unset = "0.99")))
+if (!is.finite(weight_quantile)) {
+  weight_quantile <- 0.99
+}
+weight_quantile <- max(0.50, min(weight_quantile, 0.9999))
+weight_description <- Sys.getenv("LANDSKAPSANALYS_WEIGHT_DESCRIPTION", unset = "")
+weight_rescale_mode <- Sys.getenv(
+  "LANDSKAPSANALYS_WEIGHT_RESCALE_MODE",
+  unset = if (identical(weight_strategy, "geometry_balanced_q99")) "n_input_layers" else "none"
+)
+if (!nzchar(weight_description)) {
+  weight_description <- dplyr::case_when(
+    weight_strategy == "raw_sum" ~ "Raw row-sum across selected signals",
+    weight_strategy == "geometry_balanced_q99" ~ paste(
+      "Per-layer robust scaling to the",
+      paste0("q", format(weight_quantile, trim = TRUE)),
+      "cap, then equal weighting across geometry types"
+    ),
+    TRUE ~ weight_strategy
+  )
+}
 
-k_values <- c(10, 50, 100, 250, 1000)
+k_values_env <- Sys.getenv("LANDSKAPSANALYS_K_VALUES", unset = "")
+k_values <- if (nzchar(k_values_env)) {
+  parsed_k <- suppressWarnings(as.numeric(strsplit(k_values_env, ",")[[1]]))
+  parsed_k <- sort(unique(parsed_k[is.finite(parsed_k) & parsed_k > 0]))
+  if (length(parsed_k) == 0) {
+    stop("Invalid LANDSKAPSANALYS_K_VALUES: ", k_values_env)
+  }
+  parsed_k
+} else {
+  c(10, 50, 100, 250, 1000)
+}
 n_factors <- 5
 k_candidates <- 5:10
 
@@ -59,8 +91,12 @@ analysis_metadata <- tibble::tibble(
     "vid etablering av vindkraft och solenergi."
   ),
   source_model_note = source_model_note,
-  analysis_unit_mask = "Hexagoner med total signal > 0 behalls som analysenheter; rena havshex tas bort fore kontextmatris och faktoranalys.",
+  analysis_unit_mask = "Hexagoner med raw_total > 0 behalls som analysenheter; rena havshex tas bort fore kontextmatris och faktoranalys.",
   context_k_values = paste(k_values, collapse = ","),
+  context_weight_strategy = weight_strategy,
+  context_weight_quantile = weight_quantile,
+  context_weight_description = weight_description,
+  context_weight_rescale_mode = weight_rescale_mode,
   factor_method = "psych::fa fm=minres rotate=varimax scores=tenBerge",
   factor_count = n_factors,
   cluster_candidates = paste(k_candidates, collapse = ",")
@@ -90,12 +126,155 @@ points <- tibble::tibble(
   north = coords[, 2]
 )
 
-pop_locations_full <- bind_cols(points, st_drop_geometry(hex) |> select(all_of(names(selected_cols)))) |>
-  mutate(total = rowSums(across(all_of(names(selected_cols))), na.rm = TRUE))
+weight_name <- function(x) {
+  x |>
+    tolower() |>
+    stringr::str_replace_all("[^a-z0-9]+", "_") |>
+    stringr::str_replace_all("^_+|_+$", "")
+}
 
-analysis_mask <- pop_locations_full$total > 0
+normalize_signal_robust <- function(v, quantile_prob = 0.99) {
+  v <- as.numeric(v)
+  v[!is.finite(v)] <- 0
+  pos_v <- v[v > 0]
+
+  if (length(pos_v) == 0) {
+    return(list(scaled = rep(0, length(v)), scale_cap = 0))
+  }
+
+  scale_cap <- as.numeric(stats::quantile(
+    pos_v,
+    probs = quantile_prob,
+    na.rm = TRUE,
+    names = FALSE,
+    type = 8
+  ))
+  if (!is.finite(scale_cap) || scale_cap <= 0) {
+    scale_cap <- max(pos_v, na.rm = TRUE)
+  }
+  if (!is.finite(scale_cap) || scale_cap <= 0) {
+    scale_cap <- 1
+  }
+
+  list(
+    scaled = pmax(0, pmin(v / scale_cap, 1)),
+    scale_cap = scale_cap
+  )
+}
+
+build_context_weights <- function(
+  pop_df,
+  indicator_catalog,
+  strategy = "raw_sum",
+  quantile_prob = 0.99,
+  rescale_mode = "none"
+) {
+  signal_df <- pop_df |>
+    select(all_of(indicator_catalog$gc_name))
+
+  raw_total <- rowSums(signal_df, na.rm = TRUE)
+  raw_total_sum <- sum(raw_total, na.rm = TRUE)
+  diagnostics <- indicator_catalog |>
+    mutate(
+      raw_mean = vapply(signal_df, mean, numeric(1), na.rm = TRUE),
+      raw_max = vapply(signal_df, max, numeric(1), na.rm = TRUE),
+      scale_cap = NA_real_,
+      scaled_mean = NA_real_
+    )
+
+  if (strategy == "raw_sum") {
+    diagnostics$scale_cap <- diagnostics$raw_max
+    diagnostics$scaled_mean <- diagnostics$raw_mean
+    return(list(
+      total = raw_total,
+      raw_total = raw_total,
+      total_base = raw_total,
+      scale_factor = 1,
+      geometry_scores = NULL,
+      diagnostics = diagnostics
+    ))
+  }
+
+  if (strategy != "geometry_balanced_q99") {
+    stop("Unknown LANDSKAPSANALYS_WEIGHT_STRATEGY: ", strategy)
+  }
+
+  normalized_list <- lapply(indicator_catalog$gc_name, function(gc_name) {
+    normalize_signal_robust(signal_df[[gc_name]], quantile_prob = quantile_prob)
+  })
+  names(normalized_list) <- indicator_catalog$gc_name
+
+  normalized_df <- as.data.frame(
+    setNames(lapply(normalized_list, `[[`, "scaled"), indicator_catalog$gc_name),
+    check.names = FALSE
+  )
+
+  diagnostics$scale_cap <- vapply(normalized_list, `[[`, numeric(1), "scale_cap")
+  diagnostics$scaled_mean <- vapply(normalized_df, mean, numeric(1), na.rm = TRUE)
+
+  geometry_groups <- split(indicator_catalog$gc_name, indicator_catalog$geometry_type)
+  geometry_scores <- purrr::imap_dfc(geometry_groups, function(cols, geometry_type) {
+    tibble::tibble(
+      !!paste0("weight_", weight_name(geometry_type)) := rowMeans(
+        as.matrix(normalized_df[, cols, drop = FALSE]),
+        na.rm = TRUE
+      )
+    )
+  })
+
+  total_base <- rowMeans(as.matrix(geometry_scores), na.rm = TRUE)
+  base_total_sum <- sum(total_base, na.rm = TRUE)
+  scale_factor <- dplyr::case_when(
+    !is.finite(base_total_sum) || base_total_sum <= 0 ~ 1,
+    identical(rescale_mode, "none") ~ 1,
+    identical(rescale_mode, "match_raw_total_sum") ~ raw_total_sum / base_total_sum,
+    identical(rescale_mode, "n_input_layers") ~ nrow(indicator_catalog),
+    identical(rescale_mode, "target_mean_1") ~ 1 / mean(total_base, na.rm = TRUE),
+    TRUE ~ NA_real_
+  )
+  if (!is.finite(scale_factor) || scale_factor <= 0) {
+    stop("Unknown or invalid LANDSKAPSANALYS_WEIGHT_RESCALE_MODE: ", rescale_mode)
+  }
+  total <- total_base * scale_factor
+
+  list(
+    total = total,
+    raw_total = raw_total,
+    total_base = total_base,
+    scale_factor = scale_factor,
+    geometry_scores = geometry_scores,
+    diagnostics = diagnostics
+  )
+}
+
+pop_locations_full <- bind_cols(points, st_drop_geometry(hex) |> select(all_of(names(selected_cols))))
+weight_info <- build_context_weights(
+  pop_locations_full,
+  indicator_catalog,
+  strategy = weight_strategy,
+  quantile_prob = weight_quantile,
+  rescale_mode = weight_rescale_mode
+)
+if (!is.null(weight_info$geometry_scores)) {
+  pop_locations_full <- bind_cols(pop_locations_full, weight_info$geometry_scores)
+}
+pop_locations_full <- pop_locations_full |>
+  mutate(
+    total_raw = weight_info$raw_total,
+    total_base = weight_info$total_base,
+    total = weight_info$total
+  )
+
+write.csv(
+  weight_info$diagnostics,
+  file.path(out_dir, paste0(analysis_id, "_weight_diagnostics.csv")),
+  row.names = FALSE
+)
+
+analysis_mask <- pop_locations_full$total_raw > 0
 removed_hex <- tibble::tibble(
   hex_id = pop_locations_full$hex_id[!analysis_mask],
+  total_raw = pop_locations_full$total_raw[!analysis_mask],
   total = pop_locations_full$total[!analysis_mask]
 )
 write.csv(
@@ -169,6 +348,11 @@ compute_context <- function(points_df, pop_df, groups, weight_col = "total", k_v
 
 message("Computing multiscalar context variables...")
 points_with_context <- compute_context(points, pop_locations, groups = names(selected_cols), k_values = k_values)
+weight_extra_cols <- c("total_raw", "total_base", grep("^weight_", names(pop_locations), value = TRUE))
+if (length(weight_extra_cols) > 0) {
+  points_with_context <- points_with_context |>
+    left_join(pop_locations |> select(hex_id, all_of(weight_extra_cols)), by = "hex_id")
+}
 write.csv(points_with_context, file.path(out_dir, paste0(analysis_id, "_points_with_context.csv")), row.names = FALSE)
 
 X <- points_with_context |>
@@ -287,7 +471,14 @@ run_summary <- tibble::tibble(
     "n_context_columns",
     "n_factor_columns",
     "k_best",
+    "weight_strategy",
+    "weight_quantile",
+    "weight_rescale_mode",
+    "weight_rescale_factor",
+    "raw_total_sum",
+    "base_total_sum",
     "total_weight_sum",
+    "zero_raw_total_hex",
     "zero_total_hex",
     "excluded_zero_signal_hex"
   ),
@@ -298,7 +489,14 @@ run_summary <- tibble::tibble(
     ncol(X),
     ncol(score_mat),
     K_BEST,
+    weight_strategy,
+    weight_quantile,
+    weight_rescale_mode,
+    weight_info$scale_factor,
+    sum(pop_locations$total_raw, na.rm = TRUE),
+    sum(pop_locations$total_base, na.rm = TRUE),
     sum(pop_locations$total, na.rm = TRUE),
+    sum(pop_locations$total_raw <= 0, na.rm = TRUE),
     sum(pop_locations$total <= 0, na.rm = TRUE),
     nrow(removed_hex)
   )

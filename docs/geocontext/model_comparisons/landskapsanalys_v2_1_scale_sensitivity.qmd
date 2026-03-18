@@ -1,0 +1,224 @@
+---
+title: "Landskapsanalys v2.1: Kontextskalekanslighet"
+lang: sv
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: true
+    code-summary: "Visa kod"
+    embed-resources: true
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+> Denna rapport dokumenterar skalkansligheten ovanpa `landskapsanalys_v2_1_geomweight58_res9`, med samma viktlogik men tre olika `k`-stegar.
+
+```{r}
+#| label: setup
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(tidyr)
+  library(ggplot2)
+  library(knitr)
+  library(scales)
+})
+
+repo_root <- "C:/gislab/landskapsanalys"
+sensitivity_id <- Sys.getenv(
+  "LANDSKAPSANALYS_SENSITIVITY_ID",
+  unset = "landskapsanalys_v2_1_scale_sensitivity"
+)
+data_dir <- Sys.getenv(
+  "LANDSKAPSANALYS_DATA_DIR",
+  unset = file.path(repo_root, "data/interim/landskapsanalys_versions", sensitivity_id)
+)
+
+meta <- read.csv(file.path(data_dir, paste0(sensitivity_id, "_metadata.csv")), stringsAsFactors = FALSE)
+summary_df <- read.csv(file.path(data_dir, paste0(sensitivity_id, "_summary.csv")), stringsAsFactors = FALSE)
+radius_df <- read.csv(file.path(data_dir, paste0(sensitivity_id, "_radius_summary.csv")), stringsAsFactors = FALSE)
+k_scores <- read.csv(file.path(data_dir, paste0(sensitivity_id, "_k_scores.csv")), stringsAsFactors = FALSE)
+
+summary_fmt <- summary_df |>
+  mutate(
+    cumulative_var = percent(cumulative_var, accuracy = 0.01),
+    best_silhouette = number(best_silhouette, accuracy = 0.001),
+    largest_cluster_share = percent(largest_cluster_share, accuracy = 0.1),
+    smallest_cluster_share = percent(smallest_cluster_share, accuracy = 0.1),
+    mean_total = number(mean_total, accuracy = 0.01)
+  )
+
+radius_fmt <- radius_df |>
+  mutate(
+    approx_avg_cells = number(approx_avg_cells, accuracy = 0.1),
+    zero_share = percent(zero_share, accuracy = 0.1),
+    median_radius = number(median_radius, accuracy = 1),
+    p90_radius = number(p90_radius, accuracy = 1)
+  )
+
+best_row <- summary_df |> slice_max(order_by = best_silhouette, n = 1, with_ties = FALSE)
+working_takeaway <- paste0(
+  "Local geometric scales ger hogst silhouette (",
+  number(best_row$best_silhouette[1], accuracy = 0.001),
+  "), men legacy-stegen ar fortfarande den starkaste kompromissen nar man vagar samman lokalitet, faktorstruktur och klusterbalans."
+)
+```
+
+## 1. Syfte
+
+Denna rapport svarar pa fragan:
+
+**Haller `10, 50, 100, 250, 1000` som arbetssteg, eller blir modellen tydligt battre av en alternativ `k`-stege?**
+
+Testet bygger pa samma `v2.1`-modell, men med tre skalfamiljer:
+
+- `legacy`: `10, 50, 100, 250, 1000`
+- `local_geom`: `8, 24, 72, 216, 648`
+- `broad_geom`: `15, 45, 135, 405, 1215`
+
+Allt annat halls konstant:
+
+- samma inputlager
+- samma viktlogik
+- samma `varimax`
+- samma `5` faktorer
+- samma klusterprovning `K = 5..10`
+
+## 2. Huvudresultat
+
+`r working_takeaway`
+
+```{r}
+knitr::kable(
+  summary_fmt,
+  col.names = c(
+    "Skalfamilj",
+    "Analys-ID",
+    "k-varden",
+    "Kumulativ varians",
+    "Bast K",
+    "Bast silhouette",
+    "Storsta klustershare",
+    "Minsta klustershare",
+    "Mean total"
+  )
+)
+```
+
+Det finns ingen enkel universell vinnare:
+
+- `local_geom` ger starkast klusterseparation
+- `broad_geom` ger hogst forklarad varians
+- `legacy` ligger mitt emellan och ar den jamnaste kompromissen
+
+## 3. Klusterbeteende
+
+```{r}
+ggplot(k_scores, aes(x = K, y = silhouette, color = scale_label)) +
+  geom_line(linewidth = 0.9) +
+  geom_point(size = 2.3) +
+  scale_x_continuous(breaks = sort(unique(k_scores$K))) +
+  scale_y_continuous(labels = number_format(accuracy = 0.001)) +
+  labs(
+    x = "K",
+    y = "Silhouette",
+    color = "Skalfamilj",
+    title = "Klusterseparation over K for olika k-stegar"
+  ) +
+  theme_minimal(base_size = 12)
+```
+
+Klustermassigt ar resultaten tydliga:
+
+- `local_geom` -> bast `K = 6`, silhouette `0.348`
+- `legacy` -> bast `K = 6`, silhouette `0.312`
+- `broad_geom` -> bast `K = 5`, silhouette `0.299`
+
+Det betyder att en mer lokal stege gor modellen mer separerbar i faktorrummet, medan en bredare stege trycker modellen mot mer sammanslagna kluster.
+
+## 4. Kontextlokalitet och radier
+
+```{r}
+ggplot(radius_df, aes(x = approx_avg_cells, y = zero_share, color = scale_label)) +
+  geom_line(linewidth = 0.9) +
+  geom_point(size = 2.3) +
+  scale_x_continuous(labels = number_format(accuracy = 1)) +
+  scale_y_continuous(labels = percent_format(accuracy = 1)) +
+  labs(
+    x = "Ungefarligt antal genomsnittsceller i k-traskeln",
+    y = "Andel nollradie",
+    color = "Skalfamilj",
+    title = "Hur lokal ar den tidigaste kontexten?"
+  ) +
+  theme_minimal(base_size = 12)
+```
+
+```{r}
+knitr::kable(
+  radius_fmt,
+  col.names = c(
+    "Skalfamilj",
+    "Analys-ID",
+    "k",
+    "Approx celler",
+    "Nollradieandel",
+    "Medianradie",
+    "P90-radie"
+  )
+)
+```
+
+Har ligger den viktigaste metodskillnaden:
+
+- `local_geom` gor den forsta skalan mer verkligt lokal, men ocksa mer sjalvdominerad: `45.1%` nollradie vid `k=8`
+- `legacy` ligger mellan ytterligheterna: `17.9%` nollradie vid `k=10`
+- `broad_geom` gor den forsta skalan mindre sjalvdominerad: bara `1.6%` nollradie vid `k=15`
+
+Med andra ord:
+
+- `local_geom` far mer lokal kontrast
+- `broad_geom` får mer omedelbar omgivningsinblandning
+- `legacy` verkar vara en medelvag som fortfarande skiljer lokal och omgivande struktur utan att kollapsa helt at nagot hall
+
+## 5. Faktorstruktur
+
+```{r}
+ggplot(summary_df, aes(x = scale_label, y = cumulative_var, fill = scale_label)) +
+  geom_col(width = 0.65, show.legend = FALSE) +
+  scale_y_continuous(labels = percent_format(accuracy = 1)) +
+  labs(
+    x = "Skalfamilj",
+    y = "Kumulativ forklarad varians",
+    title = "Bredare skalsteg ger hogre forklarad varians"
+  ) +
+  theme_minimal(base_size = 12)
+```
+
+Faktorstrukturen reagerar i motsatt riktning mot klustren:
+
+- `broad_geom`: `37.76%` kumulativ varians
+- `legacy`: `36.02%`
+- `local_geom`: `33.94%`
+
+Detta ar logiskt. Bredare skalor jamnar ut lokala skillnader och gynnar storre, mer sammanhangande gradienter. Lokalare skalor behaller mer rumslig kontrast men mindre statistisk samvariation.
+
+## 6. Arbetsposition
+
+Min arbetsposition efter detta test ar:
+
+1. Behall `10, 50, 100, 250, 1000` som arbetsstege i `v2.1`.
+2. Tolka `local_geom` som den viktiga alternativa challengern om vi senare vill trycka modellen mot mer lokal kontrast.
+3. Tolka `broad_geom` som en nyttig kontroll, men inte som basta arbetsval just nu eftersom klusterseparationen blir svagare och modellen glider tillbaka mot `K = 5`.
+
+Det viktigaste skälet att stanna vid legacy just nu ar att den gor inget enskilt moment absolut bast, men den undviker ocksa att bli extrem:
+
+- inte for lokal
+- inte for utjamnad
+- fortfarande `K = 6`
+- fortfarande rimlig faktorvarians
+- fortfarande battre klusterbalans an de alternativa stegarna
+
+**Arbetsbeslutet just nu blir darfor: behall `k = 10, 50, 100, 250, 1000` i `v2.1` tills leave-one-theme-out ar kord.**
+

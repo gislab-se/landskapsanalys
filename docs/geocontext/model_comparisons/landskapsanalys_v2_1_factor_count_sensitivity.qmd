@@ -1,0 +1,327 @@
+---
+title: "Landskapsanalys v2.1: Faktorantalskanslighet"
+lang: sv
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: true
+    code-summary: "Visa kod"
+    embed-resources: true
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+> Denna rapport dokumenterar faktorantalskansligheten ovanpa `landskapsanalys_v2_1_geomweight58_res9`, med `varimax` som arbetsdefault och faktorantal `4, 5, 6, 7, 8`.
+
+```{r}
+#| label: setup
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(tidyr)
+  library(ggplot2)
+  library(knitr)
+  library(scales)
+  library(stringr)
+})
+
+repo_root <- "C:/gislab/landskapsanalys"
+sensitivity_id <- Sys.getenv(
+  "LANDSKAPSANALYS_SENSITIVITY_ID",
+  unset = "landskapsanalys_v2_1_factor_count_sensitivity"
+)
+data_dir <- Sys.getenv(
+  "LANDSKAPSANALYS_DATA_DIR",
+  unset = file.path(repo_root, "data/interim/landskapsanalys_versions", sensitivity_id)
+)
+
+meta <- read.csv(file.path(data_dir, paste0(sensitivity_id, "_metadata.csv")), stringsAsFactors = FALSE)
+eigen_summary <- read.csv(file.path(data_dir, paste0(sensitivity_id, "_eigen_summary.csv")), stringsAsFactors = FALSE)
+factor_summary <- read.csv(file.path(data_dir, paste0(sensitivity_id, "_factor_summary.csv")), stringsAsFactors = FALSE)
+focus_cluster_summary <- read.csv(file.path(data_dir, paste0(sensitivity_id, "_focus_cluster_summary.csv")), stringsAsFactors = FALSE)
+adjacent_ari <- read.csv(file.path(data_dir, paste0(sensitivity_id, "_adjacent_ari.csv")), stringsAsFactors = FALSE)
+top_loadings <- read.csv(file.path(data_dir, paste0(sensitivity_id, "_top_loadings.csv")), stringsAsFactors = FALSE)
+k_scores <- read.csv(file.path(data_dir, paste0(sensitivity_id, "_k_scores.csv")), stringsAsFactors = FALSE)
+
+source_analysis_id <- meta$source_analysis_id[1]
+rotation_name <- meta$rotation[1]
+n_hex <- meta$n_hex[1]
+n_context_columns <- meta$n_context_columns[1]
+
+factor_summary_fmt <- factor_summary |>
+  mutate(
+    cumulative_var = percent(cumulative_var, accuracy = 0.01),
+    TLI = number(TLI, accuracy = 0.001),
+    RMSEA = number(RMSEA, accuracy = 0.001),
+    rms = number(rms, accuracy = 0.001),
+    crms = number(crms, accuracy = 0.001),
+    fit = number(fit, accuracy = 0.001),
+    fit_off = number(fit_off, accuracy = 0.001),
+    best_silhouette = number(best_silhouette, accuracy = 0.001),
+    largest_cluster_share_best_k = percent(largest_cluster_share_best_k, accuracy = 0.1),
+    smallest_cluster_share_best_k = percent(smallest_cluster_share_best_k, accuracy = 0.1)
+  )
+
+focus_cluster_fmt <- focus_cluster_summary |>
+  mutate(
+    largest_cluster_share = percent(largest_cluster_share, accuracy = 0.1),
+    smallest_cluster_share = percent(smallest_cluster_share, accuracy = 0.1),
+    silhouette = number(silhouette, accuracy = 0.001)
+  )
+
+adjacent_ari_fmt <- adjacent_ari |>
+  mutate(ari = number(ari, accuracy = 0.001))
+
+top_loading_focus <- top_loadings |>
+  filter(n_factors %in% c(4, 5, 6)) |>
+  group_by(n_factors, factor) |>
+  slice_head(n = 5) |>
+  ungroup() |>
+  select(n_factors, factor, variable, loading)
+
+best_overall <- factor_summary |>
+  slice_max(order_by = best_silhouette, n = 1, with_ties = FALSE)
+
+working_takeaway <- paste0(
+  "Fyra faktorer ger hogst klusterseparation (silhouette ",
+  number(best_overall$best_silhouette[1], accuracy = 0.001),
+  "), men fem faktorer ar fortfarande den starkaste kompromissen mellan tolkbarhet, klusterbalans och uppdelning av kust/geologi."
+)
+```
+
+## 1. Syfte
+
+Denna rapport svarar pa fragan:
+
+**Ar fem faktorer fortfarande rimligt i `v2.1`, eller bor modellen egentligen forenkla till fyra eller expandera till sex-plus?**
+
+Testet bygger pa samma `v2.1`-kontextmatris som tidigare, men med ett fast metodpaket:
+
+- rotation = `r rotation_name`
+- factor counts = `4, 5, 6, 7, 8`
+- klusterprovning = `K = 5..10`
+
+## 2. Testdesign
+
+Analysen bygger pa `r n_hex` hexagoner och `r n_context_columns` rensade kontextkolumner, direkt lasna fran `r source_analysis_id`.
+
+```{r}
+design_table <- tibble::tibble(
+  komponent = c(
+    "Kallmodell",
+    "Rotation",
+    "Faktorantal",
+    "Jamforda K",
+    "Fokus-K",
+    "Klusteralgoritm"
+  ),
+  val = c(
+    source_analysis_id,
+    rotation_name,
+    "4, 5, 6, 7, 8",
+    "5..10",
+    "5 och 6",
+    "kmeans (Lloyd, nstart = 50, iter.max = 500)"
+  )
+)
+knitr::kable(design_table, col.names = c("Komponent", "Val"))
+```
+
+## 3. Huvudresultat
+
+`r working_takeaway`
+
+```{r}
+knitr::kable(
+  factor_summary_fmt |>
+    select(
+      n_factors,
+      cumulative_var,
+      TLI,
+      RMSEA,
+      best_k,
+      best_silhouette,
+      largest_cluster_share_best_k,
+      smallest_cluster_share_best_k
+    ),
+  col.names = c(
+    "Faktorer",
+    "Kumulativ varians",
+    "TLI",
+    "RMSEA",
+    "Bast K",
+    "Bast silhouette",
+    "Storsta klustershare",
+    "Minsta klustershare"
+  )
+)
+```
+
+Det finns en tydlig trade-off:
+
+- fler faktorer ger battre FA-fit
+- farre faktorer ger battre klusterseparation
+- fem faktorer ligger mitt i denna brytpunkt
+
+## 4. Fit For Faktoranalysen
+
+### 4.1 Forklarad varians
+
+```{r}
+ggplot(factor_summary, aes(x = n_factors, y = cumulative_var)) +
+  geom_line(linewidth = 0.9, color = "#2C6E49") +
+  geom_point(size = 2.4, color = "#2C6E49") +
+  scale_x_continuous(breaks = factor_summary$n_factors) +
+  scale_y_continuous(labels = percent_format(accuracy = 1)) +
+  labs(
+    x = "Antal faktorer",
+    y = "Kumulativ forklarad varians",
+    title = "Forklarad varians okar jamnt med fler faktorer"
+  ) +
+  theme_minimal(base_size = 12)
+```
+
+```{r}
+fit_long <- factor_summary |>
+  select(n_factors, TLI, RMSEA) |>
+  pivot_longer(cols = c(TLI, RMSEA), names_to = "metric", values_to = "value")
+
+ggplot(fit_long, aes(x = n_factors, y = value, color = metric)) +
+  geom_line(linewidth = 0.9) +
+  geom_point(size = 2.4) +
+  scale_x_continuous(breaks = factor_summary$n_factors) +
+  labs(
+    x = "Antal faktorer",
+    y = "Varde",
+    color = "Metrik",
+    title = "TLI stiger och RMSEA sjunker nar faktorantalet okar"
+  ) +
+  theme_minimal(base_size = 12)
+```
+
+FA-fit blir tydligt battre nar modellen gar fran `4` till `8` faktorer:
+
+- TLI: `0.765 -> 0.875`
+- RMSEA: `0.131 -> 0.096`
+
+Det betyder dock inte automatiskt att `8` faktorer ar bast. En del av vinsten ar bara att modellen blir friare och mer detaljerad.
+
+## 5. Klusterbeteende
+
+### 5.1 Basta K per faktorantal
+
+```{r}
+ggplot(k_scores, aes(x = K, y = silhouette, color = factor(n_factors), group = n_factors)) +
+  geom_line(linewidth = 0.9) +
+  geom_point(size = 2.1) +
+  scale_x_continuous(breaks = sort(unique(k_scores$K))) +
+  scale_y_continuous(labels = number_format(accuracy = 0.001)) +
+  labs(
+    x = "K",
+    y = "Silhouette",
+    color = "Faktorer",
+    title = "Klusterseparation sjunker i stort nar faktorantalet okar"
+  ) +
+  theme_minimal(base_size = 12)
+```
+
+Silhouette-bilden ar ganska klar:
+
+- `4` faktorer ger hogst silhouette och foredrar `K = 5`
+- `5` faktorer flyttar bast K till `6`
+- `6-8` faktorer behaller `K = 6`, men silhouette fortsatter nedat
+
+### 5.2 Fokus pa K = 5 och K = 6
+
+```{r}
+knitr::kable(
+  focus_cluster_fmt,
+  col.names = c(
+    "Faktorer",
+    "K",
+    "Storsta klustershare",
+    "Minsta klustershare",
+    "Silhouette"
+  )
+)
+```
+
+Fyra faktorer ar starka for klustring, men de ar ocksa grova:
+
+- `4 faktorer, K=5` har silhouette `0.379`
+- `5 faktorer, K=6` har silhouette `0.311`
+- `6+ faktorer` ger gradvis svagare klusterseparation och ofta mer dominerande storsta kluster
+
+## 6. Stabilitet Mellan Narliggande Faktorantal
+
+```{r}
+knitr::kable(
+  adjacent_ari_fmt,
+  col.names = c("K", "Vanster faktorantal", "Hoger faktorantal", "ARI")
+)
+```
+
+Det viktigaste brottet ligger mellan `5` och `6` faktorer:
+
+- `K = 5`: ARI `0.432`
+- `K = 6`: ARI `0.497`
+
+Det betyder att overgangen fran `5` till `6` inte bara ar en liten finjustering. Det ar en faktisk omstrukturering av klusterrummet.
+
+## 7. Vad Hander Innehallsligt?
+
+```{r}
+knitr::kable(
+  top_loading_focus |>
+    mutate(loading = number(loading, accuracy = 0.001)),
+  col.names = c("Faktorer totalt", "Faktor", "Variabel", "Laddning")
+)
+```
+
+Det mest metodiskt intressanta ar detta:
+
+- `4` faktorer ser ut att sla ihop det som i `5` faktorer blir en separat marin/sandig kustfaktor
+- `5` faktorer ger fortfarande en tydlig extra kust-geologisk gradient utan att modellen spricker upp for mycket
+- `6` faktorer introducerar en smalare faktor som delvis ser ut att blandas av specifika geologiska formationer och `aviation_bird_collision`
+
+Just den sista punkten gor `6` faktorer mindre attraktivt som arbetsdefault just nu. Det ser mer ut som en metodisk uppsplittring av specialsignaler an som en tydligare overgripande landskapslogik.
+
+## 8. Egenvardesbilden
+
+```{r}
+ggplot(head(eigen_summary, 12), aes(x = component, y = eigenvalue)) +
+  geom_line(linewidth = 0.9, color = "#8C5E34") +
+  geom_point(size = 2.2, color = "#8C5E34") +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "grey40") +
+  scale_x_continuous(breaks = 1:12) +
+  labs(
+    x = "Komponent",
+    y = "Egenvarde",
+    title = "De forsta egenvardena faller, men utan ett skarpt naturligt stopp"
+  ) +
+  theme_minimal(base_size = 12)
+```
+
+Egenvardena visar inget rent och enkelt stopp vid `5`. Det ar inte overraskande, eftersom matrisen innehaller manga nara beslektade variabler over flera skalor.
+
+Med andra ord:
+
+- egenvardena alene legitimerar inte `5`
+- men de legitimerar inte heller ett enkelt hopp till `8`
+
+## 9. Arbetsposition
+
+Min arbetsposition efter denna kanslighetsrunda ar:
+
+1. Behall `5` faktorer som arbetsdefault i `v2.1`.
+2. Tolka `4` faktorer som en viktig kontroll: modellen kan bli mer klusterbar om vi tillater mer sammanslagning.
+3. Tolka `6` faktorer som en verklig alternativ modell, men inte som basta arbetsval just nu.
+4. Tolka `7-8` faktorer som overdetaljerade for den aktuella rapportnivan.
+5. Anvand resultatet som argument for att ga vidare till leave-one-theme-out innan vi overger femfaktorslosningen.
+
+Det viktigaste metodbeslutet just nu ar alltsa:
+
+**Behall `v2.1` med `varimax`, `5` faktorer och `K = 6` som arbetsmodell for fortsatt granskning.**
+

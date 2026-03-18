@@ -1,0 +1,291 @@
+---
+title: "Landskapsanalys v2.1: Faktor- och klusterkanslighet"
+lang: sv
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: true
+    code-summary: "Visa kod"
+    embed-resources: true
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+> Denna rapport dokumenterar nasta robusthetspass ovanpa `landskapsanalys_v2_1_geomweight58_res9`: jamforelse mellan `varimax` och `oblimin`, samt mellan `K = 5` och `K = 6`.
+
+```{r}
+#| label: setup
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(tidyr)
+  library(stringr)
+  library(ggplot2)
+  library(knitr)
+  library(scales)
+})
+
+repo_root <- "C:/gislab/landskapsanalys"
+sensitivity_id <- Sys.getenv(
+  "LANDSKAPSANALYS_SENSITIVITY_ID",
+  unset = "landskapsanalys_v2_1_factor_cluster_sensitivity"
+)
+data_dir <- Sys.getenv(
+  "LANDSKAPSANALYS_DATA_DIR",
+  unset = file.path(repo_root, "data/interim/landskapsanalys_versions", sensitivity_id)
+)
+current_input_path <- knitr::current_input(dir = TRUE)
+report_dir <- if (nzchar(current_input_path)) {
+  normalizePath(dirname(current_input_path), winslash = "/", mustWork = FALSE)
+} else {
+  file.path(repo_root, "docs/geocontext")
+}
+
+metadata_path <- file.path(data_dir, paste0(sensitivity_id, "_metadata.csv"))
+k_scores_path <- file.path(data_dir, paste0(sensitivity_id, "_k_scores.csv"))
+variance_path <- file.path(data_dir, paste0(sensitivity_id, "_factor_variance.csv"))
+congruence_path <- file.path(data_dir, paste0(sensitivity_id, "_rotation_matched_congruence.csv"))
+phi_path <- file.path(data_dir, paste0(sensitivity_id, "_phi.csv"))
+focus_cluster_path <- file.path(data_dir, paste0(sensitivity_id, "_focus_cluster_summary.csv"))
+cluster_comparison_path <- file.path(data_dir, paste0(sensitivity_id, "_cluster_comparison.csv"))
+top_loadings_path <- file.path(data_dir, paste0(sensitivity_id, "_top_loadings.csv"))
+
+meta <- read.csv(metadata_path, stringsAsFactors = FALSE)
+k_scores <- read.csv(k_scores_path, stringsAsFactors = FALSE)
+variance_df <- read.csv(variance_path, stringsAsFactors = FALSE)
+matched_congruence <- read.csv(congruence_path, stringsAsFactors = FALSE)
+phi_df <- read.csv(phi_path, stringsAsFactors = FALSE)
+focus_cluster_summary <- read.csv(focus_cluster_path, stringsAsFactors = FALSE)
+cluster_comparison <- read.csv(cluster_comparison_path, stringsAsFactors = FALSE)
+top_loadings <- read.csv(top_loadings_path, stringsAsFactors = FALSE)
+
+source_analysis_id <- meta$source_analysis_id[1]
+n_hex <- meta$n_hex[1]
+n_context_columns <- meta$n_context_columns[1]
+
+best_by_rotation <- k_scores |>
+  group_by(rotation) |>
+  slice_max(order_by = silhouette, n = 1, with_ties = FALSE) |>
+  ungroup()
+
+variance_summary <- variance_df |>
+  filter(metric == "Cumulative Var") |>
+  pivot_longer(cols = starts_with("F"), names_to = "factor", values_to = "value") |>
+  group_by(rotation) |>
+  summarise(cumulative_var = max(value), .groups = "drop")
+
+phi_long <- phi_df |>
+  pivot_longer(cols = starts_with("MR"), names_to = "factor_to", values_to = "correlation") |>
+  filter(factor_from != factor_to)
+
+max_abs_phi <- max(abs(phi_long$correlation), na.rm = TRUE)
+min_congruence <- min(matched_congruence$congruence, na.rm = TRUE)
+max_congruence <- max(matched_congruence$congruence, na.rm = TRUE)
+
+rotation_takeaway <- paste0(
+  "Matched factor congruence ligger mellan ",
+  number(min_congruence, accuracy = 0.01),
+  " och ",
+  number(max_congruence, accuracy = 0.01),
+  ", medan hogsta absoluta faktor-korrelation i oblimin ar ",
+  number(max_abs_phi, accuracy = 0.001),
+  "."
+)
+
+best_overall <- k_scores |>
+  slice_max(order_by = silhouette, n = 1, with_ties = FALSE)
+
+focus_table <- focus_cluster_summary |>
+  mutate(
+    largest_cluster_share = percent(largest_cluster_share, accuracy = 0.1),
+    smallest_cluster_share = percent(smallest_cluster_share, accuracy = 0.1),
+    silhouette = number(silhouette, accuracy = 0.001)
+  )
+
+cluster_comparison_table <- cluster_comparison |>
+  mutate(ari = number(ari, accuracy = 0.001))
+
+top_loading_table <- top_loadings |>
+  group_by(rotation, factor) |>
+  slice_head(n = 5) |>
+  ungroup() |>
+  select(rotation, factor, variable, loading)
+```
+
+## 1. Syfte
+
+Denna rapport svarar pa en mycket konkret metodfraga:
+
+**Vad hander i `v2.1` om vi slutar ta `varimax` och ett enda valt `K` for givet?**
+
+Har testas samma kontextmatris som i [landskapsanalys_v2_1.html](/c:/gislab/landskapsanalys/docs/geocontext/current_landscape_model/landskapsanalys_v2_1.html), men med tva explicita jamforelser:
+
+- `varimax` mot `oblimin`
+- `K = 5` mot `K = 6`
+
+Allt annat halls konstant:
+
+- samma `v2.1`-kontextmatris
+- samma `5` faktorer
+- samma `minres`
+- samma `tenBerge`
+- samma klusterintervall `K = 5..10`
+
+## 2. Testdesign
+
+Analysen bygger pa `r n_hex` hexagoner och `r n_context_columns` rensade kontextkolumner, direkt lasna fran `r source_analysis_id`.
+
+```{r}
+design_table <- tibble::tibble(
+  komponent = c(
+    "Kallmodell",
+    "Jämförda rotationer",
+    "Faktorantal",
+    "Jämförda K",
+    "Fokus-K",
+    "Klusteralgoritm"
+  ),
+  val = c(
+    source_analysis_id,
+    "varimax, oblimin",
+    "5",
+    "5..10",
+    "5 och 6",
+    "kmeans (Lloyd, nstart = 50, iter.max = 500)"
+  )
+)
+knitr::kable(design_table, col.names = c("Komponent", "Val"))
+```
+
+## 3. Rotation: Varimax Mot Oblimin
+
+Den viktigaste fragan har ar inte om siffrorna blir lite olika, utan om den landskapliga strukturen faktiskt byter karaktar.
+
+`r rotation_takeaway`
+
+### 3.1 Matchad faktorlikhet
+
+```{r}
+knitr::kable(
+  matched_congruence |>
+    mutate(congruence = number(congruence, accuracy = 0.01)),
+  col.names = c("Varimax-faktor", "Matchad oblimin-faktor", "Kongruens")
+)
+```
+
+Det mest slående ar att oblimin i praktiken mest byter ordning pa ett par faktorer. Innehallet ar nara identiskt.
+
+### 3.2 Faktor-korrelationer i oblimin
+
+```{r}
+phi_display <- phi_long |>
+  mutate(correlation = number(correlation, accuracy = 0.001))
+knitr::kable(phi_display, col.names = c("Rotation", "Faktor fran", "Faktor till", "Korrelationskoefficient"))
+```
+
+Den hogsta absoluta faktor-korrelationen ar `r number(max_abs_phi, accuracy = 0.001)`. Det ar inte noll, men det ar heller inte starkt nog for att varimax ska se direkt missvisande ut.
+
+### 3.3 Forklarad varians
+
+```{r}
+knitr::kable(
+  variance_summary |>
+    mutate(cumulative_var = percent(cumulative_var, accuracy = 0.01)),
+  col.names = c("Rotation", "Kumulativ forklarad varians")
+)
+```
+
+Den kumulativa forklarade variansen ar i praktiken samma under bada rotationerna. Det betyder att rotationen mest handlar om strukturering och tolkbarhet, inte om hur mycket signal som fangas.
+
+## 4. Kluster: K = 5 Mot K = 6
+
+### 4.1 Silhouette over K
+
+```{r}
+ggplot(k_scores, aes(x = K, y = silhouette, color = rotation)) +
+  geom_line(linewidth = 0.9) +
+  geom_point(size = 2.4) +
+  scale_x_continuous(breaks = sort(unique(k_scores$K))) +
+  scale_y_continuous(labels = number_format(accuracy = 0.001)) +
+  labs(
+    x = "K",
+    y = "Silhouette",
+    color = "Rotation",
+    title = "Silhouette for K = 5..10 i v2.1-sensitivity"
+  ) +
+  theme_minimal(base_size = 12)
+```
+
+```{r}
+best_display <- best_by_rotation |>
+  mutate(silhouette = number(silhouette, accuracy = 0.001))
+knitr::kable(best_display, col.names = c("Rotation", "Bast K", "Silhouette", "Silhouette-basis"))
+```
+
+Det finns ingen enda enkel vinnare:
+
+- `oblimin` foredrar `K = 5` med silhouette `0.330`
+- `varimax` foredrar `K = 6` med silhouette `0.312`
+
+### 4.2 Fokusjämförelse för K = 5 och K = 6
+
+```{r}
+knitr::kable(
+  focus_table,
+  col.names = c(
+    "Rotation",
+    "K",
+    "Storsta klustershare",
+    "Minsta klustershare",
+    "Antal kluster",
+    "Silhouette"
+  )
+)
+```
+
+Har syns ett tydligt monster:
+
+- `K = 6` ger jamnare klusterbalans an `K = 5`
+- `K = 5` ger hogre silhouette under oblimin men ocksa ett storre dominerande kluster
+- `varimax K = 6` och `oblimin K = 6` ar nastan samma rumsliga uppdelning
+
+### 4.3 Hur stabil ar klustringen over valen?
+
+```{r}
+knitr::kable(
+  cluster_comparison_table,
+  col.names = c("Jamforelse", "ARI")
+)
+```
+
+Det viktigaste resultatet ar att `varimax_K6` och `oblimin_K6` har `ARI = 0.864`, vilket ar mycket hogre an `varimax_K5` mot `oblimin_K5` (`ARI = 0.582`). Det talar for att `K = 6` ar mer robust over rotationsval, aven om `oblimin K = 5` far hogst silhouette.
+
+## 5. Toppladdningar Som Sanity Check
+
+```{r}
+knitr::kable(
+  top_loading_table |>
+    mutate(loading = number(loading, accuracy = 0.001)),
+  col.names = c("Rotation", "Faktor", "Variabel", "Laddning")
+)
+```
+
+Toppladdningarna bekräftar samma sak som kongruensen: oblimin ser inte ut att skapa en helt ny landskapssyn. De stora gradienterna finns kvar, men faktorordningen flyttar sig delvis.
+
+## 6. Arbetsposition
+
+Min arbetsposition efter denna kanslighetsrunda ar:
+
+1. Behall `varimax` som **arbetsdefault** i huvudrapporten tills vidare.
+2. Tolka inte detta som att `varimax` nu ar bevisat bast. Det betyder bara att oblimin inte visade stark nog faktorinterdependens for att tvinga ett metodbyte redan nu.
+3. Behall bade `K = 5` och `K = 6` som levande kandidater.
+4. Anvand `K = 6` som **arbetsval for fortsatt kartgranskning**, eftersom det ar mer balanserat och betydligt stabilare over rotationer.
+5. Tolka `oblimin K = 5` som den viktigaste motrosten: enklare kluster ger fortfarande battre separation enligt silhouette, sa vi ska inte lata `K = 6` stelna till sanning for tidigt.
+
+I praktiken betyder det att nasta steg bor vara:
+
+- visuell kartgranskning av `K = 5` mot `K = 6` i `v2.1`
+- faktorantalskanslighet ovanpa samma `v2.1`-matris
+- leave-one-theme-out pa `v2.1`
