@@ -20,7 +20,10 @@ source_model_note <- Sys.getenv(
     "hogsta hojd och ett kompletterande kulturmiljolager."
   )
 )
-input_csv <- file.path(repo_root, "data/interim/geocontext_r9/bornholm_r9_geocontext_raw_manual.csv")
+input_csv <- Sys.getenv(
+  "LANDSKAPSANALYS_INPUT_CSV",
+  unset = file.path(repo_root, "data/interim/geocontext_r9/bornholm_r9_geocontext_raw_manual.csv")
+)
 hex_gpkg <- file.path(repo_root, "data/interim/geocontext_r9/bornholm_r9_hex_44_combined.gpkg")
 hex_layer <- "r9_hex_44_combined"
 config_csv <- Sys.getenv(
@@ -39,6 +42,10 @@ if (!is.finite(weight_quantile)) {
 }
 weight_quantile <- max(0.50, min(weight_quantile, 0.9999))
 weight_description <- Sys.getenv("LANDSKAPSANALYS_WEIGHT_DESCRIPTION", unset = "")
+theme_balance_mode <- Sys.getenv("LANDSKAPSANALYS_THEME_BALANCE_MODE", unset = "none")
+layer_weight_spec <- Sys.getenv("LANDSKAPSANALYS_LAYER_WEIGHT_SPEC", unset = "")
+theme_weight_spec <- Sys.getenv("LANDSKAPSANALYS_THEME_WEIGHT_SPEC", unset = "")
+geometry_weight_spec <- Sys.getenv("LANDSKAPSANALYS_GEOMETRY_WEIGHT_SPEC", unset = "")
 weight_rescale_mode <- Sys.getenv(
   "LANDSKAPSANALYS_WEIGHT_RESCALE_MODE",
   unset = if (identical(weight_strategy, "geometry_balanced_q99")) "n_input_layers" else "none"
@@ -53,6 +60,12 @@ if (!nzchar(weight_description)) {
     ),
     TRUE ~ weight_strategy
   )
+  if (!identical(theme_balance_mode, "none")) {
+    weight_description <- paste(
+      weight_description,
+      "Theme balancing is applied within each geometry type before geometry-level aggregation."
+    )
+  }
 }
 
 k_values_env <- Sys.getenv("LANDSKAPSANALYS_K_VALUES", unset = "")
@@ -69,12 +82,83 @@ k_values <- if (nzchar(k_values_env)) {
 n_factors <- 5
 k_candidates <- 5:10
 
+parse_weight_spec <- function(spec_text) {
+  if (!nzchar(spec_text)) {
+    return(setNames(numeric(0), character(0)))
+  }
+
+  parts <- strsplit(spec_text, "[;,]")[[1]] |>
+    trimws()
+  parts <- parts[nzchar(parts)]
+
+  if (length(parts) == 0) {
+    return(setNames(numeric(0), character(0)))
+  }
+
+  keys <- character(length(parts))
+  values <- numeric(length(parts))
+
+  for (i in seq_along(parts)) {
+    part <- parts[[i]]
+    if (!str_detect(part, "=")) {
+      stop("Invalid weight specification entry: ", part)
+    }
+    keys[[i]] <- trimws(sub("=.*$", "", part))
+    values[[i]] <- suppressWarnings(as.numeric(trimws(sub("^[^=]+=", "", part))))
+    if (!nzchar(keys[[i]]) || !is.finite(values[[i]]) || values[[i]] <= 0) {
+      stop("Invalid weight specification entry: ", part)
+    }
+  }
+
+  stats::setNames(values, keys)
+}
+
 indicator_catalog <- read.csv(config_csv, stringsAsFactors = FALSE)
+layer_weight_lookup <- parse_weight_spec(layer_weight_spec)
+theme_weight_lookup <- parse_weight_spec(theme_weight_spec)
+geometry_weight_lookup <- parse_weight_spec(geometry_weight_spec)
+
+if (length(layer_weight_lookup) > 0) {
+  unknown_layer_keys <- setdiff(names(layer_weight_lookup), indicator_catalog$gc_name)
+  if (length(unknown_layer_keys) > 0) {
+    stop("Unknown layer weight keys: ", paste(unknown_layer_keys, collapse = ", "))
+  }
+}
+if (length(theme_weight_lookup) > 0) {
+  unknown_theme_keys <- setdiff(names(theme_weight_lookup), unique(indicator_catalog$theme))
+  if (length(unknown_theme_keys) > 0) {
+    stop("Unknown theme weight keys: ", paste(unknown_theme_keys, collapse = ", "))
+  }
+}
+if (length(geometry_weight_lookup) > 0) {
+  unknown_geometry_keys <- setdiff(names(geometry_weight_lookup), unique(indicator_catalog$geometry_type))
+  if (length(unknown_geometry_keys) > 0) {
+    stop("Unknown geometry weight keys: ", paste(unknown_geometry_keys, collapse = ", "))
+  }
+}
+
+indicator_catalog <- indicator_catalog |>
+  mutate(
+    layer_weight = dplyr::coalesce(unname(layer_weight_lookup[gc_name]), 1),
+    theme_weight = dplyr::coalesce(unname(theme_weight_lookup[theme]), 1),
+    geometry_weight = dplyr::coalesce(unname(geometry_weight_lookup[geometry_type]), 1)
+  )
+
 selected_cols <- stats::setNames(indicator_catalog$source_name, indicator_catalog$gc_name)
 
 write.csv(
   indicator_catalog |>
-    select(gc_name, source_name, display_name, geometry_type, theme, selection_note),
+    select(
+      gc_name,
+      source_name,
+      display_name,
+      geometry_type,
+      theme,
+      selection_note,
+      layer_weight,
+      theme_weight,
+      geometry_weight
+    ),
   file.path(out_dir, paste0(analysis_id, "_indicator_catalog.csv")),
   row.names = FALSE
 )
@@ -96,6 +180,10 @@ analysis_metadata <- tibble::tibble(
   context_weight_strategy = weight_strategy,
   context_weight_quantile = weight_quantile,
   context_weight_description = weight_description,
+  context_theme_balance_mode = theme_balance_mode,
+  context_layer_weight_spec = layer_weight_spec,
+  context_theme_weight_spec = theme_weight_spec,
+  context_geometry_weight_spec = geometry_weight_spec,
   context_weight_rescale_mode = weight_rescale_mode,
   factor_method = "psych::fa fm=minres rotate=varimax scores=tenBerge",
   factor_count = n_factors,
@@ -167,7 +255,8 @@ build_context_weights <- function(
   indicator_catalog,
   strategy = "raw_sum",
   quantile_prob = 0.99,
-  rescale_mode = "none"
+  rescale_mode = "none",
+  theme_balance_mode = "none"
 ) {
   signal_df <- pop_df |>
     select(all_of(indicator_catalog$gc_name))
@@ -179,18 +268,21 @@ build_context_weights <- function(
       raw_mean = vapply(signal_df, mean, numeric(1), na.rm = TRUE),
       raw_max = vapply(signal_df, max, numeric(1), na.rm = TRUE),
       scale_cap = NA_real_,
-      scaled_mean = NA_real_
+      scaled_mean = NA_real_,
+      scaled_mean_weighted = NA_real_
     )
 
   if (strategy == "raw_sum") {
     diagnostics$scale_cap <- diagnostics$raw_max
     diagnostics$scaled_mean <- diagnostics$raw_mean
+    diagnostics$scaled_mean_weighted <- diagnostics$raw_mean * indicator_catalog$layer_weight
     return(list(
       total = raw_total,
       raw_total = raw_total,
       total_base = raw_total,
       scale_factor = 1,
       geometry_scores = NULL,
+      theme_scores = NULL,
       diagnostics = diagnostics
     ))
   }
@@ -211,18 +303,75 @@ build_context_weights <- function(
 
   diagnostics$scale_cap <- vapply(normalized_list, `[[`, numeric(1), "scale_cap")
   diagnostics$scaled_mean <- vapply(normalized_df, mean, numeric(1), na.rm = TRUE)
+  weighted_normalized_df <- sweep(
+    normalized_df,
+    2,
+    indicator_catalog$layer_weight,
+    `*`
+  )
+  diagnostics$scaled_mean_weighted <- vapply(weighted_normalized_df, mean, numeric(1), na.rm = TRUE)
 
-  geometry_groups <- split(indicator_catalog$gc_name, indicator_catalog$geometry_type)
-  geometry_scores <- purrr::imap_dfc(geometry_groups, function(cols, geometry_type) {
-    tibble::tibble(
-      !!paste0("weight_", weight_name(geometry_type)) := rowMeans(
-        as.matrix(normalized_df[, cols, drop = FALSE]),
-        na.rm = TRUE
+  build_weighted_mean <- function(data_df, cols, weights) {
+    denom <- sum(weights, na.rm = TRUE)
+    if (!is.finite(denom) || denom <= 0) {
+      denom <- length(weights)
+    }
+    rowSums(sweep(as.matrix(data_df[, cols, drop = FALSE]), 2, weights, `*`), na.rm = TRUE) / denom
+  }
+
+  geometry_groups <- split(indicator_catalog, indicator_catalog$geometry_type)
+
+  if (!theme_balance_mode %in% c("none", "within_geometry")) {
+    stop("Unknown LANDSKAPSANALYS_THEME_BALANCE_MODE: ", theme_balance_mode)
+  }
+
+  theme_scores <- NULL
+  geometry_scores <- purrr::imap_dfc(geometry_groups, function(geom_catalog, geometry_type) {
+    cols <- geom_catalog$gc_name
+
+    if (identical(theme_balance_mode, "within_geometry")) {
+      theme_groups <- split(geom_catalog, geom_catalog$theme)
+      theme_score_df <- purrr::imap_dfc(theme_groups, function(theme_catalog, theme_name) {
+        tibble::tibble(
+          !!paste0("weight_theme_", weight_name(geometry_type), "_", weight_name(theme_name)) := build_weighted_mean(
+            normalized_df,
+            theme_catalog$gc_name,
+            theme_catalog$layer_weight
+          )
+        )
+      })
+      if (is.null(theme_scores)) {
+        theme_scores <<- theme_score_df
+      } else {
+        theme_scores <<- bind_cols(theme_scores, theme_score_df)
+      }
+
+      theme_weights_geom <- vapply(theme_groups, function(theme_catalog) theme_catalog$theme_weight[[1]], numeric(1))
+      geom_score <- build_weighted_mean(
+        theme_score_df,
+        names(theme_score_df),
+        theme_weights_geom
       )
+    } else {
+      geom_score <- build_weighted_mean(
+        normalized_df,
+        cols,
+        geom_catalog$layer_weight
+      )
+    }
+
+    tibble::tibble(
+      !!paste0("weight_", weight_name(geometry_type)) := geom_score
     )
   })
 
-  total_base <- rowMeans(as.matrix(geometry_scores), na.rm = TRUE)
+  geometry_weight_vec <- vapply(geometry_groups, function(geom_catalog) geom_catalog$geometry_weight[[1]], numeric(1))
+
+  total_base <- build_weighted_mean(
+    geometry_scores,
+    names(geometry_scores),
+    geometry_weight_vec
+  )
   base_total_sum <- sum(total_base, na.rm = TRUE)
   scale_factor <- dplyr::case_when(
     !is.finite(base_total_sum) || base_total_sum <= 0 ~ 1,
@@ -243,6 +392,7 @@ build_context_weights <- function(
     total_base = total_base,
     scale_factor = scale_factor,
     geometry_scores = geometry_scores,
+    theme_scores = theme_scores,
     diagnostics = diagnostics
   )
 }
@@ -253,10 +403,14 @@ weight_info <- build_context_weights(
   indicator_catalog,
   strategy = weight_strategy,
   quantile_prob = weight_quantile,
-  rescale_mode = weight_rescale_mode
+  rescale_mode = weight_rescale_mode,
+  theme_balance_mode = theme_balance_mode
 )
 if (!is.null(weight_info$geometry_scores)) {
   pop_locations_full <- bind_cols(pop_locations_full, weight_info$geometry_scores)
+}
+if (!is.null(weight_info$theme_scores)) {
+  pop_locations_full <- bind_cols(pop_locations_full, weight_info$theme_scores)
 }
 pop_locations_full <- pop_locations_full |>
   mutate(
@@ -348,7 +502,11 @@ compute_context <- function(points_df, pop_df, groups, weight_col = "total", k_v
 
 message("Computing multiscalar context variables...")
 points_with_context <- compute_context(points, pop_locations, groups = names(selected_cols), k_values = k_values)
-weight_extra_cols <- c("total_raw", "total_base", grep("^weight_", names(pop_locations), value = TRUE))
+weight_extra_cols <- c(
+  "total_raw",
+  "total_base",
+  grep("^weight_", names(pop_locations), value = TRUE)
+)
 if (length(weight_extra_cols) > 0) {
   points_with_context <- points_with_context |>
     left_join(pop_locations |> select(hex_id, all_of(weight_extra_cols)), by = "hex_id")
@@ -473,6 +631,10 @@ run_summary <- tibble::tibble(
     "k_best",
     "weight_strategy",
     "weight_quantile",
+    "theme_balance_mode",
+    "layer_weight_spec",
+    "theme_weight_spec",
+    "geometry_weight_spec",
     "weight_rescale_mode",
     "weight_rescale_factor",
     "raw_total_sum",
@@ -491,6 +653,10 @@ run_summary <- tibble::tibble(
     K_BEST,
     weight_strategy,
     weight_quantile,
+    theme_balance_mode,
+    layer_weight_spec,
+    theme_weight_spec,
+    geometry_weight_spec,
     weight_rescale_mode,
     weight_info$scale_factor,
     sum(pop_locations$total_raw, na.rm = TRUE),
