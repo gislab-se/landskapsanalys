@@ -1,6 +1,19 @@
-# landskapsanalys
+﻿# landskapsanalys
 
 Standalone Streamlit app for geocontext-based landscape analysis on Bornholm.
+
+## Repo Landing Page
+
+The repo now has a short landing page at `docs/geocontext/index.html`.
+It is intended as the main human-facing entry point and currently links to four tracks:
+
+- the local Streamlit wind-acceptance app
+- the current full landscape-analysis report
+- the shorter supervisor-oriented report
+- the separate wind-acceptance report
+
+The landing page should stay very short, with a visual hex-map hero and clear navigation rather than long method text.
+The full report is meant to become the exhaustive v1-v2-v3 synthesis, while the supervisor report should remain the shorter guided version.
 
 ## Included assets
 
