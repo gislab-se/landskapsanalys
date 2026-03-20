@@ -1,0 +1,369 @@
+---
+title: "Bornholm Vindacceptans Stage 1: Scenarier For Exkludering, Infrastruktur Och Landskapskontext"
+lang: sv
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: true
+    code-summary: "Visa kod"
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+> Denna rapport beskriver ett separat acceptanslager for vindkraftsinfrastruktur pa Bornholm. Det ar inte ett juridiskt beslutsunderlag utan en transparent arbetsmodell som jamfor tre policylogiker: `Strikt`, `Balanserad` och `Teknikprioriterad`.
+
+```{r}
+#| label: setup
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(htmltools)
+  library(htmlwidgets)
+  library(knitr)
+  library(leaflet)
+  library(scales)
+  library(sf)
+  library(tidyr)
+})
+
+repo_root <- "C:/gislab/landskapsanalys"
+analysis_id <- "bornholm_vindacceptans_stage1_v3_2_res9"
+data_dir <- file.path(repo_root, "docs/geocontext/acceptance_framework/data", analysis_id)
+report_dir <- file.path(repo_root, "docs/geocontext/acceptance_framework")
+map_dir <- file.path(report_dir, "maps")
+dir.create(map_dir, recursive = TRUE, showWarnings = FALSE)
+
+hex_path <- file.path(data_dir, paste0(analysis_id, "_hex.gpkg"))
+summary_path <- file.path(data_dir, paste0(analysis_id, "_summary.csv"))
+criteria_path <- file.path(data_dir, paste0(analysis_id, "_criteria.csv"))
+metadata_path <- file.path(data_dir, paste0(analysis_id, "_metadata.csv"))
+
+map_href <- paste0("maps/", analysis_id, "_map.html")
+map_path <- file.path(map_dir, paste0(analysis_id, "_map.html"))
+
+hex <- st_read(hex_path, layer = analysis_id, quiet = TRUE)
+hex_wgs84 <- st_transform(hex, 4326)
+summary_df <- read.csv(summary_path, stringsAsFactors = FALSE)
+criteria_df <- read.csv(criteria_path, stringsAsFactors = FALSE)
+metadata_df <- read.csv(metadata_path, stringsAsFactors = FALSE)
+
+scenario_levels <- c("strict", "balanced", "tech_prioritized")
+scenario_labels <- c(
+  "strict" = "Strikt",
+  "balanced" = "Balanserad",
+  "tech_prioritized" = "Teknikprioriterad"
+)
+
+summary_value <- function(scenario_id, metric) {
+  summary_df$value[
+    summary_df$scenario_id == scenario_id &
+      summary_df$metric == metric
+  ][1]
+}
+
+scenario_overview <- tibble(
+  scenario_id = scenario_levels,
+  scenario = unname(scenario_labels[scenario_levels]),
+  tillatna_hex = as.integer(vapply(scenario_levels, summary_value, metric = "n_allowed", FUN.VALUE = character(1))),
+  tillaten_andel = as.numeric(vapply(scenario_levels, summary_value, metric = "allowed_share", FUN.VALUE = character(1))),
+  mean_score_allowed = as.numeric(vapply(scenario_levels, summary_value, metric = "mean_acceptance_score_allowed", FUN.VALUE = character(1))),
+  median_score_allowed = as.numeric(vapply(scenario_levels, summary_value, metric = "median_acceptance_score_allowed", FUN.VALUE = character(1))),
+  high_or_very_high_count = as.integer(vapply(scenario_levels, summary_value, metric = "high_or_very_high_count", FUN.VALUE = character(1)))
+)
+
+balanced_row <- scenario_overview |>
+  filter(scenario_id == "balanced") |>
+  slice(1)
+
+n_hex <- as.integer(summary_value("balanced", "n_hex"))
+n_allowed_balanced <- balanced_row$tillatna_hex
+allowed_share_balanced <- balanced_row$tillaten_andel
+mean_score_balanced <- balanced_row$mean_score_allowed
+median_score_balanced <- balanced_row$median_score_allowed
+high_or_very_high_balanced <- balanced_row$high_or_very_high_count
+
+class_palette <- c(
+  "Exkluderad" = "#8c8c8c",
+  "Lag" = "#f1e8a6",
+  "Medel" = "#f0b35b",
+  "Hog" = "#7dbb7d",
+  "Mycket hog" = "#2c7a4b"
+)
+
+group_balanced <- "<span style='display:inline-block;width:10px;height:10px;background:#2c7a4b;border:1px solid #666;margin-right:6px;'></span>Balanserad klass"
+group_strict <- "<span style='display:inline-block;width:10px;height:10px;background:#b23a48;border:1px solid #666;margin-right:6px;'></span>Strikt klass"
+group_tech <- "<span style='display:inline-block;width:10px;height:10px;background:#355c7d;border:1px solid #666;margin-right:6px;'></span>Teknikprioriterad klass"
+group_score <- "<span style='display:inline-block;width:10px;height:10px;background:#d99048;border:1px solid #666;margin-right:6px;'></span>Balanserad score"
+group_cluster <- "<span style='display:inline-block;width:10px;height:10px;background:#777;border:1px solid #666;margin-right:6px;'></span>Landskapskluster"
+
+cluster_labels <- c(
+  "1" = "Tatorts- och verksamhetskarnor",
+  "2" = "Vardagslandskap med blandad bakgrundskaraktar",
+  "3" = "Flygsands- och laglanta kuststrak",
+  "4" = "Brant relief och dalpraglat inland",
+  "5" = "Skogligt skyddsinland och habitatkarnor"
+)
+
+score_pal <- colorNumeric(
+  palette = c("#efe8d8", "#e0c782", "#d99048", "#9bb86c", "#2c7a4b"),
+  domain = hex_wgs84$acceptance_score_balanced,
+  na.color = "#8c8c8c"
+)
+
+cluster_pal <- colorFactor(
+  palette = c("#355C7D", "#C06C84", "#F67280", "#99B898", "#E5D97B"),
+  domain = sort(unique(as.character(hex_wgs84$class_km)))
+)
+
+hex_wgs84 <- hex_wgs84 |>
+  mutate(
+    fill_balanced = unname(class_palette[acceptance_class_balanced]),
+    fill_strict = unname(class_palette[acceptance_class_strict]),
+    fill_tech = unname(class_palette[acceptance_class_tech_prioritized]),
+    cluster_label = recode(as.character(class_km), !!!cluster_labels, .default = "Okant"),
+    popup_html = paste0(
+      "<strong>Scenarier</strong><br>",
+      "Strikt: ", acceptance_class_strict, " (", number(acceptance_score_strict, accuracy = 0.1), ")<br>",
+      "Balanserad: ", acceptance_class_balanced, " (", number(acceptance_score_balanced, accuracy = 0.1), ")<br>",
+      "Teknikprioriterad: ", acceptance_class_tech_prioritized, " (", number(acceptance_score_tech_prioritized, accuracy = 0.1), ")<br><br>",
+      "<strong>Balanserad exkludering</strong><br>",
+      exclusion_reason_balanced, "<br><br>",
+      "<strong>Avstand</strong><br>",
+      "Tat bebyggelsestruktur: ", comma(dist_to_settlement_hard_m), " m<br>",
+      "All bosattning/befolkning: ", comma(dist_to_settlement_m), " m<br>",
+      "Kulturmiljo: ", comma(dist_to_culture_m), " m<br>",
+      "Skyddad natur: ", comma(dist_to_protected_m), " m<br>",
+      "Fagelkollisionszon: ", comma(dist_to_aviation_bird_m), " m<br>",
+      "Hogspanningsledning: ", comma(dist_to_hv_line_m), " m<br>",
+      "Elstation: ", comma(dist_to_substation_m), " m<br>",
+      "Kabel: ", comma(dist_to_cable_m), " m<br>",
+      "Befintligt vindkraftverk: ", comma(dist_to_existing_wind_m), " m<br><br>",
+      "<strong>Delpoang</strong><br>",
+      "Grid: ", number(score_grid_proximity, accuracy = 0.01), "<br>",
+      "Clearance: ", number(score_clearance, accuracy = 0.01), "<br>",
+      "Landskap: ", number(score_landscape, accuracy = 0.01), "<br><br>",
+      "<strong>Landskapskontext</strong><br>",
+      "Kluster ", class_km, ": ", cluster_label
+    )
+  )
+
+map_widget <- leaflet(options = leafletOptions(zoomSnap = 0.25)) |>
+  addProviderTiles(providers$CartoDB.Positron, group = "Ljus baskarta") |>
+  addProviderTiles(providers$Esri.WorldImagery, group = "Satellitbild") |>
+  addPolygons(
+    data = hex_wgs84,
+    group = group_balanced,
+    color = "#ffffff",
+    weight = 0.25,
+    fillOpacity = 0.78,
+    fillColor = ~fill_balanced,
+    popup = ~lapply(popup_html, HTML)
+  ) |>
+  addPolygons(
+    data = hex_wgs84,
+    group = group_strict,
+    color = "#ffffff",
+    weight = 0.25,
+    fillOpacity = 0.78,
+    fillColor = ~fill_strict,
+    popup = ~lapply(popup_html, HTML)
+  ) |>
+  addPolygons(
+    data = hex_wgs84,
+    group = group_tech,
+    color = "#ffffff",
+    weight = 0.25,
+    fillOpacity = 0.78,
+    fillColor = ~fill_tech,
+    popup = ~lapply(popup_html, HTML)
+  ) |>
+  addPolygons(
+    data = hex_wgs84,
+    group = group_score,
+    color = "#ffffff",
+    weight = 0.2,
+    fillOpacity = 0.78,
+    fillColor = ~score_pal(acceptance_score_balanced),
+    popup = ~lapply(popup_html, HTML)
+  ) |>
+  addPolygons(
+    data = hex_wgs84,
+    group = group_cluster,
+    color = "#ffffff",
+    weight = 0.2,
+    fillOpacity = 0.78,
+    fillColor = ~cluster_pal(as.character(class_km)),
+    popup = ~lapply(popup_html, HTML)
+  ) |>
+  addLegend(
+    "bottomright",
+    colors = unname(class_palette),
+    labels = names(class_palette),
+    title = "Acceptansklass",
+    group = "Balanserad klass"
+  ) |>
+  addLegend(
+    "bottomleft",
+    pal = score_pal,
+    values = hex_wgs84$acceptance_score_balanced,
+    title = "Balanserad score",
+    group = "Balanserad score"
+  ) |>
+  addLayersControl(
+    baseGroups = c("Ljus baskarta", "Satellitbild"),
+    overlayGroups = c(
+      group_balanced,
+      group_strict,
+      group_tech,
+      group_score,
+      group_cluster
+    ),
+    options = layersControlOptions(collapsed = FALSE)
+  ) |>
+  hideGroup(c(group_strict, group_tech, group_score, group_cluster))
+
+htmlwidgets::saveWidget(map_widget, map_path, selfcontained = FALSE)
+
+scenario_table <- scenario_overview |>
+  mutate(
+    `Tillatna hex` = comma(tillatna_hex),
+    `Tillaten andel` = percent(tillaten_andel, accuracy = 0.1),
+    `Medelscore` = number(mean_score_allowed, accuracy = 0.1),
+    `Medianscore` = number(median_score_allowed, accuracy = 0.1),
+    `Hog eller mycket hog` = comma(high_or_very_high_count)
+  ) |>
+  select(
+    Scenario = scenario,
+    `Tillatna hex`,
+    `Tillaten andel`,
+    `Medelscore`,
+    `Medianscore`,
+    `Hog eller mycket hog`
+  )
+
+criteria_table <- criteria_df |>
+  mutate(scenario_label = factor(scenario_label, levels = scenario_labels[scenario_levels])) |>
+  arrange(scenario_label, criterion_type, criterion_name) |>
+  select(
+    Scenario = scenario_label,
+    Typ = criterion_type,
+    Kriterium = criterion_name,
+    Regel = threshold_or_rule,
+    Roll = role_in_model
+  )
+
+exclusion_metrics <- c(
+  "excluded_settlement",
+  "excluded_culture",
+  "excluded_protected",
+  "excluded_military",
+  "excluded_aviation_approach",
+  "excluded_aviation_bird",
+  "excluded_strand"
+)
+
+exclusion_labels <- c(
+  "excluded_settlement" = "Bosattningsbuffert",
+  "excluded_culture" = "Kulturmiljo",
+  "excluded_protected" = "Skyddad natur",
+  "excluded_military" = "Militar",
+  "excluded_aviation_approach" = "Inflygning",
+  "excluded_aviation_bird" = "Fagelkollisionszon",
+  "excluded_strand" = "Strandskydd"
+)
+
+exclusion_table <- expand.grid(
+  scenario_id = scenario_levels,
+  metric = exclusion_metrics,
+  stringsAsFactors = FALSE
+) |>
+  as_tibble() |>
+  mutate(
+    Scenario = scenario_labels[scenario_id],
+    Kriterium = exclusion_labels[metric],
+    Antal = as.integer(mapply(summary_value, scenario_id, metric))
+  ) |>
+  select(Scenario, Kriterium, Antal) |>
+  pivot_wider(names_from = Scenario, values_from = Antal)
+```
+
+```{r}
+#| results: asis
+cat(
+  paste0(
+    '<p><a class="btn btn-primary btn-sm" href="', map_href,
+    '" target="_blank" rel="noopener">Oppna kartan i egen flik / helskarm</a></p>'
+  )
+)
+```
+
+```{r}
+#| fig-height: 8.2
+map_widget
+```
+
+## Sammanfattning
+
+Den balanserade standardlasningen lamnar `r comma(n_allowed_balanced)` av `r comma(n_hex)` aktiva landhexagoner oppna efter harda exkluderingar, alltsa `r percent(allowed_share_balanced, accuracy = 0.1)`. Av dessa hamnar `r comma(high_or_very_high_balanced)` i klasserna `Hog` eller `Mycket hog`, med medelscore `r number(mean_score_balanced, accuracy = 0.1)`.
+
+Den viktiga fortsatta skillnaden mot landskapsmodellen ar att acceptanslagret nu fungerar som en separat scenarioyta ovanpa landskapsanalysen, inte som en dold viktning inne i faktor- och klustermodellen.
+
+## Scenariejamforelse
+
+```{r}
+kable(scenario_table)
+```
+
+Scenarioerna ar avsiktligt olika:
+
+- `Strikt` breddar bosattningsbufferten till `1000 m` och gor fagelkollisionszoner till hard exkludering.
+- `Balanserad` motsvarar den tidigare stage-1-logiken och ar nu rapportens standardscenario.
+- `Teknikprioriterad` behaller kulturmiljo som tydlig undvikandefaktor, men flyttar den fran hard polygonregel till graderad clearance.
+
+## Regler Och Kriterier
+
+```{r}
+kable(criteria_table)
+```
+
+## Exkluderingsprofil
+
+```{r}
+kable(exclusion_table)
+```
+
+Tabellen ovan visar hur scenarioformen faktiskt flyttar utslaget. Sarskilt kulturmiljo och fagelkollisionszoner blir viktiga skiljelinjer mellan scenarierna.
+
+## Koppling Till Landskapsanalysen
+
+Landskapsdelen ateranvander inte ra restriktionslager. I stallet hamtas en separat kontext från den senaste landskapsanalysen genom:
+
+- klustertillhorighet
+- plateau-/oppenhetslogik fran `gc_high_agri_plateau_proxy`
+- lagre lutning fran den konturharledda terrangytan
+
+Det gor att modellen kan skilja pa tre saker samtidigt: var vindkraft inte bor ligga, var tekniken har battre forutsattningar och vilka bakgrundslandskap som ser mer kompatibla ut.
+
+## Tolkning Och Nasta Steg
+
+Den stora metodvinsten med denna version ar att policyvalen nu ar synliga. Vi kan jamfora om ett utfall beror pa hardare restriktioner eller pa att ett lage faktiskt ligger battre till tekniskt och landskapsmassigt.
+
+Nasta rimliga steg ar:
+
+1. dela upp bosattningslogiken tydligare mellan tatorter, samlad bebyggelse och gles landsbygd
+2. prova en mellanvariant dar kulturmiljo far buffert i stallet for ren overlap/no-overlap
+3. lagga in fler tekniska lager om de finns, framfor allt natkapacitet och vag/logistik
+4. eventuellt bygga en stage 2 med synlighet och kumulativa landskapseffekter
+
+## Utdata
+
+Huvudfilerna fran denna korning ar:
+
+- `r hex_path`
+- `r summary_path`
+- `r criteria_path`
+- `r metadata_path`
+
+QGIS-klara data ligger i GeoPackage-filen ovan.
