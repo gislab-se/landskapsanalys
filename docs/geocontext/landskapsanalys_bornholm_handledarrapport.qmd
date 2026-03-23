@@ -76,6 +76,8 @@ cluster_sizes_path <- file.path(data_dir, paste0(analysis_id, "_cluster_sizes.cs
 run_summary_path <- file.path(data_dir, paste0(analysis_id, "_run_summary.csv"))
 variance_path <- file.path(data_dir, paste0(analysis_id, "_factor_variance.csv"))
 raw_geocontext_path <- file.path(repo_root, "data/interim/geocontext_r9/bornholm_r9_geocontext_raw_manual.csv")
+raw_augmented_path <- file.path(data_dir, paste0(analysis_id, "_raw_augmented.csv"))
+points_with_context_scores_path <- file.path(data_dir, paste0(analysis_id, "_points_with_context_and_scores.csv"))
 
 analysis_meta <- read.csv(metadata_path, stringsAsFactors = FALSE)
 indicator_catalog <- read.csv(indicator_catalog_path, stringsAsFactors = FALSE)
@@ -88,6 +90,8 @@ cluster_sizes <- read.csv(cluster_sizes_path, stringsAsFactors = FALSE)
 run_summary <- read.csv(run_summary_path, stringsAsFactors = FALSE)
 variance_df <- read.csv(variance_path, stringsAsFactors = FALSE)
 raw_geocontext <- read.csv(raw_geocontext_path, stringsAsFactors = FALSE)
+raw_augmented <- read.csv(raw_augmented_path, stringsAsFactors = FALSE)
+points_with_context_scores <- read.csv(points_with_context_scores_path, stringsAsFactors = FALSE)
 
 meta_value <- function(name, default = NA_character_) {
   if (!(name %in% names(analysis_meta))) {
@@ -281,6 +285,53 @@ class_palette <- c(
 )
 
 indicator_lookup <- setNames(indicator_catalog$display_name, indicator_catalog$gc_name)
+source_lookup <- setNames(indicator_catalog$source_name, indicator_catalog$gc_name)
+geometry_lookup <- setNames(indicator_catalog$geometry_type, indicator_catalog$gc_name)
+
+format_popup_number <- function(x, digits = 1) {
+  if (length(x) == 0 || is.na(x)) {
+    return("NA")
+  }
+  format(
+    round(as.numeric(x), digits = digits),
+    trim = TRUE,
+    scientific = FALSE,
+    big.mark = " ",
+    nsmall = digits
+  )
+}
+
+format_layer_value <- function(value, gc_name) {
+  value_num <- suppressWarnings(as.numeric(value))
+  if (length(value_num) == 0 || is.na(value_num)) {
+    return("NA")
+  }
+
+  source_name <- dplyr::coalesce(unname(source_lookup[gc_name]), gc_name)
+  geometry_type <- dplyr::coalesce(unname(geometry_lookup[gc_name]), "")
+  name_probe <- paste(gc_name, source_name)
+
+  if (geometry_type == "Polygon area share" || grepl("(_area_share$|_share$)", source_name)) {
+    return(paste0(format_popup_number(value_num * 100, 1), "%"))
+  }
+  if (geometry_type == "Point count" || grepl("count$", gc_name)) {
+    return(format_popup_number(value_num, 0))
+  }
+  if (grepl("slope_deg", name_probe)) {
+    return(paste0(format_popup_number(value_num, 1), " deg"))
+  }
+  if (geometry_type == "Line length" || grepl("_length_m($|_)", source_name) || grepl("_length_m($|_)", gc_name)) {
+    return(paste0(format_popup_number(value_num, 0), " m"))
+  }
+  if (grepl("band|proxy", name_probe)) {
+    return(format_popup_number(value_num, 2))
+  }
+  if (geometry_type == "Continuous metric" || grepl("(_m$|relief|highest_point|elevation|valley_depth)", name_probe)) {
+    return(paste0(format_popup_number(value_num, 1), " m"))
+  }
+
+  format_popup_number(value_num, 2)
+}
 
 series_from_variable <- function(variable) {
   variable |>
@@ -360,6 +411,118 @@ factor_top_loadings_html_lookup <- purrr::imap_chr(factor_top_loadings_lookup, f
   )
 })
 
+raw_augmented$hex_id <- as.character(raw_augmented$hex_id)
+points_with_context_scores$hex_id <- as.character(points_with_context_scores$hex_id)
+
+layer_context_variable_lookup <- purrr::set_names(
+  purrr::map(indicator_catalog$gc_name, function(gc_name) {
+    vars <- loadings_df$variable[
+      grepl(paste0("^(mean_|std_)", gc_name, "_k[0-9]+$"), loadings_df$variable)
+    ]
+    vars[vars %in% names(points_with_context_scores)]
+  }),
+  indicator_catalog$gc_name
+)
+
+layer_context_weight_lookup <- purrr::imap(
+  layer_context_variable_lookup,
+  function(vars, gc_name) {
+    if (length(vars) == 0) {
+      return(numeric(0))
+    }
+    vapply(vars, function(variable_name) {
+      loading_row <- loadings_df[loadings_df$variable == variable_name, factor_cols, drop = FALSE]
+      if (nrow(loading_row) == 0) {
+        return(0)
+      }
+      sum(abs(as.numeric(loading_row[1, factor_cols, drop = TRUE])), na.rm = TRUE)
+    }, numeric(1))
+  }
+)
+
+layer_contribution_df <- tibble::tibble(hex_id = points_with_context_scores$hex_id)
+for (gc_name in indicator_catalog$gc_name) {
+  vars <- layer_context_variable_lookup[[gc_name]]
+  weights <- layer_context_weight_lookup[[gc_name]]
+
+  if (length(vars) == 0) {
+    layer_contribution_df[[gc_name]] <- NA_real_
+  } else {
+    contribution <- rep(0, nrow(points_with_context_scores))
+    for (i in seq_along(vars)) {
+      contribution <- contribution + abs(suppressWarnings(as.numeric(points_with_context_scores[[vars[i]]]))) * weights[i]
+    }
+    layer_contribution_df[[gc_name]] <- contribution
+  }
+}
+
+display_hex_ids <- unique(as.character(hex_wgs84_display$hex_id))
+layer_popup_lookup <- purrr::set_names(
+  purrr::map_chr(display_hex_ids, function(current_hex_id) {
+    raw_idx <- match(current_hex_id, raw_augmented$hex_id)
+    contribution_idx <- match(current_hex_id, layer_contribution_df$hex_id)
+
+    if (is.na(raw_idx)) {
+      return("")
+    }
+
+    raw_row <- raw_augmented[raw_idx, , drop = FALSE]
+    layer_tbl <- indicator_catalog |>
+      transmute(
+        gc_name,
+        display_name,
+        source_name,
+        geometry_type,
+        raw_value = purrr::map_dbl(source_name, function(source_name) {
+          if (!source_name %in% names(raw_row)) {
+            return(NA_real_)
+          }
+          suppressWarnings(as.numeric(raw_row[[source_name]][1]))
+        }),
+        contribution = purrr::map_dbl(gc_name, function(gc_name) {
+          if (is.na(contribution_idx) || !gc_name %in% names(layer_contribution_df)) {
+            return(NA_real_)
+          }
+          suppressWarnings(as.numeric(layer_contribution_df[[gc_name]][contribution_idx]))
+        })
+      ) |>
+      filter(!is.na(raw_value), abs(raw_value) > 1e-9) |>
+      arrange(desc(tidyr::replace_na(contribution, -Inf)), desc(abs(raw_value))) |>
+      slice_head(n = 10)
+
+    if (nrow(layer_tbl) == 0) {
+      return("")
+    }
+
+    items <- paste0(
+      "<li><strong>",
+      htmltools::htmlEscape(dplyr::coalesce(layer_tbl$display_name, layer_tbl$gc_name)),
+      "</strong>: ",
+      htmltools::htmlEscape(vapply(seq_len(nrow(layer_tbl)), function(i) {
+        format_layer_value(layer_tbl$raw_value[i], layer_tbl$gc_name[i])
+      }, character(1))),
+      "</li>",
+      collapse = ""
+    )
+
+    paste0(
+      "<div style='margin-top:8px;'><strong>",
+      txt("Topplager i detta hex", "Top layers in this hex"),
+      ":</strong>",
+      "<div style='font-size:12px;color:#666;margin-top:2px;'>",
+      txt(
+        "Sorterade efter uppskattat modellbidrag; visat värde är den lokala aggregeringen i hexet.",
+        "Sorted by estimated model contribution; the displayed value is the local aggregation within the hex."
+      ),
+      "</div>",
+      "<ol style='margin:6px 0 0 18px;padding:0;'>",
+      items,
+      "</ol></div>"
+    )
+  }),
+  display_hex_ids
+)
+
 cluster_builder_lookup <- cluster_profile |>
   rowwise() |>
   mutate(
@@ -389,20 +552,7 @@ cluster_builder_lookup <- cluster_profile |>
   transmute(class_km = as.character(class_km), builder_html) |>
   tibble::deframe()
 
-factor_popup_html <- function(f, hex_id, score) {
-  paste0(
-    "<div style='min-width:320px;'>",
-    "<div style='font-weight:700;margin-bottom:6px;'>", htmltools::htmlEscape(factor_label(f)), "</div>",
-    "<div style='margin-bottom:8px;'>", htmltools::htmlEscape(unname(factor_explanations[f])), "</div>",
-    "<div><strong>", txt("Hex", "Hex"), ":</strong> ", htmltools::htmlEscape(as.character(hex_id)),
-    "<br><strong>", txt("Typ", "Type"), ":</strong> ", htmltools::htmlEscape(factor_label(f)),
-    "<br><strong>", txt("Score", "Score"), ":</strong> ", format_signed(score), "</div>",
-    factor_top_loadings_html_lookup[[f]],
-    "</div>"
-  )
-}
-
-cluster_popup_html <- function(class_km, hex_id, scores) {
+factor_sections_html <- function(scores, strongest_n = 5) {
   score_tbl <- tibble::tibble(
     factor = factor_cols,
     score = as.numeric(scores)
@@ -410,7 +560,7 @@ cluster_popup_html <- function(class_km, hex_id, scores) {
   ranked_scores <- score_tbl |>
     mutate(abs_score = abs(score)) |>
     arrange(desc(abs_score)) |>
-    slice_head(n = min(3, n()))
+    slice_head(n = strongest_n)
 
   factor_labels_local <- vapply(score_tbl$factor, factor_label, character(1))
   factor_profile_html <- paste0(
@@ -428,19 +578,7 @@ cluster_popup_html <- function(class_km, hex_id, scores) {
     "</table></div>"
   )
 
-  builder_html <- cluster_builder_lookup[[as.character(class_km)]]
-  if (is.null(builder_html)) {
-    builder_html <- ""
-  }
-
-  paste0(
-    "<div style='min-width:340px;'>",
-    "<div style='font-weight:700;margin-bottom:6px;'>", htmltools::htmlEscape(cluster_display_label(class_km)), "</div>",
-    "<div style='margin-bottom:8px;'>", htmltools::htmlEscape(unname(cluster_explanations[as.character(class_km)])), "</div>",
-    "<div><strong>", txt("Hex", "Hex"), ":</strong> ", htmltools::htmlEscape(as.character(hex_id)),
-    "<br><strong>", txt("Typ", "Type"), ":</strong> ", htmltools::htmlEscape(cluster_display_label(class_km)), "</div>",
-    builder_html,
-    factor_profile_html,
+  strongest_factor_html <- paste0(
     "<div style='margin-top:8px;'><strong>",
     txt("Starkaste faktorer i detta hex", "Strongest factors in this hex"),
     ":</strong><ul style='margin:6px 0 0 18px;padding:0;'>",
@@ -449,14 +587,68 @@ cluster_popup_html <- function(class_km, hex_id, scores) {
       "</strong>: ", format_signed(ranked_scores$score), "</li>",
       collapse = ""
     ),
-    "</ul></div></div>"
+    "</ul></div>"
+  )
+
+  list(
+    factor_profile_html = factor_profile_html,
+    strongest_factor_html = strongest_factor_html
+  )
+}
+
+layer_popup_html <- function(hex_id) {
+  popup_html <- layer_popup_lookup[[as.character(hex_id)]]
+  if (length(popup_html) == 0 || is.na(popup_html)) {
+    return("")
+  }
+  popup_html
+}
+
+factor_popup_html <- function(f, hex_id, score, class_km, scores) {
+  factor_sections <- factor_sections_html(scores)
+
+  paste0(
+    "<div style='min-width:360px;'>",
+    "<div style='font-weight:700;margin-bottom:6px;'>", htmltools::htmlEscape(factor_label(f)), "</div>",
+    "<div style='margin-bottom:8px;'>", htmltools::htmlEscape(unname(factor_explanations[f])), "</div>",
+    "<div><strong>", txt("Hex", "Hex"), ":</strong> ", htmltools::htmlEscape(as.character(hex_id)),
+    "<br><strong>", txt("Typ", "Type"), ":</strong> ", htmltools::htmlEscape(factor_label(f)),
+    "<br><strong>", txt("Kluster", "Cluster"), ":</strong> ", htmltools::htmlEscape(cluster_display_label(class_km)),
+    "<br><strong>", txt("Score", "Score"), ":</strong> ", format_signed(score), "</div>",
+    factor_sections$factor_profile_html,
+    factor_sections$strongest_factor_html,
+    layer_popup_html(hex_id),
+    factor_top_loadings_html_lookup[[f]],
+    "</div>"
+  )
+}
+
+cluster_popup_html <- function(class_km, hex_id, scores) {
+  factor_sections <- factor_sections_html(scores)
+
+  builder_html <- cluster_builder_lookup[[as.character(class_km)]]
+  if (is.null(builder_html)) {
+    builder_html <- ""
+  }
+
+  paste0(
+    "<div style='min-width:360px;'>",
+    "<div style='font-weight:700;margin-bottom:6px;'>", htmltools::htmlEscape(cluster_display_label(class_km)), "</div>",
+    "<div style='margin-bottom:8px;'>", htmltools::htmlEscape(unname(cluster_explanations[as.character(class_km)])), "</div>",
+    "<div><strong>", txt("Hex", "Hex"), ":</strong> ", htmltools::htmlEscape(as.character(hex_id)),
+    "<br><strong>", txt("Typ", "Type"), ":</strong> ", htmltools::htmlEscape(cluster_display_label(class_km)), "</div>",
+    builder_html,
+    factor_sections$factor_profile_html,
+    factor_sections$strongest_factor_html,
+    layer_popup_html(hex_id),
+    "</div>"
   )
 }
 ```
 
 ## Kartöversikt
 
-Den samlade kartan ligger först i rapporten och är tänkt som huvudytan för tolkning. Här kan du växla mellan kluster och faktorer i samma HTML-karta, läsa tydliga legender och öppna popup-rutor som visar typ, tolkning, topp-laddningar och vilka faktorer som bygger respektive kluster.
+Den samlade kartan ligger först i rapporten och är tänkt som huvudytan för tolkning. Här kan du växla mellan kluster och faktorer i samma HTML-karta, läsa tydliga legender och öppna popup-rutor som visar typ, tolkning, faktorprofil och de lager i hexet som bidrar mest till analysen.
 
 ```{r}
 #| label: combined-map-top
@@ -473,6 +665,42 @@ cluster_map_data <- hex_wgs84_display |>
   ) |>
   ungroup()
 
+combined_map_data <- cluster_map_data |>
+  transmute(
+    hex_id,
+    popup_html,
+    fill_cluster = cluster_pal(as.character(class_km))
+  )
+
+for (f in factor_cols) {
+  clipped_values <- pmax(
+    pmin(cluster_map_data[[f]], factor_limit_robust),
+    -factor_limit_robust
+  )
+  combined_map_data[[paste0("fill_", f)]] <- factor_pal(clipped_values)
+}
+
+combined_mode_options <- c(
+  list(list(value = "cluster", label = txt("Kluster", "Clusters"))),
+  lapply(factor_cols, function(f) {
+    list(value = f, label = factor_label(f))
+  })
+)
+
+combined_cluster_legend_items <- lapply(class_vals, function(k) {
+  list(
+    color = unname(cluster_pal(k)),
+    label = cluster_display_label(k)
+  )
+})
+
+combined_factor_label_lookup <- as.list(stats::setNames(factor_label(factor_cols), factor_cols))
+combined_factor_gradient <- paste0(
+  "linear-gradient(to right, ",
+  paste(factor_pal(seq(-factor_limit_robust, factor_limit_robust, length.out = 7)), collapse = ", "),
+  ")"
+)
+
 combined_map_widget <- leaflet(options = leafletOptions(zoomSnap = 0.25)) |>
   addProviderTiles(
     "Esri.WorldImagery",
@@ -483,10 +711,9 @@ combined_map_widget <- leaflet(options = leafletOptions(zoomSnap = 0.25)) |>
     group = txt("Ljus baskarta", "Light basemap")
   ) |>
   addPolygons(
-    data = cluster_map_data,
-    group = txt("Kluster", "Clusters"),
-    fillColor = ~cluster_pal(as.character(class_km)),
-    fillOpacity = cluster_fill_opacity_default,
+    data = combined_map_data,
+    fillColor = ~fill_cluster,
+    fillOpacity = factor_fill_opacity_default,
     color = "#444444",
     opacity = cluster_line_opacity_default,
     weight = 0.25,
@@ -494,59 +721,13 @@ combined_map_widget <- leaflet(options = leafletOptions(zoomSnap = 0.25)) |>
     popupOptions = popupOptions(maxWidth = 480)
   )
 
-for (f in factor_cols) {
-  data_factor <- hex_wgs84_display
-  data_factor$map_value <- data_factor[[f]]
-  data_factor$map_value_clipped <- pmax(
-    pmin(data_factor$map_value, factor_limit_robust),
-    -factor_limit_robust
-  )
-  data_factor$popup_html <- vapply(
-    seq_len(nrow(data_factor)),
-    function(i) factor_popup_html(f, data_factor$hex_id[i], data_factor$map_value[i]),
-    character(1)
-  )
-
-  combined_map_widget <- combined_map_widget |>
-    addPolygons(
-      data = data_factor,
-      group = factor_label(f),
-      fillColor = ~factor_pal(map_value_clipped),
-      fillOpacity = factor_fill_opacity_default,
-      color = "#666666",
-      opacity = factor_line_opacity_default,
-      weight = 0.15,
-      popup = ~popup_html,
-      popupOptions = popupOptions(maxWidth = 480)
-    )
-}
-
-if (length(factor_cols) > 0) {
-  combined_map_widget <- combined_map_widget |>
-    hideGroup(factor_label(factor_cols))
-}
-
 combined_map_widget <- combined_map_widget |>
   addLayersControl(
     baseGroups = c(
       txt("Satellitbild", "Satellite imagery"),
       txt("Ljus baskarta", "Light basemap")
     ),
-    overlayGroups = c(txt("Kluster", "Clusters"), factor_label(factor_cols)),
     options = layersControlOptions(collapsed = FALSE, autoZIndex = FALSE)
-  ) |>
-  addLegend(
-    "bottomright",
-    pal = cluster_pal,
-    values = class_vals,
-    labels = cluster_display_label(class_vals),
-    title = txt("Kluster", "Clusters")
-  ) |>
-  addLegend(
-    "topleft",
-    pal = factor_pal,
-    values = c(-factor_limit_robust, factor_limit_robust),
-    title = txt("Faktorscore", "Factor score")
   ) |>
   addScaleBar(position = "bottomleft") |>
   fitBounds(
@@ -558,14 +739,109 @@ combined_map_widget <- combined_map_widget |>
 
 combined_map_widget <- htmlwidgets::onRender(
   combined_map_widget,
-  sprintf(
-    "
-function(el, x) {
+  "
+function(el, x, data) {
   var map = this;
-  var baseFill = %s;
-  var control = L.control({position: 'topright'});
+  var currentMode = data.defaultMode || 'cluster';
+  var polygonLayers = [];
+  var legendEl = null;
+  var opacityControl = L.control({position: 'topright'});
+  var modeControl = L.control({position: 'topleft'});
+  var legendControl = L.control({position: 'bottomright'});
 
-  control.onAdd = function() {
+  map.eachLayer(function(layer) {
+    if (layer instanceof L.Polygon && layer.feature && layer.feature.properties && layer.feature.properties.hex_id) {
+      polygonLayers.push(layer);
+    }
+  });
+
+  function escapeHtml(value) {
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/\"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function isClusterMode(mode) {
+    return mode === 'cluster';
+  }
+
+  function currentFillValue() {
+    var slider = document.getElementById('combined-opacity-slider');
+    return slider ? Number(slider.value) : Number(data.baseFill);
+  }
+
+  function styleFor(layer, fill) {
+    var props = layer.feature.properties || {};
+    var isCluster = isClusterMode(currentMode);
+    var stroke = isCluster
+      ? Math.max(0.12, Math.min(0.85, fill * 0.8))
+      : Math.max(0.10, Math.min(0.8, fill * 0.45));
+    var fillKey = isCluster ? 'fill_cluster' : ('fill_' + currentMode);
+    return {
+      fillColor: props[fillKey] || props.fill_cluster || '#999999',
+      fillOpacity: fill,
+      color: isCluster ? data.clusterStrokeColor : data.factorStrokeColor,
+      opacity: stroke,
+      weight: isCluster ? data.clusterWeight : data.factorWeight
+    };
+  }
+
+  function updateModeLabel() {
+    var label = document.getElementById('combined-mode-value');
+    if (!label) {
+      return;
+    }
+    label.textContent = isClusterMode(currentMode)
+      ? data.clusterLegendTitle
+      : (data.factorLabelLookup[currentMode] || currentMode);
+  }
+
+  function clusterLegendHtml() {
+    var items = data.clusterLegendItems.map(function(item) {
+      return '<div style=\"display:flex;align-items:flex-start;gap:8px;margin-top:6px;\">' +
+        '<span style=\"display:inline-block;width:12px;height:12px;border-radius:2px;background:' + item.color + ';border:1px solid rgba(0,0,0,0.22);margin-top:3px;\"></span>' +
+        '<span>' + escapeHtml(item.label) + '</span>' +
+        '</div>';
+    }).join('');
+
+    return '<div style=\"font-weight:600;margin-bottom:6px;\">' +
+      escapeHtml(data.clusterLegendTitle) +
+      '</div>' + items;
+  }
+
+  function factorLegendHtml() {
+    var label = data.factorLabelLookup[currentMode] || currentMode;
+    return '<div style=\"font-weight:600;margin-bottom:6px;\">' +
+      escapeHtml(data.factorLegendTitle + ' - ' + label) +
+      '</div>' +
+      '<div style=\"height:12px;border-radius:999px;background:' + data.factorLegendGradient + ';border:1px solid rgba(0,0,0,0.18);\"></div>' +
+      '<div style=\"display:flex;justify-content:space-between;font-size:12px;margin-top:4px;gap:8px;\">' +
+      '<span>-' + escapeHtml(data.factorLimitLabel) + '</span>' +
+      '<span>0</span>' +
+      '<span>+' + escapeHtml(data.factorLimitLabel) + '</span>' +
+      '</div>';
+  }
+
+  function updateLegend() {
+    if (!legendEl) {
+      return;
+    }
+    legendEl.innerHTML = isClusterMode(currentMode) ? clusterLegendHtml() : factorLegendHtml();
+  }
+
+  function applyMode() {
+    var fill = currentFillValue();
+    polygonLayers.forEach(function(layer) {
+      layer.setStyle(styleFor(layer, fill));
+    });
+    updateModeLabel();
+    updateLegend();
+  }
+
+  opacityControl.onAdd = function() {
     var div = L.DomUtil.create('div', 'combined-opacity-control leaflet-bar');
     div.style.background = 'rgba(255,255,255,0.94)';
     div.style.padding = '10px 12px';
@@ -573,51 +849,104 @@ function(el, x) {
     div.style.boxShadow = '0 1px 6px rgba(0,0,0,0.22)';
     div.style.minWidth = '190px';
     div.style.marginTop = '48px';
-    div.innerHTML = '<div style=\"font-weight:600;margin-bottom:6px;\">Kartlagrens opacitet</div>' +
-      '<input id=\"combined-opacity-slider\" type=\"range\" min=\"0.05\" max=\"1.00\" step=\"0.05\" value=\"' + baseFill + '\" style=\"width:100%%;\">' +
-      '<div id=\"combined-opacity-value\" style=\"margin-top:4px;font-size:12px;\">' + Math.round(baseFill * 100) + '%%</div>';
+    div.innerHTML = '<div style=\"font-weight:600;margin-bottom:6px;\">' + escapeHtml(data.opacityControlTitle) + '</div>' +
+      '<input id=\"combined-opacity-slider\" type=\"range\" min=\"0.05\" max=\"1.00\" step=\"0.05\" value=\"' + data.baseFill + '\" style=\"width:100%;\">' +
+      '<div id=\"combined-opacity-value\" style=\"margin-top:4px;font-size:12px;\">' + Math.round(data.baseFill * 100) + '%</div>';
     L.DomEvent.disableClickPropagation(div);
     L.DomEvent.disableScrollPropagation(div);
     return div;
   };
 
-  control.addTo(map);
+  modeControl.onAdd = function() {
+    var div = L.DomUtil.create('div', 'combined-mode-control leaflet-bar');
+    var optionsHtml = data.modeOptions.map(function(option) {
+      var selected = option.value === currentMode ? ' selected' : '';
+      return '<option value=\"' + escapeHtml(option.value) + '\"' + selected + '>' + escapeHtml(option.label) + '</option>';
+    }).join('');
+    div.style.background = 'rgba(255,255,255,0.94)';
+    div.style.padding = '10px 12px';
+    div.style.borderRadius = '8px';
+    div.style.boxShadow = '0 1px 6px rgba(0,0,0,0.22)';
+    div.style.minWidth = '230px';
+    div.innerHTML = '<div style=\"font-weight:600;margin-bottom:6px;\">' + escapeHtml(data.modeControlTitle) + '</div>' +
+      '<select id=\"combined-mode-select\" style=\"width:100%;padding:6px 8px;\">' + optionsHtml + '</select>' +
+      '<div id=\"combined-mode-value\" style=\"margin-top:6px;font-size:12px;color:#555;\"></div>';
+    L.DomEvent.disableClickPropagation(div);
+    L.DomEvent.disableScrollPropagation(div);
+    return div;
+  };
 
-  function updateOpacity(value) {
-    var fill = Number(value);
-    map.eachLayer(function(layer) {
-      if (layer instanceof L.Polygon) {
-        var isCluster = layer.options && layer.options.weight >= 0.24;
-        var stroke = isCluster
-          ? Math.max(0.12, Math.min(0.85, fill * 0.8))
-          : Math.max(0.10, Math.min(0.8, fill * 0.45));
-        layer.setStyle({fillOpacity: fill, opacity: stroke});
-      }
-    });
-    var label = document.getElementById('combined-opacity-value');
-    if (label) {
-      label.textContent = Math.round(fill * 100) + '%%';
-    }
-  }
+  legendControl.onAdd = function() {
+    var div = L.DomUtil.create('div', 'combined-legend-control leaflet-bar');
+    div.style.background = 'rgba(255,255,255,0.94)';
+    div.style.padding = '10px 12px';
+    div.style.borderRadius = '8px';
+    div.style.boxShadow = '0 1px 6px rgba(0,0,0,0.22)';
+    div.style.minWidth = '190px';
+    legendEl = div;
+    updateLegend();
+    return div;
+  };
+
+  opacityControl.addTo(map);
+  modeControl.addTo(map);
+  legendControl.addTo(map);
 
   var slider = document.getElementById('combined-opacity-slider');
   if (slider) {
     slider.addEventListener('input', function(evt) {
-      updateOpacity(evt.target.value);
+      var fill = Number(evt.target.value);
+      polygonLayers.forEach(function(layer) {
+        layer.setStyle(styleFor(layer, fill));
+      });
+      var label = document.getElementById('combined-opacity-value');
+      if (label) {
+        label.textContent = Math.round(fill * 100) + '%';
+      }
     });
   }
 
-  updateOpacity(baseFill);
+  var select = document.getElementById('combined-mode-select');
+  if (select) {
+    select.addEventListener('change', function(evt) {
+      currentMode = evt.target.value;
+      applyMode();
+    });
+  }
+
+  if (!slider) {
+    var label = document.getElementById('combined-opacity-value');
+    if (label) {
+      label.textContent = Math.round(data.baseFill * 100) + '%';
+    }
+  }
+
+  applyMode();
 }
 ",
-    factor_fill_opacity_default
+  data = list(
+    defaultMode = "cluster",
+    baseFill = factor_fill_opacity_default,
+    modeControlTitle = txt("Karttema", "Map theme"),
+    opacityControlTitle = txt("Kartlagrens opacitet", "Layer opacity"),
+    clusterLegendTitle = txt("Kluster", "Clusters"),
+    factorLegendTitle = txt("Faktorscore", "Factor score"),
+    factorLegendGradient = combined_factor_gradient,
+    factorLimitLabel = format_popup_number(abs(factor_limit_robust), 1),
+    modeOptions = combined_mode_options,
+    clusterLegendItems = combined_cluster_legend_items,
+    factorLabelLookup = combined_factor_label_lookup,
+    clusterStrokeColor = "#444444",
+    factorStrokeColor = "#666666",
+    clusterWeight = 0.25,
+    factorWeight = 0.15
   )
 )
 
 htmlwidgets::saveWidget(
   combined_map_widget,
   combined_map_path,
-  selfcontained = TRUE,
+  selfcontained = FALSE,
   title = "Samlad kluster- och faktorkarta för Bornholmsanalysen"
 )
 
@@ -1265,7 +1594,7 @@ function(el, x) {
 htmlwidgets::saveWidget(
   factor_map_widget,
   factor_map_path,
-  selfcontained = TRUE,
+  selfcontained = FALSE,
   title = "Faktorernas geografi för Bornholmsanalysen"
 )
 
@@ -1481,7 +1810,7 @@ function(el, x) {
 htmlwidgets::saveWidget(
   cluster_map_widget,
   cluster_map_path,
-  selfcontained = TRUE,
+  selfcontained = FALSE,
   title = "Klustertilldelning för Bornholmsanalysen"
 )
 

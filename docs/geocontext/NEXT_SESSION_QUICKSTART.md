@@ -9,6 +9,26 @@
 - Keep `res9` as the frozen `v2` baseline until context weighting and factor robustness have been retested.
 - Treat `res10` as a planned sensitivity test, not as the new default yet.
 
+## Latest Report/Map Status (2026-03-23)
+- The short and long Bornholm reports now use richer hex popups in the standalone maps:
+  - cluster / type
+  - full factor profile
+  - strongest factors in the hex
+  - top 10 contributing layers with local aggregated values
+- The displayed map view is clipped to Bornholm mainland, while the analysis can still use sea hex in the underlying model.
+- Standalone map exports for these two reports now save with `selfcontained = FALSE` to avoid the UTF-8 popup encoding problem (`Ã¤`, `Ã¶`, etc.) seen in direct browser opens.
+- Updated standalone map files:
+  - `docs/geocontext/maps/landskapsanalys_bornholm_handledarrapport_combined_map.html`
+  - `docs/geocontext/maps/landskapsanalys_bornholm_handledarrapport_factor_mapview.html`
+  - `docs/geocontext/maps/landskapsanalys_bornholm_handledarrapport_cluster_map.html`
+  - `docs/geocontext/model_comparisons/maps/landskapsanalys_v3_2_contourterrain68_res9_combined_map.html`
+  - `docs/geocontext/model_comparisons/maps/landskapsanalys_v3_2_contourterrain68_res9_factor_mapview.html`
+  - `docs/geocontext/model_comparisons/maps/landskapsanalys_v3_2_contourterrain68_res9_cluster_map.html`
+- Important limitation:
+  - the full report HTML files were not rerendered all the way through in this session
+  - if the embedded map inside the report still shows stale content, rerun the full Quarto render for the report before publishing
+  - the regenerated `*_combined_map.html` files for the short and long Bornholm reports exceed GitHub's 100 MB file limit, so the QMD logic is committed but those two local HTML outputs still need a slimmer publishing strategy
+
 ## Report Folders
 - Active working report folder: `docs/geocontext/current_landscape_model/`
 - Comparison and sensitivity folder: `docs/geocontext/model_comparisons/`
@@ -26,6 +46,9 @@
 - Active frozen comparison baseline: `landskapsanalys_58lager_geologi_restriktioner_res9`
 - Frozen `v2` baseline: `landskapsanalys_v2_baseline58_res9`
 - Active `v2.1` run: `landskapsanalys_v2_1_geomweight58_res9`
+- New challenger `v3` run: `landskapsanalys_v3_themepriority58_res9`
+- Terrain-band challenger `v3.1` run: `landskapsanalys_v3_1_terrainbands64_res9`
+- Contour-terrain challenger `v3.2` run: `landskapsanalys_v3_2_contourterrain68_res9`
 - Previous staged step: `landskapsanalys_47lager_geologi_res9`
 - Saved comparison baseline: `landskapsanalys_26lager_res9`
 - Archived bridge model: `landskapsanalys_gc4_res9`
@@ -129,11 +152,13 @@ Rscript script\landskapsanalys\09_build_bornholm_r9_landskapsanalys_v2_1_geomwei
 Rscript script\landskapsanalys\10_analyze_bornholm_r9_landskapsanalys_v2_1_factor_cluster_sensitivity.R
 Rscript script\landskapsanalys\11_analyze_bornholm_r9_landskapsanalys_v2_1_factor_count_sensitivity.R
 Rscript script\landskapsanalys\12_run_bornholm_r9_landskapsanalys_v2_1_scale_sensitivity.R
+Rscript script\landskapsanalys\13_analyze_bornholm_r9_landskapsanalys_v2_1_leave_one_theme_out.R
 quarto render docs\geocontext\current_landscape_model\landskapsanalys_v2_1.qmd
 quarto render docs\geocontext\current_landscape_model\landskapsanalys_v2_1_light.qmd
 quarto render docs\geocontext\model_comparisons\landskapsanalys_v2_1_sensitivity.qmd
 quarto render docs\geocontext\model_comparisons\landskapsanalys_v2_1_factor_count_sensitivity.qmd
 quarto render docs\geocontext\model_comparisons\landskapsanalys_v2_1_scale_sensitivity.qmd
+quarto render docs\geocontext\model_comparisons\landskapsanalys_v2_1_leave_one_theme_out.qmd
 ```
 
 ## Main Outputs
@@ -149,9 +174,13 @@ quarto render docs\geocontext\model_comparisons\landskapsanalys_v2_1_scale_sensi
   - `docs/geocontext/model_comparisons/landskapsanalys_v2_1_factor_count_sensitivity.html`
 - Scale-sensitivity report:
   - `docs/geocontext/model_comparisons/landskapsanalys_v2_1_scale_sensitivity.html`
+- Leave-one-theme-out report:
+  - `docs/geocontext/model_comparisons/landskapsanalys_v2_1_leave_one_theme_out.html`
 - Standalone interactive maps:
   - `docs/geocontext/current_landscape_model/maps/landskapsanalys_v2_1_geomweight58_res9_cluster_map.html`
   - `docs/geocontext/current_landscape_model/maps/landskapsanalys_v2_1_geomweight58_res9_factor_mapview.html`
+- Leave-one-theme-out comparison maps:
+  - `docs/geocontext/model_comparisons/maps/landskapsanalys_v2_1_leave_one_theme_out/`
 - Versioned run output:
   - `data/interim/landskapsanalys_versions/landskapsanalys_v2_1_geomweight58_res9/`
 - Sensitivity output:
@@ -160,6 +189,8 @@ quarto render docs\geocontext\model_comparisons\landskapsanalys_v2_1_scale_sensi
   - `data/interim/landskapsanalys_versions/landskapsanalys_v2_1_factor_count_sensitivity/`
 - Scale-sensitivity output:
   - `data/interim/landskapsanalys_versions/landskapsanalys_v2_1_scale_sensitivity/`
+- Leave-one-theme-out output:
+  - `data/interim/landskapsanalys_versions/landskapsanalys_v2_1_leave_one_theme_out/`
 
 ## Available Comparison Runs
 1. `script/landskapsanalys/06_build_bornholm_r9_landskapsanalys_47lager_geologi_res9.R`
@@ -170,12 +201,20 @@ quarto render docs\geocontext\model_comparisons\landskapsanalys_v2_1_scale_sensi
    - frozen `v2` reference with raw-sum neighborhood weighting
 4. `script/landskapsanalys/09_build_bornholm_r9_landskapsanalys_v2_1_geomweight58_res9.R`
    - active `v2.1` run with geometry-balanced context weighting
-5. `script/landskapsanalys/10_analyze_bornholm_r9_landskapsanalys_v2_1_factor_cluster_sensitivity.R`
+5. `script/landskapsanalys/15_build_bornholm_r9_landskapsanalys_v3_themepriority58_res9.R`
+   - `v3` challenger with normalized weighting, theme balancing within geometry, extra support for agricultural land, and a mild continuous-metric uplift
+6. `script/landskapsanalys/16_build_bornholm_r9_landskapsanalys_v3_1_terrainbands64_res9.R`
+   - `v3.1` challenger with six extra terrain-band layers derived from relief and highest-point signals
+7. `script/landskapsanalys/17_build_bornholm_r9_landskapsanalys_v3_2_contourterrain68_res9.R`
+   - `v3.2` challenger with a contour-derived pseudo-DEM, contour-based slope and valley-depth signals, and a first high-agricultural-plateau proxy
+8. `script/landskapsanalys/10_analyze_bornholm_r9_landskapsanalys_v2_1_factor_cluster_sensitivity.R`
    - compares `varimax` vs `oblimin` and `K=5` vs `K=6` on the frozen `v2.1` context matrix
-6. `script/landskapsanalys/11_analyze_bornholm_r9_landskapsanalys_v2_1_factor_count_sensitivity.R`
+9. `script/landskapsanalys/11_analyze_bornholm_r9_landskapsanalys_v2_1_factor_count_sensitivity.R`
    - compares factor counts `4..8` on the frozen `v2.1` context matrix with `varimax`
-7. `script/landskapsanalys/12_run_bornholm_r9_landskapsanalys_v2_1_scale_sensitivity.R`
+10. `script/landskapsanalys/12_run_bornholm_r9_landskapsanalys_v2_1_scale_sensitivity.R`
    - compares alternative `k` scale families around the frozen `v2.1` legacy scale ladder
+11. `script/landskapsanalys/13_analyze_bornholm_r9_landskapsanalys_v2_1_leave_one_theme_out.R`
+   - drops one theme at a time from the frozen `v2.1` context matrix, reruns factors and clusters, and writes interactive comparison outputs plus a QGIS-ready GeoPackage
 
 ## Comparison Commands
 ```powershell
@@ -192,10 +231,22 @@ Rscript script\landskapsanalys\09_build_bornholm_r9_landskapsanalys_v2_1_geomwei
 5. After leave-one-theme-out, compare selected inactive groups rather than all at once.
 6. Only after the `v2.1` `res9` model is cleaner, test whether `res10` improves or worsens sparsity, interpretability and stability.
 7. Keep acceptance-layer work paused until the character model is cleaner.
+8. Use `v3.2` only as a terrain challenger for now; it improves contour-based relief interpretation but is not the new default.
+9. If agricultural plateau and sprickdals patterns still look weak, prefer more terrain derivation or a real DEM before stronger manual weighting.
+10. If weighting is revisited, treat large subtype families as theme budgets rather than flat layer counts; e.g. the full geology family should share one controlled geology weight budget instead of each subtype receiving a full independent vote.
 
 ## Note For Next Time
 - Find out where the main agricultural-land landscapes are in the active model.
 - Find out where the crack-valley (`sprickdalslandskap`) landscapes are in the active model.
+- Later methodological note: inspect how weighting behaves for the layers judged most important for landscape character, especially agricultural land, relief/topography and other priority layers.
+- Main report usability note: the full loadings matrix in `landskapsanalys_v2_1` must be made readable and treated as a secondary diagnostic surface; keep the heatmap for overview but use a filtered Excel view for full inspection.
+- Line-normalization note: keep per-layer robust normalization first, but test line geometry with an explicit challenger weight below `1.0` after normalization if line-length signals still dominate the geometry mix.
+- `v3` note: the first challenger run uses theme balancing inside geometry types so agricultural land no longer competes one-to-one with all 21 geology polygons; topography is tested with a mild continuous-metric uplift rather than a hard manual override.
+- `v3.1` note: terrain bands from relief and highest point improved terrain visibility but still did not make sprickdalar or the higher agricultural plateau read clearly enough.
+- `v3.2` note: the contour-derived pseudo-DEM created the clearest terrain-incision factor so far, but clustering compactness dropped to silhouette `0.252`; keep it as a terrain challenger, not as the new active model.
+- Weighting note: if geology, protection or other large subtype families are kept, let them split a shared theme weight rather than accumulate influence just by having many sublayers.
+- Acceptance note: a first separate wind-acceptance framework now exists under `docs/geocontext/acceptance_framework/`; keep it conceptually separate from the landscape-character factor model and use it as a staged planning layer, not as proof that the character model itself is final.
+- Terrain-data note: for next round, decide whether to continue with more contour-derived terrain metrics or move to a real DEM/LiDAR-backed terrain surface.
 
 ## Key Interpretation Reminders
 - Equal factor-score standard deviations are expected because the factor-score columns are normalized.
