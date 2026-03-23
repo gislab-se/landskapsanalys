@@ -60,6 +60,8 @@ loadings_excel_name <- paste0(analysis_id, "_factor_loadings_readable.xlsx")
 loadings_excel_href <- paste0("tables/", loadings_excel_name)
 loadings_excel_path <- file.path(tables_dir, loadings_excel_name)
 reference_pdf_href <- "https://github.com/gislab-se/landskapsanalys/blob/main/data/Landskapstyper%20Bornholm.pdf"
+h3_reference_href <- "https://h3geo.org/docs/core-library/restable/"
+multiscalar_typology_reference_href <- "https://su.figshare.com/articles/dataset/Multiscalar_typology_of_residential_areas_in_Sweden/14753826"
 
 metadata_path <- file.path(data_dir, paste0(analysis_id, "_metadata.csv"))
 indicator_catalog_path <- file.path(data_dir, paste0(analysis_id, "_indicator_catalog.csv"))
@@ -82,6 +84,7 @@ cluster_profile <- read.csv(cluster_profile_path, stringsAsFactors = FALSE)
 cluster_sizes <- read.csv(cluster_sizes_path, stringsAsFactors = FALSE)
 run_summary <- read.csv(run_summary_path, stringsAsFactors = FALSE)
 variance_df <- read.csv(variance_path, stringsAsFactors = FALSE)
+raw_geocontext <- read.csv(raw_geocontext_path, stringsAsFactors = FALSE)
 
 meta_value <- function(name, default = NA_character_) {
   if (!(name %in% names(analysis_meta))) {
@@ -97,6 +100,41 @@ meta_value <- function(name, default = NA_character_) {
 factor_cols <- grep("^F[0-9]+$", names(hex), value = TRUE)
 input_cols <- indicator_catalog$gc_name
 layer_count <- nrow(indicator_catalog)
+display_mainland_cols <- intersect(
+  c(
+    "dhm_hoejdekurver_highest_point_m",
+    "dhm_hoejdekurver_relief_m",
+    "markblokke_2026_bornholm_area_share",
+    "forest_gd_v_skov_forest_bol_33_area_share",
+    "fredskov_miljostyrelsen_gds_mat2_fredskov_bor_32_area_share",
+    "wetland_gd_v_vaadomr_wetland_bol_33_area_share",
+    "lake_gd_v_soe_lake_bol_33_area_share",
+    "roads_simplified_gd_v_vej_road_merged_bol_33_length_m_total",
+    "fastboendebefolkningmapinfo_count",
+    "buildings_low_gd_v_buildings_low_bol_33_area_share",
+    "buildings_high_gd_v_buildings_high_bol_33_area_share",
+    "built_centre_gd_v_bykerne_built_centre_bol_33_area_share",
+    "built_low_gd_v_buildings_low_selection_by_bol_33_area_share",
+    "industry_business_gd_v_erhverv_business_industry_bol_33_area_share",
+    "jordart_25000_v7_1_area_share",
+    "prekvart_bornholm_area_share"
+  ),
+  names(raw_geocontext)
+)
+if (length(display_mainland_cols) == 0) {
+  stop("No mainland display columns found in raw geocontext data.")
+}
+display_mainland_lookup <- raw_geocontext |>
+  transmute(
+    hex_id,
+    mainland_display = rowSums(across(all_of(display_mainland_cols), ~ dplyr::coalesce(as.numeric(.x), 0))) > 0
+  )
+hex_wgs84 <- hex_wgs84 |>
+  left_join(display_mainland_lookup, by = "hex_id") |>
+  mutate(mainland_display = if_else(is.na(mainland_display), FALSE, mainland_display))
+hex_wgs84_display <- hex_wgs84 |>
+  filter(mainland_display)
+display_bbox <- st_bbox(hex_wgs84_display)
 analysis_unit_mask <- meta_value("analysis_unit_mask", "Hex med signal > 0")
 context_k_values <- meta_value("context_k_values", "10,50,100,250,1000")
 context_weight_strategy <- meta_value("context_weight_strategy", "raw_sum")
@@ -289,7 +327,7 @@ factor_pal <- colorNumeric(
   na.color = "transparent"
 )
 
-class_vals <- sort(unique(as.character(hex_wgs84$class_km)))
+class_vals <- sort(unique(as.character(hex_wgs84_display$class_km)))
 cluster_pal <- colorFactor(unname(class_palette[class_vals]), domain = class_vals)
 
 factor_top_loadings_lookup <- purrr::map(factor_cols, function(f) {
@@ -362,13 +400,30 @@ factor_popup_html <- function(f, hex_id, score) {
 }
 
 cluster_popup_html <- function(class_km, hex_id, scores) {
-  ranked_scores <- tibble::tibble(
+  score_tbl <- tibble::tibble(
     factor = factor_cols,
     score = as.numeric(scores)
-  ) |>
+  )
+  ranked_scores <- score_tbl |>
     mutate(abs_score = abs(score)) |>
     arrange(desc(abs_score)) |>
     slice_head(n = min(3, n()))
+
+  factor_labels_local <- vapply(score_tbl$factor, factor_label, character(1))
+  factor_profile_html <- paste0(
+    "<div style='margin-top:8px;'><strong>",
+    txt("Faktorprofil i detta hex", "Factor profile in this hex"),
+    ":</strong><table style='width:100%;margin-top:6px;border-collapse:collapse;'>",
+    paste0(
+      "<tr><td style='padding:2px 8px 2px 0;vertical-align:top;'><strong>",
+      htmltools::htmlEscape(factor_labels_local),
+      "</strong></td><td style='padding:2px 0;text-align:right;white-space:nowrap;'>",
+      format_signed(score_tbl$score),
+      "</td></tr>",
+      collapse = ""
+    ),
+    "</table></div>"
+  )
 
   builder_html <- cluster_builder_lookup[[as.character(class_km)]]
   if (is.null(builder_html)) {
@@ -376,17 +431,18 @@ cluster_popup_html <- function(class_km, hex_id, scores) {
   }
 
   paste0(
-    "<div style='min-width:320px;'>",
+    "<div style='min-width:340px;'>",
     "<div style='font-weight:700;margin-bottom:6px;'>", htmltools::htmlEscape(cluster_display_label(class_km)), "</div>",
     "<div style='margin-bottom:8px;'>", htmltools::htmlEscape(unname(cluster_explanations[as.character(class_km)])), "</div>",
     "<div><strong>", txt("Hex", "Hex"), ":</strong> ", htmltools::htmlEscape(as.character(hex_id)),
     "<br><strong>", txt("Typ", "Type"), ":</strong> ", htmltools::htmlEscape(cluster_display_label(class_km)), "</div>",
     builder_html,
+    factor_profile_html,
     "<div style='margin-top:8px;'><strong>",
     txt("Starkaste faktorer i detta hex", "Strongest factors in this hex"),
     ":</strong><ul style='margin:6px 0 0 18px;padding:0;'>",
     paste0(
-      "<li><strong>", htmltools::htmlEscape(factor_label(ranked_scores$factor)),
+      "<li><strong>", htmltools::htmlEscape(vapply(ranked_scores$factor, factor_label, character(1))),
       "</strong>: ", format_signed(ranked_scores$score), "</li>",
       collapse = ""
     ),
@@ -403,7 +459,7 @@ Den samlade kartan ligger först i rapporten och är tänkt som huvudytan för t
 #| label: combined-map-top
 #| fig-width: 13
 #| fig-height: 9
-cluster_map_data <- hex_wgs84 |>
+cluster_map_data <- hex_wgs84_display |>
   rowwise() |>
   mutate(
     popup_html = cluster_popup_html(
@@ -432,11 +488,11 @@ combined_map_widget <- leaflet(options = leafletOptions(zoomSnap = 0.25)) |>
     opacity = cluster_line_opacity_default,
     weight = 0.25,
     popup = ~popup_html,
-    popupOptions = popupOptions(maxWidth = 420)
+    popupOptions = popupOptions(maxWidth = 480)
   )
 
 for (f in factor_cols) {
-  data_factor <- hex_wgs84
+  data_factor <- hex_wgs84_display
   data_factor$map_value <- data_factor[[f]]
   data_factor$map_value_clipped <- pmax(
     pmin(data_factor$map_value, factor_limit_robust),
@@ -458,7 +514,7 @@ for (f in factor_cols) {
       opacity = factor_line_opacity_default,
       weight = 0.15,
       popup = ~popup_html,
-      popupOptions = popupOptions(maxWidth = 420)
+      popupOptions = popupOptions(maxWidth = 480)
     )
 }
 
@@ -489,7 +545,13 @@ combined_map_widget <- combined_map_widget |>
     values = c(-factor_limit_robust, factor_limit_robust),
     title = txt("Faktorscore", "Factor score")
   ) |>
-  addScaleBar(position = "bottomleft")
+  addScaleBar(position = "bottomleft") |>
+  fitBounds(
+    lng1 = unname(display_bbox["xmin"]),
+    lat1 = unname(display_bbox["ymin"]),
+    lng2 = unname(display_bbox["xmax"]),
+    lat2 = unname(display_bbox["ymax"])
+  )
 
 combined_map_widget <- htmlwidgets::onRender(
   combined_map_widget,
@@ -588,7 +650,7 @@ Det centrala värdet i nuläget är att modellen nu täcker stora delar av Bornh
 
 ## 2. Studieområde, skala och avgränsning
 
-Analysen omfattar Bornholm på samma R9-hexgrid som tidigare körningar. Den fasta analysenheten är alltså en regelbunden hexagon, medan landskapskaraktären uppstår genom att varje hexagon beskrivs både lokalt och genom sin omgivning.
+Analysen omfattar Bornholm på samma R9-hexgrid som tidigare körningar, enligt H3:s upplösningssystem ([H3: Tables of Cell Statistics Across Resolutions](`r h3_reference_href`)). Den fasta analysenheten är alltså en regelbunden hexagon, medan landskapskaraktären uppstår genom att varje hexagon beskrivs både lokalt och genom sin omgivning.
 
 ```{r}
 #| label: scope-summary
@@ -625,7 +687,9 @@ Skalvalet har tre konsekvenser:
 
 ## 3. Datagrund
 
-Den aktiva modellen bygger på `r layer_count` lagersignaler. Datagrunden är därför bred nog för att fånga Bornholm som både naturgeografiskt och kulturgeografiskt landskap: skog, jordbruk, topografi, kust, vatten, kulturmiljö, bebyggelse, skydd, restriktioner och geologi finns nu i samma analysram.
+Den aktiva körningen i v3.2 bygger på `r layer_count` lagersignaler. Datagrunden är därför bred nog för att fånga Bornholm som både naturgeografiskt och kulturgeografiskt landskap: skog, jordbruk, topografi, kust, vatten, kulturmiljö, bebyggelse, skydd, restriktioner och geologi finns nu i samma analysram.
+
+Det betyder konkret att varje rålager först översätts till en jämförbar hexsignal: punktlager som antal eller summerade attributvärden per hexagon, linjelager som linjelängd inom hexagonen, polygonlager som area eller areaandel, och terränglager som sammanfattad statistik per hexagon.
 
 Särskilt viktigt i denna version är att topografin inte bara beskrivs via tidigare hexaggregerade höjdmått. V3.2 lägger också till en **konturhärledd pseudo-DEM** från originalhöjdkurvorna, varifrån medelhöjd, lutning och lokal daldjupssignal aggregeras tillbaka till hexagonerna.
 
@@ -732,7 +796,7 @@ knitr::kable(omitted_summary, col.names = c("Ej aktiv grupp", "Antal lager", "Ex
 
 ## 4. Metod och transparens
 
-Metoden följer samma grundidé som i Jutas och Malmbergs multiskalära typologiarbete: en plats ska inte bara beskrivas av vad som finns **i själva rutan**, utan också av **vilket sammanhang rutan ligger i** när omgivningen läses på flera skalor. I deras fall gäller det bostadsområden; här överförs samma logik till landskapstyper på Bornholm.
+Metoden följer samma grundidé som i Juta Kawalerowicz och Bo Malmbergs multiskalära typologiarbete ([Multiscalar Typology of Residential Areas in Sweden](`r multiscalar_typology_reference_href`)): en plats ska inte bara beskrivas av vad som finns **i själva rutan**, utan också av **vilket sammanhang rutan ligger i** när omgivningen läses på flera skalor. I deras fall gäller det bostadsområden; här överförs samma logik till landskapstyper på Bornholm.
 
 Översatt till denna rapport betyder det:
 
@@ -804,6 +868,8 @@ knitr::kable(method_table, col.names = c("Metodsteg", "Val"))
 
 Varje ingångslager aggregeras först till R9-hexagoner. Därefter byggs en **kontextmatris** där varje hexagon får information om sin omgivning vid `k = 10, 50, 100, 250, 1000`.
 
+I praktiken betyder det att alla geometrier först översätts till samma analysenhet. Punktlager summeras som antal eller summerade attributvärden för de punkter som faller inom hexagonen. Linjelager summeras som den linjelängd som ligger inom hexagonen. Polygonlager översätts till total area eller areaandel inom hexagonen. Kontinuerliga terrängmått sammanfattas som statistik per hexagon, till exempel medelvärde, relief eller högsta värde. Först när alla lager uttrycks i denna gemensamma form kan de jämföras, viktas och läsas tillsammans i samma analysmatris.
+
 Två mått beräknas för varje lager och varje skala:
 
 - `mean`: hur mycket av signalen som i genomsnitt finns i omgivningen
@@ -813,7 +879,7 @@ Detta steg är avgörande. En hexagon med lite skog kan ligga mitt i ett stort s
 
 I denna modell är `k` inte samma sak som antal hexringar. I stället anger `k` hur mycket kumulativ kontextvikt som ska fångas upp när modellen går utåt genom närmaste grannar. Det betyder att samma `k` kan motsvara olika geografiska utbredningar i olika delar av ön beroende på hur stark signalstrukturen är.
 
-Den aktiva viktstrategin i denna körning är `r context_weight_description`.
+Den aktiva viktstrategin i denna körning är `r context_weight_description`. Det betyder i praktiken att modellen inte bara frågar vilka grannar som ligger närmast, utan också hur mycket samlad signalvikt som fångas när kontexten byggs utåt från varje hexagon.
 
 `r if (identical(context_weight_strategy, "geometry_balanced_q99") && !identical(context_weight_rescale_mode, "none")) paste0("I denna körning reskalas den balanserade kontextvikten dessutom med faktor ", format(round(weight_rescale_factor, 3), nsmall = 3), " enligt rescale-läget '", context_weight_rescale_mode, "' innan k-trösklarna beräknas.") else ""`
 
@@ -1128,7 +1194,7 @@ factor_map_widget <- leaflet(options = leafletOptions(zoomSnap = 0.25)) |>
   )
 
 for (f in factor_cols) {
-  data_factor <- hex_wgs84
+  data_factor <- hex_wgs84_display
   data_factor$map_value <- data_factor[[f]]
   data_factor$map_value_clipped <- pmax(
     pmin(data_factor$map_value, factor_limit_robust),
@@ -1173,7 +1239,13 @@ factor_map_widget <- factor_map_widget |>
     values = c(-factor_limit_robust, factor_limit_robust),
     title = "Faktorscore"
   ) |>
-  addScaleBar(position = "bottomleft")
+  addScaleBar(position = "bottomleft") |>
+  fitBounds(
+    lng1 = unname(display_bbox["xmin"]),
+    lat1 = unname(display_bbox["ymin"]),
+    lng2 = unname(display_bbox["xmax"]),
+    lat2 = unname(display_bbox["ymax"])
+  )
 
 factor_map_widget <- htmlwidgets::onRender(
   factor_map_widget,
@@ -1346,10 +1418,10 @@ ggplot(cluster_profile_long, aes(x = factor, y = cluster_name, fill = mean_score
 #| fig-width: 13
 #| fig-height: 8
 #| include: false
-class_vals <- sort(unique(as.character(hex_wgs84$class_km)))
+class_vals <- sort(unique(as.character(hex_wgs84_display$class_km)))
 pal <- colorFactor(unname(class_palette[class_vals]), domain = class_vals)
 
-cluster_map_widget <- leaflet(hex_wgs84, options = leafletOptions(zoomSnap = 0.25)) |>
+cluster_map_widget <- leaflet(cluster_map_data, options = leafletOptions(zoomSnap = 0.25)) |>
   addProviderTiles(
     "CartoDB.Positron",
     group = txt("Ljus baskarta", "Light basemap")
@@ -1365,15 +1437,8 @@ cluster_map_widget <- leaflet(hex_wgs84, options = leafletOptions(zoomSnap = 0.2
     color = "#444444",
     opacity = cluster_line_opacity_default,
     weight = 0.25,
-    popup = ~paste0(
-      "hex: ", hex_id,
-      "<br>kluster: ", cluster_display_label(class_km),
-      "<br>", factor_label("F1"), ": ", round(F1, 3),
-      "<br>", factor_label("F2"), ": ", round(F2, 3),
-      "<br>", factor_label("F3"), ": ", round(F3, 3),
-      "<br>", factor_label("F4"), ": ", round(F4, 3),
-      "<br>", factor_label("F5"), ": ", round(F5, 3)
-    )
+    popup = ~popup_html,
+    popupOptions = popupOptions(maxWidth = 480)
   ) |>
   addLegend(
     "bottomright",
@@ -1383,6 +1448,12 @@ cluster_map_widget <- leaflet(hex_wgs84, options = leafletOptions(zoomSnap = 0.2
     title = "Kluster"
   ) |>
   addScaleBar(position = "bottomleft") |>
+  fitBounds(
+    lng1 = unname(display_bbox["xmin"]),
+    lat1 = unname(display_bbox["ymin"]),
+    lng2 = unname(display_bbox["xmax"]),
+    lat2 = unname(display_bbox["ymax"])
+  ) |>
   addLayersControl(
     baseGroups = c(
       txt("Ljus baskarta", "Light basemap"),
@@ -1499,13 +1570,7 @@ Rapporten bör ännu inte användas som ensam beslutsgrund för lokalisering, ti
 
 ## 8. Typologisk tolkning och nästa steg
 
-Som tolkningsram är två referenser särskilt viktiga för denna rapport. Den första är Jutas och Malmbergs multiskalära typologitänkande: platser ska beskrivas både av sina lokala egenskaper och av sin omgivning på flera skalor. Här används det som en **metodisk anpassning**, inte som en direkt kopia av deras bostadstypologi. Den andra är den befintliga Bornholmsanalysen i [Landskapstyper Bornholm (PDF)](`r reference_pdf_href`), som fungerar som verklighetskontroll för hur översiktliga landskapsrum faktiskt brukar beskrivas på ön.
-
-För Jutas/Malmberg används följande primärreferenser i rapportens tolkningsram:
-
-- [Figshare dataset/material](https://su.figshare.com/articles/dataset/Multiscalar_typology_of_residential_areas_in_Sweden/14753826?file=28351917)
-- [DiVA-post](https://www.diva-portal.org/smash/record.jsf?pid=diva2:1624901)
-- [Fulltext PDF](https://www.diva-portal.org/smash/get/diva2:1624901/FULLTEXT01.pdf)
+Som tolkningsram är två referenser särskilt viktiga för denna rapport. Den första är Juta Kawalerowicz och Bo Malmbergs multiskalära typologitänkande ([Multiscalar Typology of Residential Areas in Sweden](`r multiscalar_typology_reference_href`)): platser ska beskrivas både av sina lokala egenskaper och av sin omgivning på flera skalor. Här används det som en **metodisk anpassning**, inte som en direkt kopia av deras bostadstypologi. Den andra är den befintliga Bornholmsanalysen i [Landskapstyper Bornholm (PDF)](`r reference_pdf_href`), som fungerar som verklighetskontroll för hur översiktliga landskapsrum faktiskt brukar beskrivas på ön.
 
 Det viktiga är inte att denna modell ska kopiera någon tidigare typologi exakt. Det viktiga är att den ska återge huvuddragen i Bornholms landskap på ett sätt som är både statistiskt hållbart och geografiskt begripligt. Om låglänta sandkuster, skogligt skyddsinland, brant dalpräglat inland, vardagslandskap och bebyggda kärnor går att läsa tydligt i samma modell, då är typologin på väg att gå i mål.
 
@@ -1530,3 +1595,9 @@ Viktigaste filer:
 - `r file.path(data_dir, paste0(analysis_id, "_factor_scores.csv"))`
 - `r file.path(data_dir, paste0(analysis_id, "_factor_loadings.csv"))`
 - `r file.path(data_dir, paste0(analysis_id, "_hex.gpkg"))`
+
+## Referenser
+
+- H3. *Tables of Cell Statistics Across Resolutions*. H3 documentation. [https://h3geo.org/docs/core-library/restable/](https://h3geo.org/docs/core-library/restable/)
+- Kawalerowicz, J., & Malmberg, B. *Multiscalar Typology of Residential Areas in Sweden*. Stockholm University / Figshare. [https://su.figshare.com/articles/dataset/Multiscalar_typology_of_residential_areas_in_Sweden/14753826](https://su.figshare.com/articles/dataset/Multiscalar_typology_of_residential_areas_in_Sweden/14753826)
+- *Landskapstyper Bornholm (PDF)*. [https://github.com/gislab-se/landskapsanalys/blob/main/data/Landskapstyper%20Bornholm.pdf](https://github.com/gislab-se/landskapsanalys/blob/main/data/Landskapstyper%20Bornholm.pdf)
