@@ -8,7 +8,9 @@ on:
       - .github/workflows/publish-geocontext-pages.yml
       - docs/geocontext/index.html
       - docs/geocontext/robots.txt
+      - docs/geocontext/snygg_karta.png
       - docs/geocontext/current_landscape_model/**
+      - docs/geocontext/model_comparisons/**
       - docs/geocontext/acceptance_framework/**
       - docs/geocontext/landskapsanalys_bornholm_handledarrapport.html
       - docs/geocontext/maps/**
@@ -43,8 +45,10 @@ jobs:
 
           cp docs/geocontext/index.html "$site_dir/index.html"
           cp docs/geocontext/robots.txt "$site_dir/robots.txt"
+          cp docs/geocontext/snygg_karta.png "$site_dir/snygg_karta.png"
           cp docs/geocontext/landskapsanalys_bornholm_handledarrapport.html "$site_dir/landskapsanalys_bornholm_handledarrapport.html"
           cp -R docs/geocontext/current_landscape_model "$site_dir/current_landscape_model"
+          cp -R docs/geocontext/model_comparisons "$site_dir/model_comparisons"
           cp -R docs/geocontext/acceptance_framework "$site_dir/acceptance_framework"
           cp -R docs/geocontext/maps "$site_dir/maps"
           cp -R docs/geocontext/tables "$site_dir/tables"

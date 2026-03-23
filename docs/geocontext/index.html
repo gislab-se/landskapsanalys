@@ -13,10 +13,7 @@
         --muted: #5d675f;
         --line: rgba(23, 33, 27, 0.12);
         --forest: #335846;
-        --forest-soft: #dce9df;
         --clay: #9a6445;
-        --sand: #e8d5bb;
-        --sea: #dbe7ee;
         --gold: #c8a55b;
         --shadow: 0 24px 50px rgba(23, 33, 27, 0.12);
       }
@@ -30,8 +27,8 @@
         font-family: Georgia, "Times New Roman", serif;
         color: var(--ink);
         background:
-          radial-gradient(circle at top left, rgba(154, 100, 69, 0.18), transparent 28%),
-          radial-gradient(circle at bottom right, rgba(51, 88, 70, 0.16), transparent 30%),
+          radial-gradient(circle at top left, rgba(154, 100, 69, 0.16), transparent 28%),
+          radial-gradient(circle at bottom right, rgba(51, 88, 70, 0.14), transparent 30%),
           linear-gradient(180deg, #faf7f1 0%, var(--paper) 100%);
       }
 
@@ -43,7 +40,7 @@
 
       .hero {
         display: grid;
-        grid-template-columns: 1.1fr 0.9fr;
+        grid-template-columns: 1.05fr 0.95fr;
         gap: 28px;
         align-items: center;
         margin-bottom: 30px;
@@ -66,14 +63,14 @@
 
       h1 {
         margin: 0 0 16px;
-        font-size: clamp(2.4rem, 5vw, 4.8rem);
-        line-height: 0.95;
+        font-size: clamp(2.6rem, 5vw, 4.8rem);
+        line-height: 0.96;
         letter-spacing: -0.03em;
-        max-width: 11ch;
+        max-width: 13ch;
       }
 
       .lead {
-        max-width: 710px;
+        max-width: 740px;
         margin: 0;
         font-size: 1.08rem;
         line-height: 1.75;
@@ -82,7 +79,7 @@
 
       .mini-note {
         margin-top: 18px;
-        max-width: 740px;
+        max-width: 760px;
         padding: 14px 16px;
         border-left: 4px solid var(--gold);
         background: rgba(255, 255, 255, 0.58);
@@ -92,13 +89,10 @@
       .hero-panel {
         position: relative;
         min-height: 420px;
-        border: 1px solid var(--line);
+        border: 1px solid rgba(111, 120, 129, 0.22);
         border-radius: 34px;
         overflow: hidden;
-        background:
-          radial-gradient(circle at 20% 20%, rgba(255,255,255,0.72), transparent 24%),
-          radial-gradient(circle at 75% 15%, rgba(200,165,91,0.18), transparent 18%),
-          linear-gradient(180deg, #e7efe7 0%, #d8e3d9 42%, #e9dfd1 100%);
+        background: linear-gradient(180deg, #d9dde1 0%, #cfd4da 100%);
         box-shadow: var(--shadow);
       }
 
@@ -107,8 +101,8 @@
         position: absolute;
         inset: 0;
         background:
-          linear-gradient(120deg, rgba(255,255,255,0.3), transparent 40%),
-          linear-gradient(0deg, rgba(255,255,255,0.1), transparent 40%);
+          linear-gradient(120deg, rgba(255,255,255,0.2), transparent 38%),
+          linear-gradient(0deg, rgba(255,255,255,0.06), transparent 42%);
         pointer-events: none;
       }
 
@@ -118,28 +112,22 @@
         top: 18px;
         padding: 7px 10px;
         border-radius: 999px;
-        border: 1px solid rgba(23, 33, 27, 0.08);
+        border: 1px solid rgba(111, 120, 129, 0.16);
         background: rgba(255,255,255,0.7);
         font-size: 0.78rem;
         letter-spacing: 0.06em;
         text-transform: uppercase;
-        color: var(--muted);
+        color: #5f6670;
         z-index: 2;
       }
 
-      .map-caption {
-        position: absolute;
-        right: 18px;
-        bottom: 16px;
-        max-width: 230px;
-        padding: 12px 14px;
-        border-radius: 18px;
-        background: rgba(255,255,255,0.72);
-        backdrop-filter: blur(6px);
-        color: var(--ink);
-        font-size: 0.92rem;
-        line-height: 1.45;
-        z-index: 2;
+      .hero-map-image {
+        display: block;
+        width: 100%;
+        height: 100%;
+        min-height: 420px;
+        object-fit: contain;
+        padding: 20px 18px 8px;
       }
 
       .cards {
@@ -158,6 +146,11 @@
         background: rgba(255, 252, 245, 0.86);
         box-shadow: var(--shadow);
         backdrop-filter: blur(10px);
+      }
+
+      .card-start {
+        border-color: rgba(200, 165, 91, 0.32);
+        background: rgba(255, 252, 245, 0.94);
       }
 
       .tag {
@@ -229,42 +222,12 @@
         border: 1px solid var(--line);
       }
 
-      .section-note {
-        margin-top: 18px;
-        color: var(--muted);
-        font-size: 0.95rem;
-      }
-
-      .run-box {
-        margin-top: 24px;
-        padding: 18px 20px;
-        border: 1px solid var(--line);
-        border-radius: 22px;
-        background: rgba(255,255,255,0.6);
-      }
-
-      .run-box h3 {
-        margin: 0 0 10px;
-        font-size: 1.05rem;
-      }
-
-      pre {
-        margin: 0;
-        overflow-x: auto;
-        padding: 14px 16px;
-        border-radius: 16px;
-        background: #19231c;
-        color: #eff5ef;
-        font-size: 0.92rem;
-        line-height: 1.5;
-      }
-
       @media (max-width: 920px) {
         .hero {
           grid-template-columns: 1fr;
         }
 
-        .hero-panel {
+        .hero-map-image {
           min-height: 340px;
         }
       }
@@ -274,294 +237,76 @@
     <main>
       <section class="hero">
         <div>
-          <div class="eyebrow">Bornholm · Landskapsanalys</div>
-          <h1>Tre ingångar och en arbetsapp</h1>
+          <div class="eyebrow">Bornholm · Briefing</div>
+          <h1>Landskapsanalys Bornholm</h1>
           <p class="lead">
-            Detta repo samlar den pågående landskapsanalysen för Bornholm, en separat vindacceptansapp
-            ovanpå landskapsmodellen, en full huvudrapport och en kortare handledarinriktad läsning.
-            Landningssidan är avsiktligt ultrakort: välj ingång och gå vidare direkt.
+            Landskapsanalysen beskriver Bornholms rumsliga landskapskaraktär i ett hexbaserat ramverk.
+            Ovanpå den modellen ska ett separat acceptanslager byggas för scenarioarbete kring vindkraft.
           </p>
           <p class="mini-note">
-            Arbetslogiken just nu är att hålla landskapskaraktär och vindacceptans isär: rapporterna beskriver
-            modellen, medan appen låter användaren bygga egna acceptansscenarier ovanpå hexnätet.
+            Rapportdelen beskriver modellen. Acceptansdelen använder modellen som underlag för nästa lager.
           </p>
         </div>
 
         <div class="hero-panel">
-          <div class="map-label">Hexkarta · Bornholm</div>
-          <svg viewBox="0 0 520 420" width="100%" height="100%" aria-hidden="true">
-            <defs>
-              <linearGradient id="seaFade" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stop-color="#eef4f7" />
-                <stop offset="100%" stop-color="#d9e5ea" />
-              </linearGradient>
-              <linearGradient id="hexGreen" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#7a9d7f" />
-                <stop offset="100%" stop-color="#3f6249" />
-              </linearGradient>
-              <linearGradient id="hexSand" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#ddbf8d" />
-                <stop offset="100%" stop-color="#b28658" />
-              </linearGradient>
-              <linearGradient id="hexClay" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#cc926d" />
-                <stop offset="100%" stop-color="#8e5a42" />
-              </linearGradient>
-              <clipPath id="islandShape">
-                <path d="M165 54 L208 30 L265 48 L302 98 L330 170 L384 220 L455 304 L438 356 L366 382 L277 367 L190 388 L121 360 L88 296 L100 232 L84 185 L109 150 L123 100 Z" />
-              </clipPath>
-              <symbol id="hex" viewBox="0 0 24 21">
-                <polygon points="6,1 18,1 23,10.5 18,20 6,20 1,10.5" />
-              </symbol>
-            </defs>
-
-            <rect x="0" y="0" width="520" height="420" fill="url(#seaFade)" />
-            <g clip-path="url(#islandShape)">
-              <rect x="65" y="18" width="405" height="385" fill="#edf1e7" />
-              <g opacity="0.95" stroke="rgba(255,255,255,0.55)" stroke-width="0.7">
-                <use href="#hex" x="92" y="64" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="108" y="74" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="124" y="64" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="140" y="74" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="156" y="64" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="172" y="74" width="20" height="18" fill="url(#hexSand)" />
-                <use href="#hex" x="188" y="64" width="20" height="18" fill="url(#hexSand)" />
-                <use href="#hex" x="204" y="74" width="20" height="18" fill="url(#hexSand)" />
-                <use href="#hex" x="220" y="64" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="236" y="74" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="252" y="64" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="268" y="74" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="284" y="64" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="300" y="74" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="316" y="64" width="20" height="18" fill="url(#hexGreen)" />
-
-                <use href="#hex" x="84" y="95" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="100" y="105" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="116" y="95" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="132" y="105" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="148" y="95" width="20" height="18" fill="url(#hexSand)" />
-                <use href="#hex" x="164" y="105" width="20" height="18" fill="url(#hexSand)" />
-                <use href="#hex" x="180" y="95" width="20" height="18" fill="url(#hexSand)" />
-                <use href="#hex" x="196" y="105" width="20" height="18" fill="url(#hexSand)" />
-                <use href="#hex" x="212" y="95" width="20" height="18" fill="url(#hexSand)" />
-                <use href="#hex" x="228" y="105" width="20" height="18" fill="url(#hexClay)" />
-                <use href="#hex" x="244" y="95" width="20" height="18" fill="url(#hexClay)" />
-                <use href="#hex" x="260" y="105" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="276" y="95" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="292" y="105" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="308" y="95" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="324" y="105" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="340" y="95" width="20" height="18" fill="url(#hexGreen)" />
-
-                <use href="#hex" x="88" y="126" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="104" y="136" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="120" y="126" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="136" y="136" width="20" height="18" fill="url(#hexSand)" />
-                <use href="#hex" x="152" y="126" width="20" height="18" fill="url(#hexSand)" />
-                <use href="#hex" x="168" y="136" width="20" height="18" fill="url(#hexSand)" />
-                <use href="#hex" x="184" y="126" width="20" height="18" fill="url(#hexSand)" />
-                <use href="#hex" x="200" y="136" width="20" height="18" fill="url(#hexClay)" />
-                <use href="#hex" x="216" y="126" width="20" height="18" fill="url(#hexClay)" />
-                <use href="#hex" x="232" y="136" width="20" height="18" fill="url(#hexClay)" />
-                <use href="#hex" x="248" y="126" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="264" y="136" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="280" y="126" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="296" y="136" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="312" y="126" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="328" y="136" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="344" y="126" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="360" y="136" width="20" height="18" fill="url(#hexGreen)" />
-
-                <use href="#hex" x="80" y="157" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="96" y="167" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="112" y="157" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="128" y="167" width="20" height="18" fill="url(#hexSand)" />
-                <use href="#hex" x="144" y="157" width="20" height="18" fill="url(#hexSand)" />
-                <use href="#hex" x="160" y="167" width="20" height="18" fill="url(#hexSand)" />
-                <use href="#hex" x="176" y="157" width="20" height="18" fill="url(#hexClay)" />
-                <use href="#hex" x="192" y="167" width="20" height="18" fill="url(#hexClay)" />
-                <use href="#hex" x="208" y="157" width="20" height="18" fill="url(#hexClay)" />
-                <use href="#hex" x="224" y="167" width="20" height="18" fill="url(#hexClay)" />
-                <use href="#hex" x="240" y="157" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="256" y="167" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="272" y="157" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="288" y="167" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="304" y="157" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="320" y="167" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="336" y="157" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="352" y="167" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="368" y="157" width="20" height="18" fill="url(#hexGreen)" />
-
-                <use href="#hex" x="76" y="188" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="92" y="198" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="108" y="188" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="124" y="198" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="140" y="188" width="20" height="18" fill="url(#hexSand)" />
-                <use href="#hex" x="156" y="198" width="20" height="18" fill="url(#hexSand)" />
-                <use href="#hex" x="172" y="188" width="20" height="18" fill="url(#hexClay)" />
-                <use href="#hex" x="188" y="198" width="20" height="18" fill="url(#hexClay)" />
-                <use href="#hex" x="204" y="188" width="20" height="18" fill="url(#hexClay)" />
-                <use href="#hex" x="220" y="198" width="20" height="18" fill="url(#hexClay)" />
-                <use href="#hex" x="236" y="188" width="20" height="18" fill="url(#hexClay)" />
-                <use href="#hex" x="252" y="198" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="268" y="188" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="284" y="198" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="300" y="188" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="316" y="198" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="332" y="188" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="348" y="198" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="364" y="188" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="380" y="198" width="20" height="18" fill="url(#hexGreen)" />
-
-                <use href="#hex" x="84" y="219" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="100" y="229" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="116" y="219" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="132" y="229" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="148" y="219" width="20" height="18" fill="url(#hexSand)" />
-                <use href="#hex" x="164" y="229" width="20" height="18" fill="url(#hexSand)" />
-                <use href="#hex" x="180" y="219" width="20" height="18" fill="url(#hexSand)" />
-                <use href="#hex" x="196" y="229" width="20" height="18" fill="url(#hexClay)" />
-                <use href="#hex" x="212" y="219" width="20" height="18" fill="url(#hexClay)" />
-                <use href="#hex" x="228" y="229" width="20" height="18" fill="url(#hexClay)" />
-                <use href="#hex" x="244" y="219" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="260" y="229" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="276" y="219" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="292" y="229" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="308" y="219" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="324" y="229" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="340" y="219" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="356" y="229" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="372" y="219" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="388" y="229" width="20" height="18" fill="url(#hexGreen)" />
-
-                <use href="#hex" x="96" y="250" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="112" y="260" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="128" y="250" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="144" y="260" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="160" y="250" width="20" height="18" fill="url(#hexSand)" />
-                <use href="#hex" x="176" y="260" width="20" height="18" fill="url(#hexSand)" />
-                <use href="#hex" x="192" y="250" width="20" height="18" fill="url(#hexSand)" />
-                <use href="#hex" x="208" y="260" width="20" height="18" fill="url(#hexSand)" />
-                <use href="#hex" x="224" y="250" width="20" height="18" fill="url(#hexClay)" />
-                <use href="#hex" x="240" y="260" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="256" y="250" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="272" y="260" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="288" y="250" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="304" y="260" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="320" y="250" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="336" y="260" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="352" y="250" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="368" y="260" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="384" y="250" width="20" height="18" fill="url(#hexGreen)" />
-
-                <use href="#hex" x="112" y="281" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="128" y="291" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="144" y="281" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="160" y="291" width="20" height="18" fill="url(#hexSand)" />
-                <use href="#hex" x="176" y="281" width="20" height="18" fill="url(#hexSand)" />
-                <use href="#hex" x="192" y="291" width="20" height="18" fill="url(#hexSand)" />
-                <use href="#hex" x="208" y="281" width="20" height="18" fill="url(#hexSand)" />
-                <use href="#hex" x="224" y="291" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="240" y="281" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="256" y="291" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="272" y="281" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="288" y="291" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="304" y="281" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="320" y="291" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="336" y="281" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="352" y="291" width="20" height="18" fill="url(#hexGreen)" />
-
-                <use href="#hex" x="144" y="313" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="160" y="323" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="176" y="313" width="20" height="18" fill="url(#hexSand)" />
-                <use href="#hex" x="192" y="323" width="20" height="18" fill="url(#hexSand)" />
-                <use href="#hex" x="208" y="313" width="20" height="18" fill="url(#hexSand)" />
-                <use href="#hex" x="224" y="323" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="240" y="313" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="256" y="323" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="272" y="313" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="288" y="323" width="20" height="18" fill="url(#hexGreen)" />
-                <use href="#hex" x="304" y="313" width="20" height="18" fill="url(#hexGreen)" />
-              </g>
-            </g>
-            <path d="M165 54 L208 30 L265 48 L302 98 L330 170 L384 220 L455 304 L438 356 L366 382 L277 367 L190 388 L121 360 L88 296 L100 232 L84 185 L109 150 L123 100 Z" fill="none" stroke="rgba(23,33,27,0.18)" stroke-width="3" />
-          </svg>
-          <div class="map-caption">
-            En kort hexöversikt i startbilden, medan detaljerna finns i rapporterna och i den lokala appen.
-          </div>
+          <div class="map-label">Översiktskarta · v3.2</div>
+          <img class="hero-map-image" src="snygg_karta.png" alt="Hexöversikt från Bornholms landskapsanalys v3.2">
         </div>
       </section>
 
       <section class="cards">
-        <article class="card">
-          <div class="tag primary">Interaktivt verktyg</div>
-          <h2>Vindacceptansapp</h2>
+        <article class="card card-start">
+          <div class="tag soft">Först</div>
+          <h2>Kortfattad rapport</h2>
           <p>
-            En lokal Streamlit-app där användaren kan slå av och på lager, välja vilka som är hard stop,
-            vikta compound-lager och bygga egna acceptansscenarier ovanpå hexnätet.
+            Den korta, handledarinriktade läsningen. Här finns översikten, huvudfrågorna och den snabbaste
+            vägen in i arbetet.
           </p>
           <div class="actions">
-            <a class="button primary" href="http://localhost:8501">Öppna localhost-app</a>
-            <a class="button secondary" href="../../apps/acceptance_app.py">Öppna appfil</a>
-            <a class="button secondary" href="https://www.sologvindinfo.dk/spatialmap">Öppna sologvindinfo</a>
-          </div>
-        </article>
-
-        <article class="card">
-          <div class="tag alt">Full rapport</div>
-          <h2>Rådande rapport</h2>
-          <p>
-            Detta är huvudspåret för den löpande landskapsanalysen. Här ska den fulla, uttömmande rapporten bo,
-            med metodik, jämförelser och den samlade berättelsen från v1, v2 och v3.
-          </p>
-          <div class="actions">
-            <a class="button primary" href="current_landscape_model/landskapsanalys_v2_1.html">Öppna rapport</a>
-            <a class="button secondary" href="current_landscape_model/maps/landskapsanalys_v2_1_geomweight58_res9_combined_map.html">Öppna karta</a>
-            <a class="button secondary" href="current_landscape_model/tables/landskapsanalys_v2_1_geomweight58_res9_factor_loadings_readable.xlsx">Öppna Excel</a>
-          </div>
-        </article>
-
-        <article class="card">
-          <div class="tag soft">Kortare läsning</div>
-          <h2>Handledarrapport</h2>
-          <p>
-            Den sammanfattade, handledarinriktade varianten. Kortare, tydligare och bättre för diskussion,
-            handledning och snabb överblick än den fulla huvudrapporten.
-          </p>
-          <div class="actions">
-            <a class="button primary" href="landskapsanalys_bornholm_handledarrapport.html">Öppna handledarrapport</a>
+            <a class="button primary" href="landskapsanalys_bornholm_handledarrapport.html">Öppna kort rapport</a>
             <a class="button secondary" href="maps/landskapsanalys_bornholm_handledarrapport_combined_map.html">Öppna karta</a>
           </div>
         </article>
 
         <article class="card">
-          <div class="tag primary">Separat arbetsström</div>
+          <div class="tag alt">Därefter</div>
+          <h2>Lång rapport</h2>
+          <p>
+            Den längre metod- och resultatrapporten. Här ligger nu v3.2-spåret med metodik, jämförelser,
+            tolkning och den samlade analysberättelsen.
+          </p>
+          <div class="actions">
+            <a class="button primary" href="model_comparisons/landskapsanalys_v3_2_contourterrain68_res9.html">Öppna lång rapport</a>
+            <a class="button secondary" href="model_comparisons/maps/landskapsanalys_v3_2_contourterrain68_res9_combined_map.html">Öppna karta</a>
+            <a class="button secondary" href="model_comparisons/tables/landskapsanalys_v3_2_contourterrain68_res9_factor_loadings_readable.xlsx">Öppna Excel</a>
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="tag primary">Sedan</div>
           <h2>Vindacceptansrapport</h2>
           <p>
-            Den separata rapporten för acceptansramverket. Den beskriver nulägets scenarier och ligger ovanpå,
-            inte inuti, landskapskaraktärsmodellen.
+            Den separata rapporten för acceptansramverket. Den följer efter landskapsdelen och kan läsas
+            när ni vill gå vidare från modell till acceptansscenarier.
           </p>
           <div class="actions">
             <a class="button primary" href="acceptance_framework/bornholm_vindacceptans_stage1_v3_2_res9.html">Öppna rapport</a>
             <a class="button secondary" href="acceptance_framework/maps/bornholm_vindacceptans_stage1_v3_2_res9_map.html">Öppna karta</a>
           </div>
         </article>
-      </section>
 
-      <p class="section-note">
-        Landningssidan ska vara kort. Rapporterna står för djupet, appen står för scenarioarbete och den fulla rapporten blir den samlade metodberättelsen framåt.
-      </p>
-
-      <section class="run-box" id="run-locally">
-        <h3>Kör vindacceptansappen lokalt</h3>
-        <pre>cd C:\gislab\landskapsanalys
-py -m venv .venv
-.\.venv\Scripts\Activate.ps1
-py -m pip install -r requirements.txt
-py -m streamlit run apps\acceptance_app.py</pre>
+        <article class="card">
+          <div class="tag primary">Sist</div>
+          <h2>Vindacceptansapp</h2>
+          <p>
+            Den interaktiva versionen av acceptansarbetet. Appen kan publiceras separat på Streamlit och
+            öppnas direkt härifrån när ni vill testa scenarier efter rapportgenomgången.
+          </p>
+          <div class="actions">
+            <a class="button primary" href="https://gislab-bornholm-vindacceptans.streamlit.app/" target="_blank" rel="noreferrer">Öppna Streamlit-app</a>
+          </div>
+        </article>
       </section>
     </main>
   </body>
 </html>
-
-
