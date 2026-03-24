@@ -1,0 +1,7 @@
+r-base
+r-cran-sf
+r-cran-lwgeom
+r-cran-dplyr
+r-cran-jsonlite
+r-cran-readr
+r-cran-tibble

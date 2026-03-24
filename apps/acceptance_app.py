@@ -1,622 +1,303 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
-import sqlite3
-from pathlib import Path
 
-import numpy as np
 import pandas as pd
-import pydeck as pdk
 import streamlit as st
+import streamlit.components.v1 as components
 
-try:
-    import h3
-except Exception:  # pragma: no cover
-    h3 = None
-
-
-APP_TITLE = "Bornholm Vindacceptans Explorer"
-DATA_RELATIVE_PATH = (
-    "docs/geocontext/acceptance_framework/data/"
-    "bornholm_vindacceptans_stage1_v3_2_res9/"
-    "bornholm_vindacceptans_stage1_v3_2_res9_hex.gpkg"
+from acceptance_model.layers import (
+    acceptance_reference_payload,
+    layer_status_table,
+    load_registry,
+    ordered_groups,
+    ordered_layers,
+    source_geojson_for_layer,
 )
-DATA_LAYER = "bornholm_vindacceptans_stage1_v3_2_res9"
+from acceptance_model.leaflet_map import (
+    build_leaflet_html,
+    combined_overlay as combined_overlay_spec,
+    group_overlay,
+    source_overlay,
+)
+from acceptance_model.runtime_geometry import run_geometry_runtime
 
-CLASS_COLORS = {
-    "Exkluderad": [140, 140, 140, 180],
-    "Lag": [241, 232, 166, 180],
-    "Medel": [240, 179, 91, 185],
-    "Hog": [125, 187, 125, 190],
-    "Mycket hog": [44, 122, 75, 210],
-}
 
-BASELINE_CLASS_COLS = {
-    "balanced": "acceptance_class_balanced",
-    "strict": "acceptance_class_strict",
-    "tech_prioritized": "acceptance_class_tech_prioritized",
-}
+APP_TITLE = "Bornholm Wind-Acceptance Prototype"
 
-LAYER_META = {
-    "score_hv_line": {"label": "Hogspanningsledning", "group": "El och teknik"},
-    "score_substation": {"label": "Elstation", "group": "El och teknik"},
-    "score_cable": {"label": "Kabel", "group": "El och teknik"},
-    "score_existing_wind": {"label": "Befintlig vindkraft", "group": "El och teknik"},
-    "score_settlement_clearance": {"label": "Avstand till bosattning", "group": "Bosattning och kultur"},
-    "score_culture_clearance": {"label": "Avstand till kulturmiljo", "group": "Bosattning och kultur"},
-    "score_protected_edge_clearance": {"label": "Avstand till skyddad natur", "group": "Skydd och natur"},
-    "score_aviation_bird_clearance": {"label": "Avstand till fagelkollisionszon", "group": "Skydd och natur"},
-    "score_landscape_cluster": {"label": "Landskapskluster", "group": "Landskap"},
-    "score_landscape_plateau": {"label": "Hog jordbruksplata", "group": "Landskap"},
-    "score_landscape_open_terrain": {"label": "Oppet terrain", "group": "Landskap"},
-}
-
-LAYER_GROUPS = [
-    "El och teknik",
-    "Bosattning och kultur",
-    "Skydd och natur",
-    "Landskap",
+CRITICAL_REVIEW = [
+    "This stage should stay geometry-first. Settlement, roads, substations, and protected areas mean something as real source geometries, so the live map should show and buffer those geometries directly instead of collapsing them to hexes too early.",
+    "Settlement proxies still overlap heavily, so group logic should use dissolved unions and shared buffers rather than additive scoring. That avoids counting the same built structure multiple times.",
+    "Electrical infrastructure still needs different semantics: buffering selected grid assets by a maximum connection distance is a feasibility rule, not a classic no-go buffer.",
+    "Population points are visually noisy as raw points at this scale, so the prototype now displays them as a dissolved 100 m buffer polygon. That keeps the layer legible while still making the source logic explicit.",
+    "All source, group, and combined geometries are clipped to a Bornholm landmask derived from the full-coverage prekvart_bornholm polygon, so buffers do not spill into the sea.",
+    "Combined acceptance should always be shown as the land that remains available inside a polygon. Without a feasibility group, that means Bornholm landmass minus the active conflict layers. With a feasibility group, it means feasible land minus active conflicts.",
 ]
 
-PRESETS = {
-    "balanced": {
-        "label": "Balanserad",
-        "hard": {
-            "settlement_mode": "Hard stop",
-            "settlement_threshold_m": 800,
-            "culture_mode": "Hard stop",
-            "protected_mode": "Hard stop",
-            "military_mode": "Hard stop",
-            "aviation_approach_mode": "Hard stop",
-            "aviation_bird_mode": "Soft",
-            "aviation_bird_threshold_m": 0,
-            "strand_mode": "Hard stop",
-        },
-        "weights": {
-            "score_hv_line": 18,
-            "score_substation": 12,
-            "score_cable": 8,
-            "score_existing_wind": 12,
-            "score_settlement_clearance": 18,
-            "score_culture_clearance": 8,
-            "score_protected_edge_clearance": 12,
-            "score_aviation_bird_clearance": 8,
-            "score_landscape_cluster": 14,
-            "score_landscape_plateau": 6,
-            "score_landscape_open_terrain": 4,
-        },
-    },
-    "strict": {
-        "label": "Strikt",
-        "hard": {
-            "settlement_mode": "Hard stop",
-            "settlement_threshold_m": 1000,
-            "culture_mode": "Hard stop",
-            "protected_mode": "Hard stop",
-            "military_mode": "Hard stop",
-            "aviation_approach_mode": "Hard stop",
-            "aviation_bird_mode": "Hard stop",
-            "aviation_bird_threshold_m": 0,
-            "strand_mode": "Hard stop",
-        },
-        "weights": {
-            "score_hv_line": 12,
-            "score_substation": 10,
-            "score_cable": 6,
-            "score_existing_wind": 8,
-            "score_settlement_clearance": 22,
-            "score_culture_clearance": 12,
-            "score_protected_edge_clearance": 14,
-            "score_aviation_bird_clearance": 10,
-            "score_landscape_cluster": 4,
-            "score_landscape_plateau": 1,
-            "score_landscape_open_terrain": 1,
-        },
-    },
-    "tech_prioritized": {
-        "label": "Teknikprioriterad",
-        "hard": {
-            "settlement_mode": "Hard stop",
-            "settlement_threshold_m": 800,
-            "culture_mode": "Ignore",
-            "protected_mode": "Hard stop",
-            "military_mode": "Hard stop",
-            "aviation_approach_mode": "Hard stop",
-            "aviation_bird_mode": "Ignore",
-            "aviation_bird_threshold_m": 0,
-            "strand_mode": "Hard stop",
-        },
-        "weights": {
-            "score_hv_line": 24,
-            "score_substation": 18,
-            "score_cable": 10,
-            "score_existing_wind": 8,
-            "score_settlement_clearance": 12,
-            "score_culture_clearance": 4,
-            "score_protected_edge_clearance": 8,
-            "score_aviation_bird_clearance": 4,
-            "score_landscape_cluster": 8,
-            "score_landscape_plateau": 2,
-            "score_landscape_open_terrain": 2,
-        },
-    },
-}
+HEXAGON_NOTE = [
+    "Hexagons are no longer used in the live map stage of this prototype.",
+    "They can still be useful later for reporting, ranking, comparison with the landscape-analysis clusters, or summarising how much land remains after geometry-first filtering.",
+    "If you later want a hex view again, it should come after the geometry-based buffers and intersections, not before them.",
+]
 
 
-@st.cache_data(show_spinner=False)
-def load_acceptance_table(gpkg_path: str, layer_name: str) -> pd.DataFrame:
-    con = sqlite3.connect(gpkg_path)
-    try:
-        query = f'SELECT * FROM "{layer_name}"'
-        df = pd.read_sql_query(query, con)
-    finally:
-        con.close()
-    if "geom" in df.columns:
-        df = df.drop(columns=["geom"])
-    return df
+def _state_key(prefix: str, item_id: str) -> str:
+    return f"{prefix}__{item_id}"
 
 
-def _hex_polygon(hex_id: str):
-    if h3 is None:
-        return None
-    try:
-        boundary = h3.cell_to_boundary(hex_id)
-        return [[lng, lat] for lat, lng in boundary]
-    except Exception:
-        return None
+def _rgb_to_hex(rgb: tuple[int, int, int]) -> str:
+    return "#%02x%02x%02x" % rgb
 
 
-@st.cache_data(show_spinner=False)
-def build_map_frame(df: pd.DataFrame) -> pd.DataFrame:
-    out = df.copy()
-    lat = []
-    lon = []
-    polygon = []
-    for hex_id in out["hex_id"].astype(str):
-        try:
-            y, x = h3.cell_to_latlng(hex_id)
-            lat.append(y)
-            lon.append(x)
-            polygon.append(_hex_polygon(hex_id))
-        except Exception:
-            lat.append(np.nan)
-            lon.append(np.nan)
-            polygon.append(None)
-    out["lat"] = lat
-    out["lon"] = lon
-    out["polygon"] = polygon
-    return out.dropna(subset=["lat", "lon", "polygon"]).copy()
+def _source_opacity(blend_value: int) -> float:
+    return max(0.0, 1.0 - (int(blend_value) / 100.0))
 
 
-def _init_state_from_preset(preset_key: str) -> None:
-    preset = PRESETS[preset_key]
-    st.session_state["preset_key"] = preset_key
-    for key, value in preset["hard"].items():
-        st.session_state[key] = value
-    for key, value in preset["weights"].items():
-        st.session_state[key] = value
+def _group_opacity(blend_value: int) -> float:
+    return max(0.0, min(1.0, int(blend_value) / 100.0))
 
 
-def ensure_state() -> None:
-    if "preset_key" not in st.session_state:
-        _init_state_from_preset("balanced")
-    if "active_layers" not in st.session_state:
-        st.session_state["active_layers"] = list(LAYER_META.keys())
+def _init_state() -> None:
+    groups, layers, _ = load_registry()
+    for group in groups.values():
+        st.session_state.setdefault(_state_key("analysis", group.id), group.analysis_default_m)
+        st.session_state.setdefault(_state_key("blend", group.id), group.blend_default)
+    for layer in layers.values():
+        st.session_state.setdefault(_state_key("layer", layer.id), False)
 
 
-def apply_preset(preset_key: str) -> None:
-    _init_state_from_preset(preset_key)
+def _layer_status_lookup(registry_meta: dict[str, object]) -> dict[str, dict[str, object]]:
+    status_df = layer_status_table(registry_meta)
+    return {row["layer_id"]: row.to_dict() for _, row in status_df.iterrows()}
 
 
-def normalize_weights(weights: dict[str, float]) -> dict[str, float]:
-    total = float(sum(max(0.0, float(v)) for v in weights.values()))
-    if total <= 0:
-        total = 1.0
-    return {k: max(0.0, float(v)) / total for k, v in weights.items()}
+def _build_group_controls(registry_meta: dict[str, object]) -> tuple[dict[str, list[str]], bool]:
+    availability = _layer_status_lookup(registry_meta)
+    selected: dict[str, list[str]] = {group.id: [] for group in ordered_groups()}
+
+    with st.sidebar:
+        st.header("Groups")
+        st.caption("Select source layers per group. Group polygons are dissolved real-geometry buffers, not hex cells.")
+        with st.form("group_controls", clear_on_submit=False):
+            st.caption("Map updates when you click Apply changes. This avoids rerunning the geometry engine on every slider move.")
+
+            for group in ordered_groups():
+                with st.expander(group.label, expanded=group.id in {"settlement", "transport", "electrical"}):
+                    st.caption(group.interpretation)
+                    st.slider(
+                        group.analysis_label,
+                        min_value=group.analysis_min_m,
+                        max_value=group.analysis_max_m,
+                        step=group.analysis_step_m,
+                        key=_state_key("analysis", group.id),
+                        help="Analysis only. This value changes the real buffer / feasibility geometry.",
+                    )
+                    st.slider(
+                        "Display / blend",
+                        min_value=0,
+                        max_value=100,
+                        step=5,
+                        key=_state_key("blend", group.id),
+                        help="Display only. 0 = source layers, 100 = group layer.",
+                    )
+
+                    for layer in [item for item in ordered_layers() if item.group_id == group.id]:
+                        status = availability.get(layer.id, {})
+                        ready = (
+                            bool(status.get("geojson_ready"))
+                            and bool(status.get("source_exists"))
+                            and int(status.get("feature_count", 0) or 0) > 0
+                            and str(status.get("status", "")) == "ok"
+                        )
+                        message = str(status.get("message", "") or layer.note or "Layer is not available for the current prototype.")
+                        checked = st.checkbox(layer.label, key=_state_key("layer", layer.id), disabled=not ready, help=message)
+                        if checked and ready:
+                            selected[group.id].append(layer.id)
+
+                    if not selected[group.id]:
+                        st.caption("Group inactive. Select one or more source layers above.")
+
+            applied = st.form_submit_button("Apply changes", type="primary", use_container_width=True)
+
+    return selected, applied
 
 
-def export_current_config(active_layers: list[str]) -> str:
-    payload = {
-        "preset_key": st.session_state["preset_key"],
-        "hard": {
-            "settlement_mode": st.session_state["settlement_mode"],
-            "settlement_threshold_m": st.session_state["settlement_threshold_m"],
-            "culture_mode": st.session_state["culture_mode"],
-            "protected_mode": st.session_state["protected_mode"],
-            "military_mode": st.session_state["military_mode"],
-            "aviation_approach_mode": st.session_state["aviation_approach_mode"],
-            "aviation_bird_mode": st.session_state["aviation_bird_mode"],
-            "aviation_bird_threshold_m": st.session_state["aviation_bird_threshold_m"],
-            "strand_mode": st.session_state["strand_mode"],
-        },
-        "active_layers": active_layers,
-        "weights": {key: st.session_state[key] for key in LAYER_META},
-    }
-    return json.dumps(payload, indent=2)
-
-
-def load_config_from_upload(uploaded_file) -> None:
-    payload = json.loads(uploaded_file.getvalue().decode("utf-8"))
-    if "preset_key" in payload and payload["preset_key"] in PRESETS:
-        st.session_state["preset_key"] = payload["preset_key"]
-    for key, value in payload.get("hard", {}).items():
-        st.session_state[key] = value
-    for key, value in payload.get("weights", {}).items():
-        if key in LAYER_META:
-            st.session_state[key] = value
-    if "active_layers" in payload:
-        st.session_state["active_layers"] = [x for x in payload["active_layers"] if x in LAYER_META]
-
-
-def compute_hard_exclusions(df: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
-    reasons = []
-
-    settlement_threshold = float(st.session_state["settlement_threshold_m"])
-    settlement_hard = (
-        st.session_state["settlement_mode"] == "Hard stop"
-    ) & (pd.to_numeric(df["dist_to_settlement_hard_m"], errors="coerce") <= settlement_threshold)
-    culture_hard = (st.session_state["culture_mode"] == "Hard stop") & df["hard_exclusion_culture"].astype(bool)
-    protected_hard = (st.session_state["protected_mode"] == "Hard stop") & df["hard_exclusion_protected"].astype(bool)
-    military_hard = (st.session_state["military_mode"] == "Hard stop") & df["hard_exclusion_military"].astype(bool)
-    aviation_approach_hard = (
-        (st.session_state["aviation_approach_mode"] == "Hard stop")
-        & df["hard_exclusion_aviation_approach"].astype(bool)
-    )
-    strand_hard = (st.session_state["strand_mode"] == "Hard stop") & df["hard_exclusion_strand"].astype(bool)
-
-    bird_mode = st.session_state["aviation_bird_mode"]
-    if bird_mode == "Hard stop":
-        bird_threshold = float(st.session_state["aviation_bird_threshold_m"])
-        if bird_threshold > 0:
-            bird_hard = pd.to_numeric(df["dist_to_aviation_bird_m"], errors="coerce") <= bird_threshold
-        else:
-            bird_hard = df["hard_exclusion_aviation_bird"].astype(bool)
-    else:
-        bird_hard = pd.Series(False, index=df.index)
-
-    exclusion_frame = pd.DataFrame(
-        {
-            "Bosattning": settlement_hard,
-            "Kulturmiljo": culture_hard,
-            "Skyddad natur": protected_hard,
-            "Militar": military_hard,
-            "Inflygning": aviation_approach_hard,
-            "Fagelkollision": bird_hard,
-            "Strandskydd": strand_hard,
+def _runtime_payload(selected_by_group: dict[str, list[str]]) -> str:
+    payload = {"groups": {}}
+    for group in ordered_groups():
+        active_layer_ids = selected_by_group.get(group.id, [])
+        if not active_layer_ids:
+            continue
+        payload["groups"][group.id] = {
+            "active_layer_ids": active_layer_ids,
+            "analysis_value_m": int(st.session_state[_state_key("analysis", group.id)]),
         }
-    )
-
-    for _, row in exclusion_frame.iterrows():
-        active = [name for name, flag in row.items() if bool(flag)]
-        reasons.append("; ".join(active) if active else "Ingen hard exkludering")
-
-    hard_count = exclusion_frame.sum(axis=1).astype(int)
-    return hard_count, pd.Series(reasons, index=df.index)
+    return json.dumps(payload, sort_keys=True)
 
 
-def compute_compound_score(df: pd.DataFrame, weights: dict[str, float]) -> pd.Series:
-    normalized = normalize_weights(weights)
-    score = np.zeros(len(df), dtype=float)
-    for col, weight in normalized.items():
-        score += pd.to_numeric(df[col], errors="coerce").fillna(0).to_numpy() * weight
-    return pd.Series(score * 100, index=df.index)
+def _source_overlay_specs(selected_by_group: dict[str, list[str]], registry_meta: dict[str, object]) -> list[dict[str, object]]:
+    _, layers, _ = load_registry()
+    specs = []
+    for group in ordered_groups():
+        blend_value = int(st.session_state[_state_key("blend", group.id)])
+        opacity = _source_opacity(blend_value)
+        for layer_id in selected_by_group.get(group.id, []):
+            geojson = source_geojson_for_layer(registry_meta, layer_id)
+            if geojson is None:
+                continue
+            layer = layers[layer_id]
+            specs.append(
+                source_overlay(
+                    name=f"Source: {layer.label}",
+                    geojson=geojson,
+                    color_hex=_rgb_to_hex(layer.source_color),
+                    opacity=opacity,
+                    point_radius=layer.point_radius,
+                )
+            )
+    return specs
 
 
-def classify_score(score: pd.Series, allowed: pd.Series) -> pd.Series:
-    labels = pd.Series("Exkluderad", index=score.index)
-    labels.loc[allowed & (score < 30)] = "Lag"
-    labels.loc[allowed & (score >= 30) & (score < 50)] = "Medel"
-    labels.loc[allowed & (score >= 50) & (score < 70)] = "Hog"
-    labels.loc[allowed & (score >= 70)] = "Mycket hog"
-    return labels
+def _group_overlay_specs(runtime_result: dict[str, object]) -> list[dict[str, object]]:
+    groups, _, _ = load_registry()
+    specs = []
+    for group in ordered_groups():
+        runtime_group = runtime_result["groups"].get(group.id)
+        if runtime_group is None or runtime_group.get("geojson") is None:
+            continue
+        opacity = _group_opacity(int(st.session_state[_state_key("blend", group.id)]))
+        specs.append(
+            group_overlay(
+                name=f"Group: {groups[group.id].label}",
+                geojson=runtime_group["geojson"],
+                color_hex=_rgb_to_hex(groups[group.id].group_color),
+                opacity=opacity,
+            )
+        )
+    return specs
 
 
-def class_to_color(class_series: pd.Series) -> list[list[int]]:
-    return [
-        CLASS_COLORS.get(label, [180, 180, 180, 140])
-        for label in class_series.fillna("Exkluderad").astype(str)
-    ]
+def _combined_overlay_spec(runtime_result: dict[str, object]) -> dict[str, object] | None:
+    combined = runtime_result.get("combined")
+    if combined is None or combined.get("geojson") is None:
+        return None
+    return combined_overlay_spec("Combined: acceptance", combined["geojson"], combined.get("semantics"))
 
 
-def numeric_gradient(series: pd.Series) -> list[list[int]]:
-    x = pd.to_numeric(series, errors="coerce").fillna(0)
-    lo = float(x.min())
-    hi = float(x.max())
-    if hi <= lo:
-        hi = lo + 1
-    scaled = (x - lo) / (hi - lo)
-    colors = []
-    for value in scaled:
-        r = int(239 - 194 * value)
-        g = int(232 - 110 * value)
-        b = int(216 - 141 * value)
-        colors.append([r, g, b, 195])
-    return colors
+def _group_summary_frame(selected_by_group: dict[str, list[str]], runtime_result: dict[str, object]) -> pd.DataFrame:
+    _, layers, _ = load_registry()
+    rows = []
+    for group in ordered_groups():
+        selected_layer_ids = selected_by_group.get(group.id, [])
+        selected_labels = [layers[layer_id].label for layer_id in selected_layer_ids]
+        runtime_group = runtime_result["groups"].get(group.id)
+        land_share = None
+        if runtime_group and runtime_group.get("land_share_pct") is not None:
+            land_share = f"{float(runtime_group['land_share_pct']):.1f}%"
+        rows.append(
+            {
+                "Group": group.label,
+                "Type": group.analysis_kind,
+                "Active": bool(selected_layer_ids),
+                "Sources": ", ".join(selected_labels) if selected_labels else "None",
+                "Analysis (m)": int(st.session_state[_state_key("analysis", group.id)]),
+                "Blend": f"{int(st.session_state[_state_key('blend', group.id)])}%",
+                "Land share": land_share,
+                "Role": runtime_group.get("role") if runtime_group else None,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def _map_legend() -> None:
+    groups, _, _ = load_registry()
+    st.caption("Map reading guide")
+    st.caption("Source layers are real source geometries. Population points are shown as a dissolved 100 m display buffer.")
+    st.caption("Group layers are dissolved analysis buffers or feasibility polygons built from the selected source layers. Electrical shows the land area that stays within the chosen maximum connection distance.")
+    st.caption("The combined layer always shows accepted land that remains inside Bornholm after the active group rules are applied.")
+    st.caption("The combined acceptance layer is turned on by default. Source and group layers are still available in the map control, but start hidden.")
+    st.caption("Five optional V4 hex reference layers are also available in the map control: Hog, Mellan, Lag, Mellan score, and Landskapskluster. The map now includes a separate V4 opacity slider and legend.")
+    st.caption("The basemap toggle is inside the map control: OSM or Satellite.")
+    for group in ordered_groups():
+        color = groups[group.id].group_color
+        swatch = f"<span style='display:inline-block;width:12px;height:12px;border-radius:2px;background:rgb({color[0]},{color[1]},{color[2]});margin-right:6px;'></span>{group.label}"
+        st.markdown(swatch, unsafe_allow_html=True)
 
 
 st.set_page_config(page_title=APP_TITLE, layout="wide")
 st.title(APP_TITLE)
-st.caption(
-    "Interaktiv acceptansapp ovanpa landskapsanalysen. Valj vilka lager som ar hard stop, "
-    "vilka som bara ska paverka score, och bygg en egen sammansatt acceptansyta."
-)
+st.caption("Geometry-first prototype. The live map now uses real buffered and dissolved source geometries instead of hexagons.")
 
-repo_root = Path(__file__).resolve().parent.parent
-data_path = repo_root / DATA_RELATIVE_PATH
+groups, layers, registry_meta = load_registry()
+_init_state()
 
-if h3 is None:
-    st.error("Python-paketet `h3` saknas. Installera dependencies och starta om appen.")
-    st.stop()
-
-ensure_state()
+status_df = layer_status_table(registry_meta)
+selected_by_group, controls_applied = _build_group_controls(registry_meta)
+runtime_config_json = _runtime_payload(selected_by_group)
 
 try:
-    base_df = load_acceptance_table(str(data_path), DATA_LAYER)
+    with st.spinner("Updating geometry..."):
+        runtime_result = run_geometry_runtime(runtime_config_json)
 except Exception as exc:
-    st.error(f"Kunde inte lasa acceptance-data: {exc}")
+    st.error(f"Geometry runtime failed: {exc}")
     st.stop()
 
-map_df = build_map_frame(base_df)
-if map_df.empty:
-    st.error("Acceptance-data laddades men inga kartbara hexagoner hittades.")
-    st.stop()
+source_specs = _source_overlay_specs(selected_by_group, registry_meta)
+group_specs = _group_overlay_specs(runtime_result)
+combined_spec = _combined_overlay_spec(runtime_result)
+reference_payload = acceptance_reference_payload(registry_meta)
+map_html = build_leaflet_html(source_specs, group_specs, combined_spec, reference_payload)
 
-st.sidebar.header("Scenario")
-preset_choice = st.sidebar.selectbox(
-    "Startlogik",
-    options=list(PRESETS.keys()),
-    format_func=lambda x: PRESETS[x]["label"],
-    index=list(PRESETS.keys()).index(st.session_state["preset_key"]),
-)
-if preset_choice != st.session_state["preset_key"]:
-    apply_preset(preset_choice)
-
-uploaded_config = st.sidebar.file_uploader("Ladda scenario JSON", type=["json"])
-if uploaded_config is not None:
-    load_config_from_upload(uploaded_config)
-
-st.sidebar.download_button(
-    "Spara current scenario som JSON",
-    data=export_current_config(st.session_state.get("active_layers", list(LAYER_META.keys()))),
-    file_name="bornholm_acceptance_scenario.json",
-    mime="application/json",
+active_source_count = sum(len(v) for v in selected_by_group.values())
+active_group_count = len(runtime_result["groups"])
+combined_share = None
+if runtime_result.get("combined") and runtime_result["combined"].get("land_share_pct") is not None:
+    combined_share = f"{float(runtime_result['combined']['land_share_pct']):.1f}%"
+source_ready_count = int(
+    (
+        status_df["geojson_ready"].astype(bool)
+        & status_df["source_exists"].astype(bool)
+        & status_df["status"].astype(str).eq("ok")
+        & (status_df["feature_count"].fillna(0) > 0)
+    ).sum()
 )
 
-st.sidebar.header("Hard stop")
-st.sidebar.select_slider("Bosattning", options=["Ignore", "Soft", "Hard stop"], key="settlement_mode")
-st.sidebar.slider("Bosattningsgrans (m)", 0, 2000, step=50, key="settlement_threshold_m")
-st.sidebar.select_slider("Kulturmiljo", options=["Ignore", "Soft", "Hard stop"], key="culture_mode")
-st.sidebar.select_slider("Skyddad natur", options=["Ignore", "Hard stop"], key="protected_mode")
-st.sidebar.select_slider("Militar", options=["Ignore", "Hard stop"], key="military_mode")
-st.sidebar.select_slider("Inflygningszon", options=["Ignore", "Hard stop"], key="aviation_approach_mode")
-st.sidebar.select_slider("Fagelkollisionszon", options=["Ignore", "Soft", "Hard stop"], key="aviation_bird_mode")
-st.sidebar.slider("Fagelkollisionsgrans (m, 0 = overlap)", 0, 4000, step=100, key="aviation_bird_threshold_m")
-st.sidebar.select_slider("Strandskydd", options=["Ignore", "Hard stop"], key="strand_mode")
+tab_map, tab_review, tab_data = st.tabs(["Prototype", "Model review", "Data status"])
 
-st.sidebar.header("Compound layer")
-active_layers = st.sidebar.multiselect(
-    "Aktiva lager i score",
-    options=list(LAYER_META.keys()),
-    default=st.session_state.get("active_layers", list(LAYER_META.keys())),
-    format_func=lambda x: f"{LAYER_META[x]['group']} | {LAYER_META[x]['label']}",
-    key="active_layers",
-)
+with tab_map:
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Selectable source layers", f"{source_ready_count}")
+    m2.metric("Active source layers", f"{active_source_count}")
+    m3.metric("Active groups", f"{active_group_count}")
+    m4.metric("Combined acceptance", combined_share or "Off")
 
-weights: dict[str, float] = {}
-for group_name in LAYER_GROUPS:
-    group_layers = [key for key, meta in LAYER_META.items() if meta["group"] == group_name and key in active_layers]
-    if not group_layers:
-        continue
-    with st.sidebar.expander(group_name, expanded=(group_name == "El och teknik")):
-        for layer_key in group_layers:
-            weights[layer_key] = float(
-                st.slider(
-                    f"{LAYER_META[layer_key]['label']} vikt",
-                    min_value=0,
-                    max_value=100,
-                    step=1,
-                    key=layer_key,
-                )
-            )
+    if controls_applied:
+        st.caption("Updated with the latest selected layers and slider values.")
 
-if not active_layers:
-    st.warning("Valj minst ett lager i compound score.")
-    st.stop()
+    left, right = st.columns([2.3, 1.0], gap="large")
+    with left:
+        components.html(map_html, height=760)
+        st.caption("Group polygons are real dissolved buffers or feasibility areas derived from the selected source layers. The combined layer always shows accepted land that remains available after the active rules are applied, and it is the only overlay shown by default.")
+    with right:
+        st.subheader("Group summary")
+        st.dataframe(_group_summary_frame(selected_by_group, runtime_result), use_container_width=True, hide_index=True, height=360)
+        _map_legend()
+        st.caption(f"Runtime cache key: {runtime_result['cache_key']}")
 
-work = map_df.copy()
-hard_count, hard_reason = compute_hard_exclusions(work)
-allowed = hard_count == 0
-compound_score = compute_compound_score(work, weights)
-acceptance_class = classify_score(compound_score, allowed)
+with tab_review:
+    st.subheader("Critical review")
+    for item in CRITICAL_REVIEW:
+        st.write(f"- {item}")
 
-work["user_hard_exclusion_count"] = hard_count
-work["user_exclusion_reason"] = hard_reason
-work["user_allowed"] = allowed
-work["user_acceptance_score"] = compound_score.round(1)
-work["user_acceptance_class"] = acceptance_class
+    st.subheader("Hexagon note")
+    for item in HEXAGON_NOTE:
+        st.write(f"- {item}")
 
-map_mode = st.sidebar.radio(
-    "Kartlager",
-    options=["User class", "User score", "Balanced baseline", "Strict baseline", "Tech baseline"],
-    index=0,
-)
-show_only_allowed = st.sidebar.checkbox("Visa bara tillatna hex", value=False)
-
-if map_mode == "User class":
-    work["fill_color"] = class_to_color(work["user_acceptance_class"])
-elif map_mode == "User score":
-    work["fill_color"] = numeric_gradient(work["user_acceptance_score"])
-elif map_mode == "Balanced baseline":
-    work["fill_color"] = class_to_color(work[BASELINE_CLASS_COLS["balanced"]])
-elif map_mode == "Strict baseline":
-    work["fill_color"] = class_to_color(work[BASELINE_CLASS_COLS["strict"]])
-else:
-    work["fill_color"] = class_to_color(work[BASELINE_CLASS_COLS["tech_prioritized"]])
-
-if show_only_allowed:
-    display_df = work[work["user_allowed"]].copy()
-else:
-    display_df = work.copy()
-
-if display_df.empty:
-    st.warning("Inga hexagoner aterstar med nuvarande urval.")
-    st.stop()
-
-normalized_weights = normalize_weights(weights)
-weights_table = pd.DataFrame(
-    {
-        "Grupp": [LAYER_META[k]["group"] for k in normalized_weights.keys()],
-        "Lager": [LAYER_META[k]["label"] for k in normalized_weights.keys()],
-        "Relativ vikt": [round(v * 100, 1) for v in normalized_weights.values()],
-    }
-).sort_values(["Grupp", "Relativ vikt"], ascending=[True, False])
-
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("Hex totalt", f"{len(work)}")
-c2.metric("Tillatna hex", f"{int(work['user_allowed'].sum())}")
-c3.metric("Tillaten andel", f"{(100 * float(work['user_allowed'].mean())):.1f}%")
-c4.metric(
-    "Median score",
-    f"{float(work.loc[work['user_allowed'], 'user_acceptance_score'].median()):.1f}"
-    if work["user_allowed"].any()
-    else "n/a",
-)
-
-left, right = st.columns([1.15, 2.15], gap="large")
-
-with left:
-    st.subheader("Scenario mot baseline")
-    baseline_compare = pd.DataFrame(
-        {
-            "Scenario": ["Strikt", "Balanserad", "Teknikprioriterad", "User"],
-            "Allowed hex": [
-                int(pd.to_numeric(work["allowed_for_wind_strict"], errors="coerce").fillna(0).astype(bool).sum()),
-                int(pd.to_numeric(work["allowed_for_wind_balanced"], errors="coerce").fillna(0).astype(bool).sum()),
-                int(pd.to_numeric(work["allowed_for_wind_tech_prioritized"], errors="coerce").fillna(0).astype(bool).sum()),
-                int(work["user_allowed"].sum()),
-            ],
-            "Median score": [
-                round(float(pd.to_numeric(work["acceptance_score_strict"], errors="coerce")[work["allowed_for_wind_strict"]].median()), 1),
-                round(float(pd.to_numeric(work["acceptance_score_balanced"], errors="coerce")[work["allowed_for_wind_balanced"]].median()), 1),
-                round(float(pd.to_numeric(work["acceptance_score_tech_prioritized"], errors="coerce")[work["allowed_for_wind_tech_prioritized"]].median()), 1),
-                round(float(work.loc[work["user_allowed"], "user_acceptance_score"].median()), 1) if work["user_allowed"].any() else np.nan,
-            ],
-        }
-    )
-    st.dataframe(baseline_compare, use_container_width=True, hide_index=True)
-
-    st.subheader("Aktiva vikter")
-    st.dataframe(weights_table, use_container_width=True, hide_index=True, height=280)
-
-    st.subheader("Hard stop profil")
-    hard_profile = pd.DataFrame(
-        {
-            "Kriterium": [
-                "Bosattning",
-                "Kulturmiljo",
-                "Skyddad natur",
-                "Militar",
-                "Inflygningszon",
-                "Fagelkollisionszon",
-                "Strandskydd",
-            ],
-            "Val": [
-                st.session_state["settlement_mode"],
-                st.session_state["culture_mode"],
-                st.session_state["protected_mode"],
-                st.session_state["military_mode"],
-                st.session_state["aviation_approach_mode"],
-                st.session_state["aviation_bird_mode"],
-                st.session_state["strand_mode"],
-            ],
-        }
-    )
-    st.dataframe(hard_profile, use_container_width=True, hide_index=True)
-
-    st.subheader("Topprankade tillatna hex")
-    top_table = (
-        work[work["user_allowed"]]
-        .sort_values("user_acceptance_score", ascending=False)
-        .loc[
-            :,
-            [
-                "hex_id",
-                "class_km",
-                "user_acceptance_score",
-                "score_grid_proximity",
-                "score_clearance",
-                "score_landscape",
-                "user_exclusion_reason",
-            ],
-        ]
-        .head(150)
-        .rename(
-            columns={
-                "class_km": "Kluster",
-                "user_acceptance_score": "Score",
-                "score_grid_proximity": "Grid",
-                "score_clearance": "Clearance",
-                "score_landscape": "Landskap",
-                "user_exclusion_reason": "Hard stop",
-            }
-        )
-    )
-    st.dataframe(top_table.round(3), use_container_width=True, height=350)
-
-with right:
-    st.subheader("Karta")
-    st.caption(f"Aktiv visning: {map_mode}")
-    tooltip = {
-        "html": (
-            "<b>hex_id:</b> {hex_id}<br/>"
-            "<b>Kluster:</b> {class_km}<br/>"
-            "<b>User class:</b> {user_acceptance_class}<br/>"
-            "<b>User score:</b> {user_acceptance_score}<br/>"
-            "<b>Hard stop:</b> {user_exclusion_reason}<br/>"
-            "<b>Balanced:</b> {acceptance_score_balanced}<br/>"
-            "<b>Strict:</b> {acceptance_score_strict}<br/>"
-            "<b>Tech:</b> {acceptance_score_tech_prioritized}"
-        ),
-        "style": {"backgroundColor": "white", "color": "black"},
-    }
-    layer = pdk.Layer(
-        "PolygonLayer",
-        data=display_df,
-        get_polygon="polygon",
-        get_fill_color="fill_color",
-        get_line_color=[80, 80, 80, 90],
-        line_width_min_pixels=0.5,
-        stroked=True,
-        filled=True,
-        pickable=True,
-        auto_highlight=True,
-    )
-    center_lat = float(display_df["lat"].median())
-    center_lon = float(display_df["lon"].median())
-    deck = pdk.Deck(
-        layers=[layer],
-        initial_view_state=pdk.ViewState(latitude=center_lat, longitude=center_lon, zoom=9, pitch=0),
-        tooltip=tooltip,
-        map_style="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
-    )
-    st.pydeck_chart(deck, use_container_width=True)
-
-st.subheader("Download")
-download_cols = [
-    "hex_id",
-    "class_km",
-    "user_allowed",
-    "user_acceptance_score",
-    "user_acceptance_class",
-    "user_exclusion_reason",
-    "score_grid_proximity",
-    "score_clearance",
-    "score_landscape",
-] + active_layers
-download_df = work[download_cols].sort_values("user_acceptance_score", ascending=False)
-st.download_button(
-    "Ladda ner current user scenario som CSV",
-    data=download_df.to_csv(index=False).encode("utf-8"),
-    file_name="bornholm_acceptance_user_scenario.csv",
-    mime="text/csv",
-)
+with tab_data:
+    st.subheader("Layer asset status")
+    st.dataframe(status_df, use_container_width=True, hide_index=True, height=420)
+    st.caption("Static source GeoJSON and readiness are exported by `script/acceptance/export_wind_acceptance_prototype_assets.R`. Dynamic group polygons are rendered by `script/acceptance/render_wind_acceptance_geometry_runtime.R`.")
+    if not status_df.empty and (status_df["status"] != "ok").any():
+        st.warning("Some source assets are not ready. Disabled checkboxes in the sidebar come from this table.")
+    else:
+        st.success("All source assets required by the current prototype are available.")

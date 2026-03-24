@@ -1,0 +1,431 @@
+---
+title: "Bornholm Vindacceptans Stage 1 v4: Hog, Mellan Och Lag Acceptans"
+lang: sv
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: true
+    code-summary: "Visa kod"
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+> Denna rapport beskriver acceptanslager v4 for vindkraftsinfrastruktur pa Bornholm. Det ar inte ett juridiskt beslutsunderlag utan en transparent arbetsmodell som jamfor tre tydliga etableringsscenarier: `Hog acceptans`, `Mellan acceptans` och `Lag acceptans`. V4 skiljer tydligare mellan hard exclusions, avstandsbaserade konflikter och elteknisk feasibility.
+
+```{r}
+#| label: setup
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(htmltools)
+  library(htmlwidgets)
+  library(knitr)
+  library(leaflet)
+  library(scales)
+  library(sf)
+  library(tidyr)
+})
+
+repo_root <- "C:/gislab/landskapsanalys"
+analysis_id <- "bornholm_vindacceptans_stage1_v4_res9"
+data_dir <- file.path(repo_root, "docs/geocontext/acceptance_framework/data", analysis_id)
+report_dir <- file.path(repo_root, "docs/geocontext/acceptance_framework")
+map_dir <- file.path(report_dir, "maps")
+dir.create(map_dir, recursive = TRUE, showWarnings = FALSE)
+
+hex_path <- file.path(data_dir, paste0(analysis_id, "_hex.gpkg"))
+summary_path <- file.path(data_dir, paste0(analysis_id, "_summary.csv"))
+criteria_path <- file.path(data_dir, paste0(analysis_id, "_criteria.csv"))
+metadata_path <- file.path(data_dir, paste0(analysis_id, "_metadata.csv"))
+
+map_href <- paste0("maps/", analysis_id, "_map.html")
+map_path <- file.path(map_dir, paste0(analysis_id, "_map.html"))
+
+hex <- st_read(hex_path, layer = analysis_id, quiet = TRUE)
+hex_wgs84 <- st_transform(hex, 4326)
+summary_df <- read.csv(summary_path, stringsAsFactors = FALSE)
+criteria_df <- read.csv(criteria_path, stringsAsFactors = FALSE)
+metadata_df <- read.csv(metadata_path, stringsAsFactors = FALSE)
+
+scenario_levels <- c("high_acceptance", "medium_acceptance", "low_acceptance")
+scenario_labels <- c(
+  "high_acceptance" = "Hog acceptans",
+  "medium_acceptance" = "Mellan acceptans",
+  "low_acceptance" = "Lag acceptans"
+)
+
+summary_value <- function(scenario_id, metric) {
+  summary_df$value[
+    summary_df$scenario_id == scenario_id &
+      summary_df$metric == metric
+  ][1]
+}
+
+scenario_overview <- tibble(
+  scenario_id = scenario_levels,
+  scenario = unname(scenario_labels[scenario_levels]),
+  tillatna_hex = as.integer(vapply(scenario_levels, summary_value, metric = "n_allowed", FUN.VALUE = character(1))),
+  tillaten_andel = as.numeric(vapply(scenario_levels, summary_value, metric = "allowed_share", FUN.VALUE = character(1))),
+  mean_score_allowed = as.numeric(vapply(scenario_levels, summary_value, metric = "mean_acceptance_score_allowed", FUN.VALUE = character(1))),
+  median_score_allowed = as.numeric(vapply(scenario_levels, summary_value, metric = "median_acceptance_score_allowed", FUN.VALUE = character(1))),
+  high_or_very_high_count = as.integer(vapply(scenario_levels, summary_value, metric = "high_or_very_high_count", FUN.VALUE = character(1)))
+)
+
+medium_row <- scenario_overview |>
+  filter(scenario_id == "medium_acceptance") |>
+  slice(1)
+
+n_hex <- as.integer(summary_value("medium_acceptance", "n_hex"))
+n_allowed_medium <- medium_row$tillatna_hex
+allowed_share_medium <- medium_row$tillaten_andel
+mean_score_medium <- medium_row$mean_score_allowed
+median_score_medium <- medium_row$median_score_allowed
+high_or_very_high_medium <- medium_row$high_or_very_high_count
+
+class_palette <- c(
+  "Exkluderad" = "#8c8c8c",
+  "Lag" = "#f1e8a6",
+  "Medel" = "#f0b35b",
+  "Hog" = "#7dbb7d",
+  "Mycket hog" = "#2c7a4b"
+)
+
+group_medium <- "<span style='display:inline-block;width:10px;height:10px;background:#2c7a4b;border:1px solid #666;margin-right:6px;'></span>Mellan acceptansscenario"
+group_low <- "<span style='display:inline-block;width:10px;height:10px;background:#b23a48;border:1px solid #666;margin-right:6px;'></span>Lag acceptansscenario"
+group_high <- "<span style='display:inline-block;width:10px;height:10px;background:#355c7d;border:1px solid #666;margin-right:6px;'></span>Hog acceptansscenario"
+group_score <- "<span style='display:inline-block;width:10px;height:10px;background:#d99048;border:1px solid #666;margin-right:6px;'></span>Mellan scenarioscore"
+group_cluster <- "<span style='display:inline-block;width:10px;height:10px;background:#777;border:1px solid #666;margin-right:6px;'></span>Landskapskluster"
+
+cluster_labels <- c(
+  "1" = "Tatorts- och verksamhetskarnor",
+  "2" = "Vardagslandskap med blandad bakgrundskaraktar",
+  "3" = "Flygsands- och laglanta kuststrak",
+  "4" = "Brant relief och dalpraglat inland",
+  "5" = "Skogligt skyddsinland och habitatkarnor"
+)
+
+score_pal <- colorNumeric(
+  palette = c("#efe8d8", "#e0c782", "#d99048", "#9bb86c", "#2c7a4b"),
+  domain = hex_wgs84$acceptance_score_medium_acceptance,
+  na.color = "#8c8c8c"
+)
+
+cluster_pal <- colorFactor(
+  palette = c("#355C7D", "#C06C84", "#F67280", "#99B898", "#E5D97B"),
+  domain = sort(unique(as.character(hex_wgs84$class_km)))
+)
+
+hex_wgs84 <- hex_wgs84 |>
+  mutate(
+    fill_high = unname(class_palette[acceptance_class_high_acceptance]),
+    fill_medium = unname(class_palette[acceptance_class_medium_acceptance]),
+    fill_low = unname(class_palette[acceptance_class_low_acceptance]),
+    cluster_label = recode(as.character(class_km), !!!cluster_labels, .default = "Okant"),
+    popup_html = paste0(
+      "<strong>Acceptansscenarier</strong><br>",
+      "Hog acceptans: ", acceptance_class_high_acceptance, " (", number(acceptance_score_high_acceptance, accuracy = 0.1), ")<br>",
+      "Mellan acceptans: ", acceptance_class_medium_acceptance, " (", number(acceptance_score_medium_acceptance, accuracy = 0.1), ")<br>",
+      "Lag acceptans: ", acceptance_class_low_acceptance, " (", number(acceptance_score_low_acceptance, accuracy = 0.1), ")<br><br>",
+      "<strong>Mellan acceptans: blockerande regler</strong><br>",
+      exclusion_reason_medium_acceptance, "<br><br>",
+      "<strong>Avstand</strong><br>",
+      "Bosattning/fastboende: ", comma(dist_to_settlement_m), " m<br>",
+      "Stor vag: ", comma(dist_to_road_large_m), " m<br>",
+      "Mellan vag: ", comma(dist_to_road_medium_m), " m<br>",
+      "Naraste transportkorridor: ", comma(dist_to_transport_m), " m<br>",
+      "Kulturmiljo: ", comma(dist_to_culture_m), " m<br>",
+      "Skyddad natur: ", comma(dist_to_protected_m), " m<br>",
+      "Fagelkollisionszon: ", comma(dist_to_aviation_bird_m), " m<br>",
+      "Naraste elinfrastruktur: ", comma(dist_to_electrical_m), " m<br>",
+      "Hogspanningsledning: ", comma(dist_to_hv_line_m), " m<br>",
+      "Elstation: ", comma(dist_to_substation_m), " m<br>",
+      "Kabel: ", comma(dist_to_cable_m), " m<br>",
+      "Befintligt vindkraftverk: ", comma(dist_to_existing_wind_m), " m<br><br>",
+      "<strong>Delpoang</strong><br>",
+      "Grid: ", number(score_grid_proximity, accuracy = 0.01), "<br>",
+      "Clearance: ", number(score_clearance, accuracy = 0.01), "<br>",
+      "Landskap: ", number(score_landscape, accuracy = 0.01), "<br><br>",
+      "<strong>Landskapskontext</strong><br>",
+      "Kluster ", class_km, ": ", cluster_label
+    )
+  )
+
+default_fill_opacity <- 0.72
+
+map_widget <- leaflet(options = leafletOptions(zoomSnap = 0.25)) |>
+  addProviderTiles(providers$CartoDB.Positron, group = "Ljus baskarta") |>
+  addProviderTiles(providers$Esri.WorldImagery, group = "Satellitbild") |>
+  addPolygons(
+    data = hex_wgs84,
+    group = group_medium,
+    stroke = FALSE,
+    smoothFactor = 0,
+    fillOpacity = default_fill_opacity,
+    fillColor = ~fill_medium,
+    popup = ~lapply(popup_html, HTML)
+  ) |>
+  addPolygons(
+    data = hex_wgs84,
+    group = group_low,
+    stroke = FALSE,
+    smoothFactor = 0,
+    fillOpacity = default_fill_opacity,
+    fillColor = ~fill_low,
+    popup = ~lapply(popup_html, HTML)
+  ) |>
+  addPolygons(
+    data = hex_wgs84,
+    group = group_high,
+    stroke = FALSE,
+    smoothFactor = 0,
+    fillOpacity = default_fill_opacity,
+    fillColor = ~fill_high,
+    popup = ~lapply(popup_html, HTML)
+  ) |>
+  addPolygons(
+    data = hex_wgs84,
+    group = group_score,
+    stroke = FALSE,
+    smoothFactor = 0,
+    fillOpacity = default_fill_opacity,
+    fillColor = ~score_pal(acceptance_score_medium_acceptance),
+    popup = ~lapply(popup_html, HTML)
+  ) |>
+  addPolygons(
+    data = hex_wgs84,
+    group = group_cluster,
+    stroke = FALSE,
+    smoothFactor = 0,
+    fillOpacity = default_fill_opacity,
+    fillColor = ~cluster_pal(as.character(class_km)),
+    popup = ~lapply(popup_html, HTML)
+  ) |>
+  addLegend(
+    "bottomright",
+    colors = unname(class_palette),
+    labels = names(class_palette),
+    title = "Klass inom scenario",
+    group = "Mellan acceptansscenario"
+  ) |>
+  addLegend(
+    "bottomleft",
+    pal = score_pal,
+    values = hex_wgs84$acceptance_score_medium_acceptance,
+    title = "Mellan scenarioscore",
+    group = "Mellan scenarioscore"
+  ) |>
+  addLayersControl(
+    baseGroups = c("Ljus baskarta", "Satellitbild"),
+    overlayGroups = c(
+      group_medium,
+      group_low,
+      group_high,
+      group_score,
+      group_cluster
+    ),
+    options = layersControlOptions(collapsed = FALSE)
+  ) |>
+  hideGroup(c(group_low, group_high, group_score, group_cluster)) |>
+  htmlwidgets::onRender(
+    sprintf(
+      "function(el, x) {
+        var map = this;
+        var currentOpacity = %s;
+        function applyOpacity(value) {
+          currentOpacity = value;
+          map.eachLayer(function(layer) {
+            if (layer && layer.setStyle && layer.feature) {
+              layer.setStyle({fillOpacity: currentOpacity});
+            }
+          });
+        }
+        var OpacityControl = L.Control.extend({
+          options: {position: 'topleft'},
+          onAdd: function(map) {
+            var container = L.DomUtil.create('div', 'leaflet-bar');
+            container.style.background = 'rgba(255,255,255,0.95)';
+            container.style.padding = '8px 10px';
+            container.style.width = '180px';
+            container.style.boxShadow = '0 1px 4px rgba(0,0,0,0.2)';
+            var title = L.DomUtil.create('div', '', container);
+            title.style.fontWeight = '600';
+            title.style.marginBottom = '4px';
+            title.innerHTML = 'Opacitet';
+            var slider = L.DomUtil.create('input', '', container);
+            slider.type = 'range';
+            slider.min = '5';
+            slider.max = '100';
+            slider.step = '5';
+            slider.value = String(Math.round(currentOpacity * 100));
+            slider.style.width = '100%%';
+            var valueLabel = L.DomUtil.create('div', '', container);
+            valueLabel.style.fontSize = '12px';
+            valueLabel.style.marginTop = '4px';
+            valueLabel.innerHTML = slider.value + '%%';
+            L.DomEvent.disableClickPropagation(container);
+            L.DomEvent.disableScrollPropagation(container);
+            slider.addEventListener('input', function(e) {
+              valueLabel.innerHTML = e.target.value + '%%';
+              applyOpacity(parseFloat(e.target.value) / 100.0);
+            });
+            return container;
+          }
+        });
+        map.addControl(new OpacityControl());
+        applyOpacity(currentOpacity);
+      }",
+      default_fill_opacity
+    )
+  )
+
+htmlwidgets::saveWidget(map_widget, map_path, selfcontained = FALSE)
+
+scenario_table <- scenario_overview |>
+  mutate(
+    `Tillatna hex` = comma(tillatna_hex),
+    `Tillaten andel` = percent(tillaten_andel, accuracy = 0.1),
+    `Medelscore` = number(mean_score_allowed, accuracy = 0.1),
+    `Medianscore` = number(median_score_allowed, accuracy = 0.1),
+    `Hog eller mycket hog` = comma(high_or_very_high_count)
+  ) |>
+  select(
+    Scenario = scenario,
+    `Tillatna hex`,
+    `Tillaten andel`,
+    `Medelscore`,
+    `Medianscore`,
+    `Hog eller mycket hog`
+  )
+
+criteria_table <- criteria_df |>
+  mutate(scenario_label = factor(scenario_label, levels = scenario_labels[scenario_levels])) |>
+  arrange(scenario_label, criterion_type, criterion_name) |>
+  select(
+    Scenario = scenario_label,
+    Typ = criterion_type,
+    Kriterium = criterion_name,
+    Regel = threshold_or_rule,
+    Roll = role_in_model
+  )
+
+exclusion_metrics <- c(
+  "excluded_settlement",
+  "excluded_transport",
+  "excluded_culture",
+  "excluded_protected",
+  "excluded_military",
+  "excluded_aviation_approach",
+  "excluded_aviation_bird",
+  "excluded_strand",
+  "excluded_coastal_zone",
+  "excluded_electrical"
+)
+
+exclusion_labels <- c(
+  "excluded_settlement" = "Bosattningsbuffert",
+  "excluded_transport" = "Transportbuffer",
+  "excluded_culture" = "Kulturmiljo",
+  "excluded_protected" = "Skyddad natur",
+  "excluded_military" = "Militar",
+  "excluded_aviation_approach" = "Inflygning",
+  "excluded_aviation_bird" = "Fagelkollisionszon",
+  "excluded_strand" = "Strandskydd",
+  "excluded_coastal_zone" = "3 km kustzon",
+  "excluded_electrical" = "Elfeasibility"
+)
+
+exclusion_table <- expand.grid(
+  scenario_id = scenario_levels,
+  metric = exclusion_metrics,
+  stringsAsFactors = FALSE
+) |>
+  as_tibble() |>
+  mutate(
+    Scenario = scenario_labels[scenario_id],
+    Kriterium = exclusion_labels[metric],
+    Antal = as.integer(mapply(summary_value, scenario_id, metric))
+  ) |>
+  select(Scenario, Kriterium, Antal) |>
+  pivot_wider(names_from = Scenario, values_from = Antal)
+```
+
+```{r}
+#| results: asis
+cat(
+  paste0(
+    '<p><a class="btn btn-primary btn-sm" href="', map_href,
+    '" target="_blank" rel="noopener">Oppna kartan i egen flik / helskarm</a></p>'
+  )
+)
+```
+
+```{r}
+#| fig-height: 8.2
+map_widget
+```
+
+## Sammanfattning
+
+Mellanscenariot i v4 lamnar `r comma(n_allowed_medium)` av `r comma(n_hex)` aktiva landhexagoner oppna efter blockerande regler, alltsa `r percent(allowed_share_medium, accuracy = 0.1)`. Av dessa hamnar `r comma(high_or_very_high_medium)` i klasserna `Hog` eller `Mycket hog`, med medelscore `r number(mean_score_medium, accuracy = 0.1)`.
+
+Den viktiga fortsatta skillnaden mot landskapsmodellen ar att acceptanslagret nu fungerar som en separat scenarioyta ovanpa landskapsanalysen, inte som en dold viktning inne i faktor- och klustermodellen.
+
+## Scenariejamforelse
+
+```{r}
+kable(scenario_table)
+```
+
+Scenarioerna ar avsiktligt olika men foljer nu samma logik:
+
+- `Hog acceptans` ger storst etableringsyta genom 250 m till bosattning/fastboende, 75 m till stora vagar, 25 m till mellanvagar och bredast elanslutningsavstand.
+- `Mellan acceptans` ar rapportens nya standardscenario och blir v4:s `stage1`-alias. I denna variant anvands inte fagelkollisionsregeln, men 3 km-kustzonen ar hard stop samt 300 m till bosattning/fastboende, 100 m till stora vagar och 50 m till mellanvagar.
+- `Lag acceptans` ger minst etableringsyta genom 600 m till bosattning/fastboende, 175 m till stora vagar, 100 m till mellanvagar, fagelkollisionszoner, en tightare elfeasibility-regel och samma 3 km-kustzon som hard stop.
+
+## Regler Och Kriterier
+
+```{r}
+kable(criteria_table)
+```
+
+## Exkluderingsprofil
+
+```{r}
+kable(exclusion_table)
+```
+
+Tabellen ovan visar hur scenarioformen flyttar utslaget i v4. De tydligaste skiljelinjerna mellan scenarierna ar nu bosattningsbuffert, transportbuffer, 3 km-kustzon och elanslutningsavstand, medan fagelkollisionsbuffer bara aktiveras i `Lag acceptans`.
+
+## Koppling Till Landskapsanalysen
+
+Landskapsdelen ateranvander inte ra restriktionslager. I stallet hamtas en separat kontext från den senaste landskapsanalysen genom:
+
+- klustertillhorighet
+- plateau-/oppenhetslogik fran `gc_high_agri_plateau_proxy`
+- lagre lutning fran den konturharledda terrangytan
+
+Det gor att modellen kan skilja pa tre saker samtidigt: var vindkraft inte bor ligga, var tekniken har battre forutsattningar och vilka bakgrundslandskap som ser mer kompatibla ut.
+
+## Tolkning Och Nasta Steg
+
+Den stora metodvinsten med v4 ar att scenarierna nu ar en ren gradient i etableringsyta. Vi kan jamfora hur mycket yta som oppnas eller stangs genom samma regeltyper med olika trasklar, utan att byta semantik mellan scenarierna.
+
+Nasta rimliga steg ar:
+
+1. koppla v4 vidare till gc4 + energy-prototypen
+2. avgora om kulturmiljo i nasta steg ska vara fortsatt hard exclusion eller overga till buffertlogik
+3. uppdatera aggregation, faktorisering och klustring till en konsekvent gc4/v4-kedja
+4. eventuellt bygga en stage 2 med synlighet och kumulativa landskapseffekter
+
+## Utdata
+
+Huvudfilerna fran denna korning ar:
+
+- `r hex_path`
+- `r summary_path`
+- `r criteria_path`
+- `r metadata_path`
+
+QGIS-klara data ligger i GeoPackage-filen ovan.
