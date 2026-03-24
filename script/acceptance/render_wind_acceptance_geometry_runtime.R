@@ -22,7 +22,10 @@ config <- jsonlite::fromJSON(config_path, simplifyVector = TRUE)
 layer_config <- read.csv(file.path(repo_root, registry$source_config_csv), stringsAsFactors = FALSE)
 asset_manifest_path <- file.path(repo_root, registry$asset_dir, "asset_manifest.csv")
 asset_manifest <- if (file.exists(asset_manifest_path)) read.csv(asset_manifest_path, stringsAsFactors = FALSE) else data.frame()
-landmask_asset_path <- file.path(repo_root, registry$asset_dir, "landmask", "bornholm_landmask.rds")
+landmask_asset_candidates <- c(
+  file.path(repo_root, registry$asset_dir, "landmask", "bornholm_landmass.rds"),
+  file.path(repo_root, registry$asset_dir, "landmask", "bornholm_landmask.rds")
+)
 
 layer_path <- function(layer_key) {
   path <- layer_config$source_path[layer_config$layer_key == layer_key][1]
@@ -110,7 +113,8 @@ single_feature_polygonal <- function(geom) {
 }
 
 load_landmask <- function() {
-  if (file.exists(landmask_asset_path)) {
+  landmask_asset_path <- landmask_asset_candidates[file.exists(landmask_asset_candidates)][1]
+  if (!is.na(landmask_asset_path) && nzchar(landmask_asset_path) && file.exists(landmask_asset_path)) {
     landmask_sf <- readRDS(landmask_asset_path)
     landmask_sf <- st_transform(landmask_sf, 32633)
     landmask_sf <- repair_sf(landmask_sf)
