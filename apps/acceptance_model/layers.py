@@ -10,6 +10,8 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
+from .i18n import acceptance_class_label, cluster_label, reference_layer_name, ui_text
+
 try:
     import h3
 except Exception:  # pragma: no cover
@@ -284,19 +286,11 @@ _CLASS_PALETTE = {
 }
 
 _CLUSTER_PALETTE = {
-    "1": "#355C7D",
-    "2": "#C06C84",
-    "3": "#F67280",
-    "4": "#99B898",
-    "5": "#E5D97B",
-}
-
-_CLUSTER_LABELS = {
-    "1": "Tatorts- och verksamhetskarnor",
-    "2": "Vardagslandskap med blandad bakgrundskaraktar",
-    "3": "Flygsands- och laglanta kuststrak",
-    "4": "Brant relief och dalpraglat inland",
-    "5": "Skogligt skyddsinland och habitatkarnor",
+    "1": "#d8893a",
+    "2": "#d8c35a",
+    "3": "#bcc6b7",
+    "4": "#72889a",
+    "5": "#355843",
 }
 
 _SCORE_STOPS = [
@@ -355,7 +349,7 @@ def _format_distance(value: Any) -> str:
 
 
 @st.cache_data(show_spinner=False)
-def build_acceptance_reference_payload(gpkg_path: str, layer_name: str) -> dict[str, Any] | None:
+def build_acceptance_reference_payload(gpkg_path: str, layer_name: str, language: str = "sv") -> dict[str, Any] | None:
     frame = build_hex_map_frame(gpkg_path, layer_name)
     if frame.empty:
         return None
@@ -368,19 +362,19 @@ def build_acceptance_reference_payload(gpkg_path: str, layer_name: str) -> dict[
 
         cluster_raw = getattr(row, "class_km", None)
         cluster_key = str(int(cluster_raw)) if not pd.isna(cluster_raw) else "?"
-        cluster_label = _CLUSTER_LABELS.get(cluster_key, "Okant")
+        cluster_label_local = cluster_label(cluster_key, language)
         allowed_medium = bool(getattr(row, "allowed_for_wind_medium_acceptance", False))
 
         popup_body = (
-            f"Hex: {getattr(row, 'hex_id', '')}<br>"
-            f"Hog acceptans: {getattr(row, 'acceptance_class_high_acceptance', 'Exkluderad')} ({_format_score(getattr(row, 'acceptance_score_high_acceptance', None))})<br>"
-            f"Mellan acceptans: {getattr(row, 'acceptance_class_medium_acceptance', 'Exkluderad')} ({_format_score(getattr(row, 'acceptance_score_medium_acceptance', None))})<br>"
-            f"Lag acceptans: {getattr(row, 'acceptance_class_low_acceptance', 'Exkluderad')} ({_format_score(getattr(row, 'acceptance_score_low_acceptance', None))})<br>"
-            f"Bosattning/fastboende: {_format_distance(getattr(row, 'dist_to_settlement_m', None))}<br>"
-            f"Stor vag: {_format_distance(getattr(row, 'dist_to_road_large_m', None))}<br>"
-            f"Mellan vag: {_format_distance(getattr(row, 'dist_to_road_medium_m', None))}<br>"
-            f"Naraste elinfrastruktur: {_format_distance(getattr(row, 'dist_to_electrical_m', None))}<br>"
-            f"Landskapskluster: {cluster_key} - {cluster_label}"
+            f"{ui_text('hex', language)}: {getattr(row, 'hex_id', '')}<br>"
+            f"{ui_text('high_acceptance', language)}: {acceptance_class_label(getattr(row, 'acceptance_class_high_acceptance', 'Exkluderad'), language)} ({_format_score(getattr(row, 'acceptance_score_high_acceptance', None))})<br>"
+            f"{ui_text('medium_acceptance', language)}: {acceptance_class_label(getattr(row, 'acceptance_class_medium_acceptance', 'Exkluderad'), language)} ({_format_score(getattr(row, 'acceptance_score_medium_acceptance', None))})<br>"
+            f"{ui_text('low_acceptance', language)}: {acceptance_class_label(getattr(row, 'acceptance_class_low_acceptance', 'Exkluderad'), language)} ({_format_score(getattr(row, 'acceptance_score_low_acceptance', None))})<br>"
+            f"{ui_text('settlement_distance', language)}: {_format_distance(getattr(row, 'dist_to_settlement_m', None))}<br>"
+            f"{ui_text('large_road_distance', language)}: {_format_distance(getattr(row, 'dist_to_road_large_m', None))}<br>"
+            f"{ui_text('medium_road_distance', language)}: {_format_distance(getattr(row, 'dist_to_road_medium_m', None))}<br>"
+            f"{ui_text('nearest_electrical', language)}: {_format_distance(getattr(row, 'dist_to_electrical_m', None))}<br>"
+            f"{ui_text('landscape_cluster', language)}: {cluster_key} - {cluster_label_local}"
         )
 
         features.append(
@@ -405,7 +399,7 @@ def build_acceptance_reference_payload(gpkg_path: str, layer_name: str) -> dict[
 
     layers = [
         {
-            "name": "V4: Mellan acceptansscenario",
+            "name": reference_layer_name("scenario_medium", language),
             "stroke": False,
             "strokeColor": "#ffffff",
             "fillColor": "#8c8c8c",
@@ -417,12 +411,12 @@ def build_acceptance_reference_payload(gpkg_path: str, layer_name: str) -> dict[
             "pointRadius": 2,
             "defaultVisible": False,
             "fillPattern": None,
-            "popupTitle": "Mellan acceptansscenario",
+            "popupTitle": reference_layer_name("scenario_medium", language),
             "popupBodyProperty": "popup_body_reference",
             "overlayFamily": "reference",
         },
         {
-            "name": "V4: Lag acceptansscenario",
+            "name": reference_layer_name("scenario_low", language),
             "stroke": False,
             "strokeColor": "#ffffff",
             "fillColor": "#8c8c8c",
@@ -434,12 +428,12 @@ def build_acceptance_reference_payload(gpkg_path: str, layer_name: str) -> dict[
             "pointRadius": 2,
             "defaultVisible": False,
             "fillPattern": None,
-            "popupTitle": "Lag acceptansscenario",
+            "popupTitle": reference_layer_name("scenario_low", language),
             "popupBodyProperty": "popup_body_reference",
             "overlayFamily": "reference",
         },
         {
-            "name": "V4: Hog acceptansscenario",
+            "name": reference_layer_name("scenario_high", language),
             "stroke": False,
             "strokeColor": "#ffffff",
             "fillColor": "#8c8c8c",
@@ -451,12 +445,12 @@ def build_acceptance_reference_payload(gpkg_path: str, layer_name: str) -> dict[
             "pointRadius": 2,
             "defaultVisible": False,
             "fillPattern": None,
-            "popupTitle": "Hog acceptansscenario",
+            "popupTitle": reference_layer_name("scenario_high", language),
             "popupBodyProperty": "popup_body_reference",
             "overlayFamily": "reference",
         },
         {
-            "name": "V4: Mellan scenarioscore",
+            "name": reference_layer_name("scenario_score_medium", language),
             "stroke": False,
             "strokeColor": "#ffffff",
             "fillColor": "#8c8c8c",
@@ -468,12 +462,12 @@ def build_acceptance_reference_payload(gpkg_path: str, layer_name: str) -> dict[
             "pointRadius": 2,
             "defaultVisible": False,
             "fillPattern": None,
-            "popupTitle": "Mellan scenarioscore",
+            "popupTitle": reference_layer_name("scenario_score_medium", language),
             "popupBodyProperty": "popup_body_reference",
             "overlayFamily": "reference",
         },
         {
-            "name": "V4: Landskapskluster",
+            "name": reference_layer_name("clusters", language),
             "stroke": False,
             "strokeColor": "#ffffff",
             "fillColor": "#777777",
@@ -485,7 +479,7 @@ def build_acceptance_reference_payload(gpkg_path: str, layer_name: str) -> dict[
             "pointRadius": 2,
             "defaultVisible": False,
             "fillPattern": None,
-            "popupTitle": "Landskapskluster",
+            "popupTitle": reference_layer_name("clusters", language),
             "popupBodyProperty": "popup_body_reference",
             "overlayFamily": "reference",
         },
@@ -494,8 +488,8 @@ def build_acceptance_reference_payload(gpkg_path: str, layer_name: str) -> dict[
     return {"featureCollection": {"type": "FeatureCollection", "features": features}, "layers": layers}
 
 
-def acceptance_reference_payload(registry_meta: dict[str, Any]) -> dict[str, Any] | None:
+def acceptance_reference_payload(registry_meta: dict[str, Any], language: str = "sv") -> dict[str, Any] | None:
     gpkg_path = resolve_repo_path(registry_meta["acceptance_hex_gpkg"])
     if not gpkg_path.exists():
         return None
-    return build_acceptance_reference_payload(str(gpkg_path), str(registry_meta["acceptance_hex_layer"]))
+    return build_acceptance_reference_payload(str(gpkg_path), str(registry_meta["acceptance_hex_layer"]), language)

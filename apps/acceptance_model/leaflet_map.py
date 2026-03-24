@@ -1,31 +1,55 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 from typing import Any
 
+from .i18n import acceptance_class_label, cluster_label, reference_layer_name, ui_text
+
 
 DEFAULT_CENTER = [55.14, 14.92]
-V4_CLASS_LEGEND = [
-    ("Exkluderad", "#d7dde2"),
-    ("Lag", "#f1e8a6"),
-    ("Medel", "#f0b35b"),
-    ("Hog", "#7dbb7d"),
-    ("Mycket hog", "#2c7a4b"),
-]
-V4_SCORE_LEGEND = [
+_CLASS_KEYS = ["Exkluderad", "Lag", "Medel", "Hog", "Mycket hog"]
+_CLASS_COLORS = {
+    "Exkluderad": "#d7dde2",
+    "Lag": "#f1e8a6",
+    "Medel": "#f0b35b",
+    "Hog": "#7dbb7d",
+    "Mycket hog": "#2c7a4b",
+}
+_CLUSTER_COLORS = {
+    "1": "#d8893a",
+    "2": "#d8c35a",
+    "3": "#bcc6b7",
+    "4": "#72889a",
+    "5": "#355843",
+}
+_SCORE_LEGEND = [
     ("0", "#efe8d8"),
     ("20", "#e0c782"),
     ("40", "#d99048"),
     ("60", "#9bb86c"),
     ("80", "#2c7a4b"),
 ]
-V4_CLUSTER_LEGEND = [
-    ("1", "#355C7D", "Tatorts- och verksamhetskarnor"),
-    ("2", "#C06C84", "Vardagslandskap med blandad bakgrundskaraktar"),
-    ("3", "#F67280", "Flygsands- och laglanta kuststrak"),
-    ("4", "#99B898", "Brant relief och dalpraglat inland"),
-    ("5", "#E5D97B", "Skogligt skyddsinland och habitatkarnor"),
-]
+
+
+def _localized_v4_class_legend(language: str) -> list[tuple[str, str]]:
+    return [(acceptance_class_label(key, language), _CLASS_COLORS[key]) for key in _CLASS_KEYS]
+
+
+def _localized_v4_cluster_legend(language: str) -> list[tuple[str, str, str]]:
+    return [(key, _CLUSTER_COLORS[key], cluster_label(key, language)) for key in ["1", "2", "3", "4", "5"]]
+
+
+def _ui_payload(language: str) -> dict[str, str]:
+    return {
+        "basemap_osm": ui_text("basemap_osm", language),
+        "basemap_satellite": ui_text("basemap_satellite", language),
+        "v4_opacity": ui_text("v4_opacity", language),
+        "v4_legend": ui_text("v4_legend", language),
+        "scenario_class": ui_text("scenario_class", language),
+        "medium_scenario_score": ui_text("medium_scenario_score", language),
+        "v4_cluster_legend": ui_text("v4_cluster_legend", language),
+        "cluster_overlay_name": reference_layer_name("clusters", language),
+    }
 
 
 def _overlay_spec(
@@ -73,8 +97,9 @@ def build_leaflet_html(
     group_overlays: list[dict[str, Any]],
     combined_overlay: dict[str, Any] | None,
     reference_payload: dict[str, Any] | None = None,
+    language: str = "sv",
 ) -> str:
-    overlay_specs = []
+    overlay_specs: list[dict[str, Any]] = []
     overlay_specs.extend(source_overlays)
     overlay_specs.extend(group_overlays)
     if combined_overlay is not None:
@@ -83,9 +108,10 @@ def build_leaflet_html(
     payload = json.dumps(overlay_specs)
     reference = json.dumps(reference_payload)
     center = json.dumps(DEFAULT_CENTER)
-    class_legend = json.dumps(V4_CLASS_LEGEND)
-    score_legend = json.dumps(V4_SCORE_LEGEND)
-    cluster_legend = json.dumps(V4_CLUSTER_LEGEND)
+    class_legend = json.dumps(_localized_v4_class_legend(language), ensure_ascii=False)
+    score_legend = json.dumps(_SCORE_LEGEND, ensure_ascii=False)
+    cluster_legend = json.dumps(_localized_v4_cluster_legend(language), ensure_ascii=False)
+    ui_payload = json.dumps(_ui_payload(language), ensure_ascii=False)
     return f"""
 <!DOCTYPE html>
 <html>
@@ -116,6 +142,7 @@ def build_leaflet_html(
     const v4ClassLegend = {class_legend};
     const v4ScoreLegend = {score_legend};
     const v4ClusterLegend = {cluster_legend};
+    const uiText = {ui_payload};
     const map = L.map('map', {{ preferCanvas: true }}).setView(defaultCenter, 9);
     const svgRenderer = L.svg();
     svgRenderer.addTo(map);
@@ -133,8 +160,8 @@ def build_leaflet_html(
     osm.addTo(map);
 
     const baseLayers = {{
-      'OSM': osm,
-      'Satellite': satellite
+      [uiText.basemap_osm]: osm,
+      [uiText.basemap_satellite]: satellite
     }};
 
     const overlayLayers = {{}};
@@ -318,7 +345,7 @@ def build_leaflet_html(
           const container = L.DomUtil.create('div', 'v4-control');
           container.style.width = '185px';
           const title = L.DomUtil.create('div', 'v4-control-title', container);
-          title.innerHTML = 'V4 opacity';
+          title.innerHTML = uiText.v4_opacity;
           const slider = L.DomUtil.create('input', '', container);
           slider.type = 'range';
           slider.min = '5';
@@ -350,17 +377,17 @@ def build_leaflet_html(
           const container = L.DomUtil.create('div', 'v4-control');
           container.style.maxWidth = '210px';
           const title = L.DomUtil.create('div', 'v4-control-title', container);
-          title.innerHTML = 'V4 legend';
+          title.innerHTML = uiText.v4_legend;
 
           const classTitle = L.DomUtil.create('div', '', container);
           classTitle.style.fontSize = '12px';
           classTitle.style.marginBottom = '4px';
-          classTitle.innerHTML = 'Scenarioklass';
+          classTitle.innerHTML = uiText.scenario_class;
           v4ClassLegend.forEach((item) => {{
             const row = L.DomUtil.create('div', 'v4-legend-row', container);
             const swatch = L.DomUtil.create('span', 'v4-swatch', row);
             swatch.style.background = item[1];
-            if (item[0] === 'Exkluderad') {{
+            if (item[0] === v4ClassLegend[0][0]) {{
               swatch.style.opacity = '0.18';
             }}
             const label = L.DomUtil.create('span', '', row);
@@ -371,7 +398,7 @@ def build_leaflet_html(
           scoreTitle.style.fontSize = '12px';
           scoreTitle.style.marginTop = '6px';
           scoreTitle.style.marginBottom = '4px';
-          scoreTitle.innerHTML = 'Mellan scenarioscore';
+          scoreTitle.innerHTML = uiText.medium_scenario_score;
           const scoreRow = L.DomUtil.create('div', 'v4-score-row', container);
           v4ScoreLegend.forEach((item) => {{
             const wrap = L.DomUtil.create('div', '', scoreRow);
@@ -403,7 +430,7 @@ def build_leaflet_html(
           container.style.maxWidth = '240px';
           container.style.display = 'none';
           const title = L.DomUtil.create('div', 'v4-control-title', container);
-          title.innerHTML = 'V4 klusterlegend';
+          title.innerHTML = uiText.v4_cluster_legend;
           v4ClusterLegend.forEach((item) => {{
             const row = L.DomUtil.create('div', 'v4-legend-row', container);
             const swatch = L.DomUtil.create('span', 'v4-swatch', row);
@@ -428,7 +455,7 @@ def build_leaflet_html(
     }}
 
     addReferenceOpacityControl();
-    const v4LegendControl = addReferenceLegendControl();
+    addReferenceLegendControl();
     const clusterLegendControl = addClusterLegendControl();
 
     L.control.layers(baseLayers, overlayLayers, {{ collapsed: false }}).addTo(map);
@@ -437,7 +464,7 @@ def build_leaflet_html(
       if (!clusterLegendControl || !clusterLegendControl.getContainer) return;
       const container = clusterLegendControl.getContainer();
       if (!container) return;
-      const clusterLayer = overlayLayers['V4: Landskapskluster'];
+      const clusterLayer = overlayLayers[uiText.cluster_overlay_name];
       const isActive = clusterLayer ? map.hasLayer(clusterLayer) : false;
       container.style.display = isActive ? 'block' : 'none';
     }}
