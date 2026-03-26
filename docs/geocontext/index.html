@@ -15,7 +15,9 @@
         --forest: #335846;
         --clay: #9a6445;
         --gold: #c8a55b;
+        --mist: #d7ddd9;
         --shadow: 0 24px 50px rgba(23, 33, 27, 0.12);
+        --shadow-soft: 0 16px 36px rgba(23, 33, 27, 0.08);
       }
 
       * {
@@ -30,20 +32,25 @@
           radial-gradient(circle at top left, rgba(154, 100, 69, 0.16), transparent 28%),
           radial-gradient(circle at bottom right, rgba(51, 88, 70, 0.14), transparent 30%),
           linear-gradient(180deg, #faf7f1 0%, var(--paper) 100%);
+        min-height: 100vh;
       }
 
       main {
         max-width: 1180px;
         margin: 0 auto;
-        padding: 42px 24px 72px;
+        padding: 48px 24px 88px;
       }
 
       .hero {
         display: grid;
-        grid-template-columns: 1.05fr 0.95fr;
-        gap: 28px;
+        grid-template-columns: minmax(0, 1.08fr) minmax(360px, 0.92fr);
+        gap: 34px;
         align-items: center;
-        margin-bottom: 30px;
+        margin-bottom: 38px;
+      }
+
+      .hero > div:first-child {
+        min-width: 0;
       }
 
       .eyebrow {
@@ -58,41 +65,52 @@
         letter-spacing: 0.08em;
         text-transform: uppercase;
         color: var(--muted);
-        background: rgba(255, 255, 255, 0.65);
+        background: rgba(255, 255, 255, 0.7);
+        box-shadow: var(--shadow-soft);
       }
 
       h1 {
-        margin: 0 0 16px;
+        margin: 0 0 18px;
         font-size: clamp(2.6rem, 5vw, 4.8rem);
-        line-height: 0.96;
+        line-height: 0.93;
         letter-spacing: -0.03em;
-        max-width: 13ch;
+        max-width: 11ch;
       }
 
       .lead {
-        max-width: 740px;
+        max-width: 700px;
         margin: 0;
         font-size: 1.08rem;
-        line-height: 1.75;
+        line-height: 1.8;
         color: var(--muted);
       }
 
       .mini-note {
-        margin-top: 18px;
-        max-width: 760px;
-        padding: 14px 16px;
+        margin-top: 22px;
+        max-width: 720px;
+        padding: 16px 18px;
         border-left: 4px solid var(--gold);
+        border-radius: 0 18px 18px 0;
         background: rgba(255, 255, 255, 0.58);
+        color: var(--ink);
+        box-shadow: var(--shadow-soft);
+      }
+
+      .mini-note strong {
         color: var(--ink);
       }
 
       .hero-panel {
         position: relative;
-        min-height: 420px;
+        width: min(100%, 470px);
+        justify-self: end;
+        min-height: 390px;
         border: 1px solid rgba(111, 120, 129, 0.22);
         border-radius: 34px;
         overflow: hidden;
-        background: linear-gradient(180deg, #d9dde1 0%, #cfd4da 100%);
+        background:
+          radial-gradient(circle at top left, rgba(255,255,255,0.45), transparent 28%),
+          linear-gradient(180deg, #dce1e5 0%, #ccd2d8 100%);
         box-shadow: var(--shadow);
       }
 
@@ -125,42 +143,64 @@
         display: block;
         width: 100%;
         height: 100%;
-        min-height: 420px;
+        min-height: 390px;
         object-fit: contain;
-        padding: 20px 18px 8px;
+        padding: 16px 16px 10px;
       }
 
       .cards {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(255px, 1fr));
-        gap: 18px;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 20px;
       }
 
       .card {
         display: flex;
         flex-direction: column;
-        gap: 12px;
-        padding: 24px;
+        gap: 14px;
+        min-height: 372px;
+        padding: 24px 24px 26px;
         border: 1px solid var(--line);
         border-radius: 26px;
-        background: rgba(255, 252, 245, 0.86);
-        box-shadow: var(--shadow);
+        background: rgba(255, 252, 245, 0.88);
+        box-shadow: var(--shadow-soft);
         backdrop-filter: blur(10px);
+        transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+      }
+
+      .card:hover {
+        transform: translateY(-4px);
+        box-shadow: var(--shadow);
+      }
+
+      .card-wind {
+        border-color: rgba(154, 100, 69, 0.2);
+      }
+
+      .card-scenario {
+        border-color: rgba(51, 88, 70, 0.18);
+      }
+
+      .card-soon {
+        background: rgba(255, 252, 245, 0.72);
       }
 
       .card-start {
-        border-color: rgba(200, 165, 91, 0.32);
-        background: rgba(255, 252, 245, 0.94);
+        border-color: rgba(200, 165, 91, 0.38);
+        background:
+          linear-gradient(180deg, rgba(255,255,255,0.65), rgba(255,255,255,0.08)),
+          rgba(255, 252, 245, 0.96);
       }
 
       .tag {
         display: inline-block;
         width: fit-content;
-        padding: 6px 10px;
+        padding: 6px 11px;
         border-radius: 999px;
-        font-size: 0.79rem;
+        font-size: 0.78rem;
         font-weight: 700;
-        letter-spacing: 0.03em;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
       }
 
       .tag.primary {
@@ -180,12 +220,13 @@
 
       .card h2 {
         margin: 0;
-        font-size: 1.45rem;
+        font-size: 1.48rem;
+        line-height: 1.08;
       }
 
       .card p {
         margin: 0;
-        line-height: 1.65;
+        line-height: 1.7;
         color: var(--muted);
       }
 
@@ -194,16 +235,16 @@
         flex-wrap: wrap;
         gap: 10px;
         margin-top: auto;
-        padding-top: 4px;
+        padding-top: 10px;
       }
 
       .button {
         display: inline-block;
-        padding: 11px 15px;
+        padding: 11px 16px;
         border-radius: 999px;
         text-decoration: none;
         font-weight: 700;
-        transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+        transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease, border-color 0.15s ease;
       }
 
       .button:hover {
@@ -222,6 +263,11 @@
         border: 1px solid var(--line);
       }
 
+      .button.secondary:hover {
+        background: rgba(255, 255, 255, 0.92);
+        border-color: rgba(23, 33, 27, 0.2);
+      }
+
       .button.disabled {
         background: rgba(255, 255, 255, 0.72);
         color: var(--muted);
@@ -230,13 +276,23 @@
         cursor: default;
         pointer-events: none;
       }
+
       @media (max-width: 920px) {
         .hero {
           grid-template-columns: 1fr;
         }
 
+        .hero-panel {
+          width: 100%;
+          justify-self: stretch;
+        }
+
         .hero-map-image {
           min-height: 340px;
+        }
+
+        .card {
+          min-height: auto;
         }
       }
     </style>
@@ -248,11 +304,13 @@
           <div class="eyebrow">Bornholm · Briefing</div>
           <h1>Landskapsanalys Bornholm</h1>
           <p class="lead">
-            Landskapsanalysen beskriver Bornholms rumsliga landskapskaraktär i ett hexbaserat ramverk.
-            Ovanpå den modellen ska ett separat acceptanslager byggas för scenarioarbete kring vindkraft.
+            Här samlas den publicerade landskapsanalysen för Bornholm tillsammans med kartor,
+            vindacceptans och scenarioappen för sol och vind. Sidan är byggd som en enkel ingång
+            till att först förstå modellen och sedan använda den i fortsatt analys.
           </p>
           <p class="mini-note">
-            Rapportdelen beskriver modellen. Acceptansdelen använder modellen som underlag för nästa lager.
+            <strong>Börja med rapporten</strong> om du vill få grepp om modellen.
+            Gå sedan vidare till vindacceptans eller scenarioappen om du vill använda den.
           </p>
         </div>
 
@@ -263,51 +321,50 @@
 
       <section class="cards">
         <article class="card card-start">
-          <div class="tag soft">Rapport</div>
-          <h2>Landskapsanalysrapport</h2>
+          <div class="tag soft">Start här</div>
+          <h2>Landskapsanalys</h2>
           <p>
-            En samlad ingång till landskapsanalysen. Här finns kortversionen, den längre rapporten,
-            huvudkartan och faktorladdningarna på ett ställe.
+            Den publicerade ingången till modellen. Här finns huvudrapporten, den samlade kartan
+            och faktorladdningarna på ett ställe.
           </p>
           <div class="actions">
-            <a class="button primary" href="landskapsanalys_bornholm_handledarrapport.html">Kortfattad</a>
-            <a class="button secondary" href="published_report/landskapsanalys_v4.html">Lång</a>
+            <a class="button primary" href="published_report/landskapsanalys_v4.html">Rapport</a>
             <a class="button secondary" href="published_report/landskapsanalys_v4_combined_map.html">Kartan</a>
             <a class="button secondary" href="published_report/tables/landskapsanalys_v4_factor_loadings_readable.xlsx">Faktorladdningar</a>
           </div>
         </article>
 
-        <article class="card">
+        <article class="card card-wind">
           <div class="tag alt">Vind</div>
           <h2>Vindacceptans</h2>
           <p>
-            Här finns både rapporten och den interaktiva appen för acceptansramverket, med scenarier,
-            avståndslogik, kartor och fortsatt arbete från modell till acceptans.
+            Här finns acceptansramverket för vindkraft, med rapport, karta och app som bygger vidare
+            på landskapsanalysen som underlag.
           </p>
           <div class="actions">
             <a class="button primary" href="acceptance_framework/bornholm_vindacceptans_stage1_v4_res9.html">Rapport</a>
             <a class="button secondary" href="acceptance_framework/maps/bornholm_vindacceptans_stage1_v4_res9_map.html">Karta</a>
-            <a class="button secondary" href="https://landskapsacceptans-vind.streamlit.app/" target="_blank" rel="noreferrer">App</a>
+            <a class="button secondary" href="https://landskapsacceptans-vind.streamlit.app/" target="_blank" rel="noreferrer">Starta app</a>
           </div>
         </article>
 
-        <article class="card">
+        <article class="card card-scenario">
           <div class="tag primary">Scenario</div>
-          <h2>Sol och vind-app</h2>
+          <h2>Scenarioapp för sol och vind</h2>
           <p>
-            Den förenklade scenarioappen för Bornholm där vind och sol läses direkt från DuckDB och kombineras med
-            markintensitet och landskapsacceptans.
+            Den förenklade scenarioappen för Bornholm, där energiscenarier för vind och sol kombineras
+            med markintensitet och landskapsacceptans.
           </p>
           <div class="actions">
-            <a class="button primary" href="https://speedlocal-bornholm-2.streamlit.app/" target="_blank" rel="noreferrer">Öppna scenarioapp</a>
+            <a class="button primary" href="https://speedlocal-bornholm-2.streamlit.app/" target="_blank" rel="noreferrer">Starta scenarioapp</a>
           </div>
         </article>
 
-        <article class="card">
+        <article class="card card-soon">
           <div class="tag soft">Snart</div>
           <h2>Solacceptansapp</h2>
           <p>
-            Här kommer en separat app för solacceptans när det lagret och arbetsflödet är klart.
+            En separat app för solacceptans kommer när det lagret och arbetsflödet är färdigt.
           </p>
           <div class="actions">
             <a class="button secondary disabled" href="#" aria-disabled="true">Kommer snart</a>
