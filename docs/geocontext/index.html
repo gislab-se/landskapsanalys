@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="sv">
   <head>
     <meta charset="utf-8">
@@ -222,6 +222,14 @@
         border: 1px solid var(--line);
       }
 
+      .button.disabled {
+        background: rgba(255, 255, 255, 0.72);
+        color: var(--muted);
+        border: 1px dashed rgba(23, 33, 27, 0.18);
+        box-shadow: none;
+        cursor: default;
+        pointer-events: none;
+      }
       @media (max-width: 920px) {
         .hero {
           grid-template-columns: 1fr;
@@ -256,54 +264,65 @@
 
       <section class="cards">
         <article class="card card-start">
-          <div class="tag soft">Först</div>
-          <h2>Kortfattad rapport</h2>
+          <div class="tag soft">3.1</div>
+          <h2>Landskapsanalysrapport</h2>
           <p>
-            Den korta, handledarinriktade läsningen. Här finns översikten, huvudfrågorna och den snabbaste
-            vägen in i arbetet.
+            En samlad ingång till landskapsanalysen. Här finns kortversionen, den längre rapporten,
+            huvudkartan och faktorladdningarna på ett ställe.
           </p>
           <div class="actions">
-            <a class="button primary" href="landskapsanalys_bornholm_handledarrapport.html">Öppna kort rapport</a>
-            <a class="button secondary" href="maps/landskapsanalys_bornholm_handledarrapport_combined_map.html">Öppna karta</a>
+            <a class="button primary" href="landskapsanalys_bornholm_handledarrapport.html">3.1.1 Kortfattad</a>
+            <a class="button secondary" href="model_comparisons/landskapsanalys_v3_2_contourterrain68_res9.html">3.1.2 Lång</a>
+            <a class="button secondary" href="model_comparisons/maps/landskapsanalys_v3_2_contourterrain68_res9_combined_map.html">3.1.3 Kartan</a>
+            <a class="button secondary" href="model_comparisons/tables/landskapsanalys_v3_2_contourterrain68_res9_factor_loadings_readable.xlsx">3.1.4 Faktorladdningar</a>
           </div>
         </article>
 
         <article class="card">
-          <div class="tag alt">Därefter</div>
-          <h2>Lång rapport</h2>
-          <p>
-            Den längre metod- och resultatrapporten. Här ligger nu v3.2-spåret med metodik, jämförelser,
-            tolkning och den samlade analysberättelsen.
-          </p>
-          <div class="actions">
-            <a class="button primary" href="model_comparisons/landskapsanalys_v3_2_contourterrain68_res9.html">Öppna lång rapport</a>
-            <a class="button secondary" href="model_comparisons/maps/landskapsanalys_v3_2_contourterrain68_res9_combined_map.html">Öppna karta</a>
-            <a class="button secondary" href="model_comparisons/tables/landskapsanalys_v3_2_contourterrain68_res9_factor_loadings_readable.xlsx">Öppna Excel</a>
-          </div>
-        </article>
-
-        <article class="card">
-          <div class="tag primary">Sedan</div>
+          <div class="tag alt">3.2</div>
           <h2>Vindacceptansrapport</h2>
           <p>
-            Den separata rapporten f?r acceptansramverket. H?r ligger nu v4-sp?ret med scenarier, avst?ndslogik
-            och kartor f?r vidare arbete fr?n modell till acceptans.
+            Den separata rapporten för acceptansramverket. Här ligger nu v4-spåret med scenarier,
+            avståndslogik och kartor för vidare arbete från modell till acceptans.
           </p>
           <div class="actions">
-            <a class="button primary" href="acceptance_framework/bornholm_vindacceptans_stage1_v4_res9.html">?ppna v4-rapport</a>
-            <a class="button secondary" href="acceptance_framework/maps/bornholm_vindacceptans_stage1_v4_res9_map.html">?ppna karta</a>
+            <a class="button primary" href="acceptance_framework/bornholm_vindacceptans_stage1_v4_res9.html">Öppna v4-rapport</a>
+            <a class="button secondary" href="acceptance_framework/maps/bornholm_vindacceptans_stage1_v4_res9_map.html">Öppna karta</a>
           </div>
         </article>
 
         <article class="card">
-          <div class="tag primary">Sist</div>
+          <div class="tag primary">3.3</div>
           <h2>Vindacceptansapp</h2>
           <p>
-            Den interaktiva versionen av acceptansarbetet. H?r kan ni v?xla spr?k, testa scenarier och arbeta vidare
-            direkt efter att ha g?tt igenom rapportdelen.
+            Den interaktiva versionen av acceptansarbetet. Här kan ni växla språk, testa scenarier och arbeta vidare
+            direkt efter att ha gått igenom rapportdelen.
           </p>
           <div class="actions">
-            <a class="button primary" href="https://gislab-bornholm-vindacceptans.streamlit.app/" target="_blank" rel="noreferrer">?ppna acceptansapp</a>
+            <a class="button primary" href="https://gislab-bornholm-vindacceptans.streamlit.app/" target="_blank" rel="noreferrer">Öppna acceptansapp</a>
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="tag primary">3.4</div>
+          <h2>Sol och vind-app</h2>
+          <p>
+            Den förenklade scenarioappen för Bornholm där vind och sol läses direkt från DuckDB och kombineras med
+            markintensitet och landskapsacceptans.
+          </p>
+          <div class="actions">
+            <a class="button primary" href="https://speedlocal-bornholm.streamlit.app/" target="_blank" rel="noreferrer">Öppna scenarioapp</a>
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="tag soft">3.5</div>
+          <h2>Solacceptansapp</h2>
+          <p>
+            Här kommer en separat app för solacceptans när det lagret och arbetsflödet är klart.
+          </p>
+          <div class="actions">
+            <a class="button secondary disabled" href="#" aria-disabled="true">Kommer snart</a>
           </div>
         </article>
       </section>
