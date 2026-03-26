@@ -10,6 +10,17 @@ data/
 # Python artifacts
 __pycache__/
 *.pyc
+.venv/
 
 # VS Code local workspace artifacts
 .vscode/*.log
+
+# Office / local presentation artifacts
+~$*.pptx
+*_backup_before_codex.pptx
+
+# Local temporary helper scripts
+tmp_patch_*.R
+
+# Local R plot scratch outputs
+Rplot*.png
