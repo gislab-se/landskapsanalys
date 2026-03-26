@@ -236,6 +236,16 @@ Rscript script\landskapsanalys\09_build_bornholm_r9_landskapsanalys_v2_1_geomwei
 10. If weighting is revisited, treat large subtype families as theme budgets rather than flat layer counts; e.g. the full geology family should share one controlled geology weight budget instead of each subtype receiving a full independent vote.
 
 ## Note For Next Time
+- Acceptance-map note for tomorrow:
+  - Open the staged acceptance map first:
+    - `docs/geocontext/acceptance_framework/maps/bornholm_vindacceptans_stage1_v4_res9_map.html`
+  - Review the map specifically as the next surface for acceptance layers, not as a finished final product.
+  - Current known issue:
+    - the opacity slider does not yet behave correctly on the acceptance-layer map
+  - Visual design note:
+    - colors can still be revised; do a quick readability pass on cluster/acceptance colors before treating the map as presentation-ready
+  - Practical next step:
+    - decide whether opacity should control all visible acceptance overlays together or only the currently active layer
 - Find out where the main agricultural-land landscapes are in the active model.
 - Find out where the crack-valley (`sprickdalslandskap`) landscapes are in the active model.
 - Later methodological note: inspect how weighting behaves for the layers judged most important for landscape character, especially agricultural land, relief/topography and other priority layers.
@@ -244,6 +254,19 @@ Rscript script\landskapsanalys\09_build_bornholm_r9_landskapsanalys_v2_1_geomwei
 - `v3` note: the first challenger run uses theme balancing inside geometry types so agricultural land no longer competes one-to-one with all 21 geology polygons; topography is tested with a mild continuous-metric uplift rather than a hard manual override.
 - `v3.1` note: terrain bands from relief and highest point improved terrain visibility but still did not make sprickdalar or the higher agricultural plateau read clearly enough.
 - `v3.2` note: the contour-derived pseudo-DEM created the clearest terrain-incision factor so far, but clustering compactness dropped to silhouette `0.252`; keep it as a terrain challenger, not as the new active model.
+- Terrain-aggregation note: the current terrain challengers still lean heavily on per-hex relief, highest-point bands, and in `v3.2` a contour-derived pseudo-DEM summarized as mean elevation, mean slope, and max local valley depth. A next challenger should test contour-line density directly, for example total contour-line length per hex, contour-line length density, and possibly elevation-weighted contour accumulation. The reason is that dense contour packing may express steep valley sides and sprickdalsstruktur more directly than only hex-level highest-minus-lowest values. Treat this as an added terrain family to compare against the current pseudo-DEM metrics, not as a blind replacement, because contour length can also rise in long slope transitions and should be validated against known brant/sprickdal zones.
+- Terrain test package to add next time:
+  - `gc_contour_length_total_m`: total contour-line length inside each hex
+  - `gc_contour_length_density_m_per_km2`: contour-line length divided by hex land area
+  - `gc_contour_elevation_sum_m`: sum of contour elevation values intersecting the hex, to let higher stacked contours count more than low flat ones
+  - `gc_contour_relief_intensity`: a composite such as `length_density * local elevation range` or `length_density * mean contour elevation contrast`
+  - `gc_contour_agri_relief_proxy`: interaction between agricultural share and contour-density/relief to help split flat agricultural plains from more incision-prone agricultural sprickdal terrain
+- Terrain test order:
+  1. derive the contour-line metrics above from the original topolines without removing the existing `v3.2` pseudo-DEM metrics
+  2. run them first as a challenger terrain family beside current metrics, not as a replacement
+  3. inspect whether they sharpen the split between `slatt- och jordbrukslandskap` and `jordbruksdominerat sprickdalslandskap`
+  4. compare their factor loadings, cluster effects, and map legibility against `gc_relief_m`, `gc_highest_point_m`, `gc_contour_mean_slope_deg`, and `gc_contour_valley_depth_max_m`
+  5. only if they clearly help, decide whether to keep both terrain families or replace part of the current set
 - Weighting note: if geology, protection or other large subtype families are kept, let them split a shared theme weight rather than accumulate influence just by having many sublayers.
 - Acceptance note: a first separate wind-acceptance framework now exists under `docs/geocontext/acceptance_framework/`; keep it conceptually separate from the landscape-character factor model and use it as a staged planning layer, not as proof that the character model itself is final.
 - Terrain-data note: for next round, decide whether to continue with more contour-derived terrain metrics or move to a real DEM/LiDAR-backed terrain surface.
