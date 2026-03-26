@@ -1,0 +1,2003 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="sv" xml:lang="sv"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.8.27">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>landskapsanalys_v4</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+</style>
+
+
+<script src="landskapsanalys_v4_files/libs/clipboard/clipboard.min.js"></script>
+<script src="landskapsanalys_v4_files/libs/quarto-html/quarto.js" type="module"></script>
+<script src="landskapsanalys_v4_files/libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="landskapsanalys_v4_files/libs/quarto-html/axe/axe-check.js" type="module"></script>
+<script src="landskapsanalys_v4_files/libs/quarto-html/popper.min.js"></script>
+<script src="landskapsanalys_v4_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="landskapsanalys_v4_files/libs/quarto-html/anchor.min.js"></script>
+<link href="landskapsanalys_v4_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="landskapsanalys_v4_files/libs/quarto-html/quarto-syntax-highlighting-ed96de9b727972fe78a7b5d16c58bf87.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="landskapsanalys_v4_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="landskapsanalys_v4_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="landskapsanalys_v4_files/libs/bootstrap/bootstrap-9e3ffae467580fdb927a41352e75a2e0.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="landskapsanalys_v4_files/libs/htmltools-fill-0.5.8.1/fill.css" rel="stylesheet">
+
+<script src="landskapsanalys_v4_files/libs/htmlwidgets-1.6.4/htmlwidgets.js"></script>
+
+<script src="landskapsanalys_v4_files/libs/jquery-3.6.0/jquery-3.6.0.min.js"></script>
+
+<link href="landskapsanalys_v4_files/libs/leaflet-1.3.1/leaflet.css" rel="stylesheet">
+
+<script src="landskapsanalys_v4_files/libs/leaflet-1.3.1/leaflet.js"></script>
+
+<link href="landskapsanalys_v4_files/libs/leafletfix-1.0.0/leafletfix.css" rel="stylesheet">
+
+<script src="landskapsanalys_v4_files/libs/proj4-2.6.2/proj4.min.js"></script>
+
+<script src="landskapsanalys_v4_files/libs/Proj4Leaflet-1.0.1/proj4leaflet.js"></script>
+
+<link href="landskapsanalys_v4_files/libs/rstudio_leaflet-1.3.1/rstudio_leaflet.css" rel="stylesheet">
+
+<script src="landskapsanalys_v4_files/libs/leaflet-binding-2.2.0/leaflet.js"></script>
+
+<script src="landskapsanalys_v4_files/libs/leaflet-providers-1.13.0/leaflet-providers_1.13.0.js"></script>
+
+<script src="landskapsanalys_v4_files/libs/leaflet-providers-plugin-2.2.0/leaflet-providers-plugin.js"></script>
+
+
+
+</head>
+
+<body class="fullcontent quarto-light">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Landskapsanalys Bornholm</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<blockquote class="blockquote">
+<p>Denna rapport presenterar den aktuella landskapsanalysen för Bornholm. Fokus ligger på hur öns landskapskaraktär kan beskrivas med ett multiskalärt, hexagonbaserat analysramverk som kombinerar natur, bebyggelse, tillgänglighet, skydd, restriktioner och geologi.</p>
+</blockquote>
+<section id="kartöversikt" class="level2">
+<h2 class="anchored" data-anchor-id="kartöversikt">Kartöversikt</h2>
+<p>Den samlade kartan ligger först i rapporten och är tänkt som huvudytan för tolkning. Här kan du växla mellan kluster och faktorer i samma HTML-karta, läsa tydliga legender och öppna popup-rutor som visar typ, tolkning, faktorprofil och de lager i hexet som bidrar mest till analysen.</p>
+<div class="cell">
+<div class="cell-output-display">
+<iframe src="landskapsanalys_v4_combined_map.html" title="Samlad kluster- och faktorkarta Landskapsanalys Bornholm" style="width:100%;height:900px;border:none;border-radius:8px;background:#fff;"></iframe>
+</div>
+</div>
+<p>
+<a class="btn btn-primary btn-sm" href="landskapsanalys_v4_combined_map.html" target="_blank" rel="noopener">Öppna den samlade kartan i egen flik / helskärm</a>
+</p>
+</section>
+<section id="syfte-och-huvudfråga" class="level2">
+<h2 class="anchored" data-anchor-id="syfte-och-huvudfråga">1. Syfte och huvudfråga</h2>
+<p>Denna rapport beskriver den aktuella landskapsanalysen för Bornholm. Målet är att ge ett tydligt och spårbart underlag för att beskriva hur öns landskap är uppbyggt, var olika landskapssammanhang dominerar och vilka mönster som återkommer på flera skalor.</p>
+<p>Huvudfrågan är:</p>
+<p><strong>Vilken landskapskaraktär har Bornholm när ön beskrivs med ett multiskalärt, hexagonbaserat analysramverk som kombinerar natur, bebyggelse, tillgänglighet, skydd, restriktioner och geologi?</strong></p>
+<p>Rapporten har tre konkreta uppgifter:</p>
+<ul>
+<li>att dokumentera vilken data som faktiskt ingår i modellen</li>
+<li>att steg för steg förklara hur rådata blir till faktorer och preliminära landskapstyper</li>
+<li>att ge en tolkning som är begriplig även för läsare som inte arbetar dagligen med faktoranalys och klustring</li>
+</ul>
+<p>På längre sikt kan samma analyskedja vara ett av flera underlag i ett acceptanslager för vindkraft och solenergi. Den här rapporten är dock en <strong>landskapskaraktärsrapport</strong>, inte ett färdigt planeringsbeslut. Den säger något viktigt om struktur, mönster och landskapstyper, men gör inte hela avvägningen mellan landskapsvärden, juridik, teknik och social acceptans.</p>
+<p>Det centrala värdet i nuläget är att modellen täcker stora delar av Bornholms relevanta landskapsinnehåll och dessutom använder ett terrängspår från originalhöjdkurvorna. Kvarvarande arbete handlar därför främst om validering, namnsättning och finjustering av hur jordbruksplatåer och sprickdalsliknande terräng ska uttryckas.</p>
+</section>
+<section id="studieområde-skala-och-avgränsning" class="level2">
+<h2 class="anchored" data-anchor-id="studieområde-skala-och-avgränsning">2. Studieområde, skala och avgränsning</h2>
+<p>Analysen omfattar Bornholm på samma R9-hexgrid som tidigare körningar, enligt H3:s upplösningssystem (<a href="https://h3geo.org/docs/core-library/restable/">H3: Tables of Cell Statistics Across Resolutions</a>). Den fasta analysenheten är alltså en regelbunden hexagon, medan landskapskaraktären uppstår genom att varje hexagon beskrivs både lokalt och genom sin omgivning.</p>
+<div class="cell">
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<thead>
+<tr class="header">
+<th style="text-align: left;">aspekt</th>
+<th style="text-align: left;">varde</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Studieområde</td>
+<td style="text-align: left;">Bornholm</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Grundupplösning</td>
+<td style="text-align: left;">R9-hex</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Antal analyshexagoner</td>
+<td style="text-align: left;">7,286</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Exkluderade havshex utan signal</td>
+<td style="text-align: left;">605</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Antal ingångslager</td>
+<td style="text-align: left;">68</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Antal kontextvariabler</td>
+<td style="text-align: left;">680</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Valt klusterantal</td>
+<td style="text-align: left;">5</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Hex utan signal i totalvikten</td>
+<td style="text-align: left;">0 (0.0%)</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p>Skalvalet har tre konsekvenser:</p>
+<ul>
+<li>analysen är bra på att beskriva regionala och mellanskaliga mönster</li>
+<li>den är svagare för mycket små lokala kvaliteter som bara finns i några få hektar</li>
+<li>den får inte läsas som om varje enskild hexagon redan vore ett landskapsområde i sig</li>
+</ul>
+</section>
+<section id="datagrund" class="level2">
+<h2 class="anchored" data-anchor-id="datagrund">3. Datagrund</h2>
+<p>Analysen bygger på 68 lagersignaler. Datagrunden är därför bred nog för att fånga Bornholm som både naturgeografiskt och kulturgeografiskt landskap: skog, jordbruk, topografi, kust, vatten, kulturmiljö, bebyggelse, skydd, restriktioner och geologi finns nu i samma analysram.</p>
+<p>Det betyder konkret att varje rålager först översätts till en jämförbar hexsignal: punktlager som antal eller summerade attributvärden per hexagon, linjelager som linjelängd inom hexagonen, polygonlager som area eller areaandel, och terränglager som sammanfattad statistik per hexagon.</p>
+<p>Särskilt viktigt i denna rapport är att topografin inte bara beskrivs via tidigare hexaggregerade höjdmått. Analysen använder också en <strong>konturhärledd pseudo-DEM</strong> från originalhöjdkurvorna, varifrån medelhöjd, lutning och lokal daldjupssignal aggregeras tillbaka till hexagonerna.</p>
+<p>Särskilt viktigt i denna rapport är att två tidigare provisoriska geologilager har ersatts av <strong>21 tolkbara underkategorier</strong> från Jordart och Prekvart. Det gör att geologi inte längre bara finns som nästan heltäckande bakgrund, utan som faktisk landskapssignal som går att läsa och jämföra med andra teman.</p>
+<p>I stora drag består datagrunden av följande grupper:</p>
+<ul>
+<li>bosättning och tillgänglighet: befolkning, vägar, färjerutter och flera bebyggelselager</li>
+<li>blågröna strukturer: sjöar, våtmarker, hede, skog, ekologiska samband, naturtyper och vattendrag</li>
+<li>kustsammanhang: kustlinje, kustzon, sanddyner och strandskydd</li>
+<li>kultur och markanvändning: kulturmiljövärden, värdefulla kulturmiljöer och jordbruksmark</li>
+<li>topografi och geologi: relief, högsta höjd, konturhärledd medelhöjd, konturhärledd lutning, konturhärlett daldjup, jordartsunderlag och prekvartär berggrund</li>
+<li>skydd och restriktioner: Natura, fredade områden, reservat, militära ytor och flygrestriktionslager</li>
+</ul>
+<p>Tabellen nedan är den viktigaste referensen för exakt innehåll och bör läsas som modellens officiella lagerlista. Här ligger fokus på vad lagret är, vilken typ av hexsignal det blir, och varifrån datan kommer.</p>
+<div class="cell">
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<colgroup>
+<col style="width: 24%">
+<col style="width: 10%">
+<col style="width: 9%">
+<col style="width: 28%">
+<col style="width: 26%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Lager</th>
+<th style="text-align: left;">Geometri</th>
+<th style="text-align: left;">Tema</th>
+<th style="text-align: left;">Datakälla</th>
+<th style="text-align: left;">Hexsignal</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Permanent population</td>
+<td style="text-align: left;">Point count</td>
+<td style="text-align: left;">Settlement</td>
+<td style="text-align: left;">BRK (Bornholms Regionskommune)</td>
+<td style="text-align: left;">Antal per hexagon</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Road length (medium)</td>
+<td style="text-align: left;">Line length</td>
+<td style="text-align: left;">Access</td>
+<td style="text-align: left;">GeoDanmark via Klimadatastyrelsen</td>
+<td style="text-align: left;">Linjelängd inom hexagonen</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Road length (large)</td>
+<td style="text-align: left;">Line length</td>
+<td style="text-align: left;">Access</td>
+<td style="text-align: left;">GeoDanmark via Klimadatastyrelsen</td>
+<td style="text-align: left;">Linjelängd inom hexagonen</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Ecological connectivity</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Blue-green</td>
+<td style="text-align: left;">Källdata i Bornholm geocontext-stack</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Cultural and historical conservation values</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Culture</td>
+<td style="text-align: left;">Källdata i Bornholm geocontext-stack</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Fredskov</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Vegetation</td>
+<td style="text-align: left;">Geodatastyrelsen MAT2 (GDS)</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Agricultural land (Markblokke)</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Land use</td>
+<td style="text-align: left;">Markblokke 2026 (lokal jordbruksdata; ej i SL01-PDF)</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Relief</td>
+<td style="text-align: left;">Continuous metric</td>
+<td style="text-align: left;">Topography</td>
+<td style="text-align: left;">GeoDanmark via Klimadatastyrelsen</td>
+<td style="text-align: left;">Sammanfattat terrängmått per hexagon</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Protected watercourses</td>
+<td style="text-align: left;">Line length</td>
+<td style="text-align: left;">Blue-green</td>
+<td style="text-align: left;">Danmarks Miljoportal / Miljostyrelsen (MP/MST)</td>
+<td style="text-align: left;">Linjelängd inom hexagonen</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Lake</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Blue-green</td>
+<td style="text-align: left;">GeoDanmark via Klimadatastyrelsen (GD-V/KDS)</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Wetland</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Blue-green</td>
+<td style="text-align: left;">GeoDanmark via Klimadatastyrelsen (GD-V/KDS)</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Moor and hede</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Blue-green</td>
+<td style="text-align: left;">GeoDanmark via Klimadatastyrelsen (GD-V/KDS)</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Forest</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Vegetation</td>
+<td style="text-align: left;">GeoDanmark via Klimadatastyrelsen (GD-V/KDS)</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Coastal zone (3 km)</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Coast</td>
+<td style="text-align: left;">Källdata i Bornholm geocontext-stack</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Coastline</td>
+<td style="text-align: left;">Line length</td>
+<td style="text-align: left;">Coast</td>
+<td style="text-align: left;">GeoDanmark via Klimadatastyrelsen (GD-V/KDS)</td>
+<td style="text-align: left;">Linjelängd inom hexagonen</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Valuable cultural environment</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Culture</td>
+<td style="text-align: left;">Slots- og Kulturstyrelsen (SLKS)</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Highest contour value</td>
+<td style="text-align: left;">Continuous metric</td>
+<td style="text-align: left;">Topography</td>
+<td style="text-align: left;">GeoDanmark via Klimadatastyrelsen</td>
+<td style="text-align: left;">Sammanfattat terrängmått per hexagon</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">River length</td>
+<td style="text-align: left;">Line length</td>
+<td style="text-align: left;">Blue-green</td>
+<td style="text-align: left;">GeoDanmark via Klimadatastyrelsen (GD-V/KDS)</td>
+<td style="text-align: left;">Linjelängd inom hexagonen</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Sand dune</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Coast</td>
+<td style="text-align: left;">GeoDanmark via Klimadatastyrelsen (GD-V/KDS)</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Protected nature types</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Blue-green</td>
+<td style="text-align: left;">Danmarks Miljoportal / Miljostyrelsen (MP/MST)</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Mapped nature types</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Blue-green</td>
+<td style="text-align: left;">Danmarks Miljoportal / Miljostyrelsen (MP/MST)</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Industry and business land</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Settlement</td>
+<td style="text-align: left;">GeoDanmark via Klimadatastyrelsen</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Built centre</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Settlement</td>
+<td style="text-align: left;">GeoDanmark via Klimadatastyrelsen (GD-V/KDS)</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Buildings high</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Settlement</td>
+<td style="text-align: left;">GeoDanmark via Klimadatastyrelsen (GD-V/KDS)</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Buildings low</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Settlement</td>
+<td style="text-align: left;">GeoDanmark via Klimadatastyrelsen (GD-V/KDS)</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Strand protection</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Coast</td>
+<td style="text-align: left;">Källdata i Bornholm geocontext-stack</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Jordart - ML - Moræneler</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Geology</td>
+<td style="text-align: left;">Källdata i Bornholm geocontext-stack</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Jordart - MS - Morænsand</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Geology</td>
+<td style="text-align: left;">Källdata i Bornholm geocontext-stack</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Jordart - FP - Ferskvandsgytje</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Geology</td>
+<td style="text-align: left;">Källdata i Bornholm geocontext-stack</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Jordart - ES - Flyvesand</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Geology</td>
+<td style="text-align: left;">Källdata i Bornholm geocontext-stack</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Jordart - DS - Smeltevandssand</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Geology</td>
+<td style="text-align: left;">Källdata i Bornholm geocontext-stack</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Jordart - PKV - Prækvartært lag</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Geology</td>
+<td style="text-align: left;">Källdata i Bornholm geocontext-stack</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Jordart - Marina sand och grus - ovrigt</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Geology</td>
+<td style="text-align: left;">Källdata i Bornholm geocontext-stack</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Jordart - Farskvatten och organiskt - ovrigt</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Geology</td>
+<td style="text-align: left;">Källdata i Bornholm geocontext-stack</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Jordart - Smaltvatten - ovrigt</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Geology</td>
+<td style="text-align: left;">Källdata i Bornholm geocontext-stack</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Jordart - Ovrigt anlagt eller okant</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Geology</td>
+<td style="text-align: left;">Källdata i Bornholm geocontext-stack</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Prekvart - Gnejs</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Geology</td>
+<td style="text-align: left;">Källdata i Bornholm geocontext-stack</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Prekvart - Hammer och Almindinge</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Geology</td>
+<td style="text-align: left;">Källdata i Bornholm geocontext-stack</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Prekvart - Gronne Skifre</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Geology</td>
+<td style="text-align: left;">Källdata i Bornholm geocontext-stack</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Prekvart - Vang och Svaneke Gran</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Geology</td>
+<td style="text-align: left;">Källdata i Bornholm geocontext-stack</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Prekvart - Balka sandsten</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Geology</td>
+<td style="text-align: left;">Källdata i Bornholm geocontext-stack</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Prekvart - Sandsten och gronsand - ovrigt</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Geology</td>
+<td style="text-align: left;">Källdata i Bornholm geocontext-stack</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Prekvart - Sedimentara formationer - ovrigt</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Geology</td>
+<td style="text-align: left;">Källdata i Bornholm geocontext-stack</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Prekvart - Skifrar - ovrigt</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Geology</td>
+<td style="text-align: left;">Källdata i Bornholm geocontext-stack</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Prekvart - Kristallint - ovrigt</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Geology</td>
+<td style="text-align: left;">Källdata i Bornholm geocontext-stack</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Prekvart - Kalkbergarter - ovrigt</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Geology</td>
+<td style="text-align: left;">Källdata i Bornholm geocontext-stack</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Prekvart - Ovrigt stratigrafiskt</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Geology</td>
+<td style="text-align: left;">Källdata i Bornholm geocontext-stack</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Protected areas (fredede omrader)</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Protected nature</td>
+<td style="text-align: left;">Källdata i Bornholm geocontext-stack</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Natura 2000 specially designated land areas</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Protected nature</td>
+<td style="text-align: left;">Danmarks Miljoportal / Miljostyrelsen (MP/MST)</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Natura 2000 bird protection</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Protected nature</td>
+<td style="text-align: left;">Danmarks Miljoportal / Miljostyrelsen (MP/MST)</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Natura 2000 habitat areas</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Protected nature</td>
+<td style="text-align: left;">Danmarks Miljoportal / Miljostyrelsen (MP/MST)</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Natura 2000 Ramsar areas</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Protected nature</td>
+<td style="text-align: left;">Danmarks Miljoportal / Miljostyrelsen (MP/MST)</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Nature and wildlife reserves</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Protected nature</td>
+<td style="text-align: left;">Danmarks Miljoportal / Miljostyrelsen (MP/MST)</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Aviation approach zones</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Restriction</td>
+<td style="text-align: left;">Trafikstyrelsen (TST)</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Aviation bird-collision zones</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Restriction</td>
+<td style="text-align: left;">Trafikstyrelsen (TST)</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Military areas</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Restriction</td>
+<td style="text-align: left;">Plan- og Landdistriktsstyrelsen / PlanDK (PLST/PDK)</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Ferry routes</td>
+<td style="text-align: left;">Line length</td>
+<td style="text-align: left;">Access</td>
+<td style="text-align: left;">OpenStreetMap (OSM)</td>
+<td style="text-align: left;">Linjelängd inom hexagonen</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Built low selection</td>
+<td style="text-align: left;">Polygon area share</td>
+<td style="text-align: left;">Settlement</td>
+<td style="text-align: left;">GeoDanmark via Klimadatastyrelsen (GD-V/KDS)</td>
+<td style="text-align: left;">Andel av hexagonens yta</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Relief band: flat to weak</td>
+<td style="text-align: left;">Continuous metric</td>
+<td style="text-align: left;">Topography</td>
+<td style="text-align: left;">Härlett från höjdkurvor och terrängunderlag</td>
+<td style="text-align: left;">Andel av hex i reliefklass</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Relief band: rolling</td>
+<td style="text-align: left;">Continuous metric</td>
+<td style="text-align: left;">Topography</td>
+<td style="text-align: left;">Härlett från höjdkurvor och terrängunderlag</td>
+<td style="text-align: left;">Andel av hex i reliefklass</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Relief band: strong</td>
+<td style="text-align: left;">Continuous metric</td>
+<td style="text-align: left;">Topography</td>
+<td style="text-align: left;">Härlett från höjdkurvor och terrängunderlag</td>
+<td style="text-align: left;">Andel av hex i reliefklass</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Elevation band: low</td>
+<td style="text-align: left;">Continuous metric</td>
+<td style="text-align: left;">Topography</td>
+<td style="text-align: left;">Härlett från höjdkurvor och terrängunderlag</td>
+<td style="text-align: left;">Andel av hex i höjdklass</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Elevation band: mid</td>
+<td style="text-align: left;">Continuous metric</td>
+<td style="text-align: left;">Topography</td>
+<td style="text-align: left;">Härlett från höjdkurvor och terrängunderlag</td>
+<td style="text-align: left;">Andel av hex i höjdklass</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Elevation band: high</td>
+<td style="text-align: left;">Continuous metric</td>
+<td style="text-align: left;">Topography</td>
+<td style="text-align: left;">Härlett från höjdkurvor och terrängunderlag</td>
+<td style="text-align: left;">Andel av hex i höjdklass</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Contour-derived mean elevation</td>
+<td style="text-align: left;">Continuous metric</td>
+<td style="text-align: left;">Topography</td>
+<td style="text-align: left;">Härlett från höjdkurvor och terrängunderlag</td>
+<td style="text-align: left;">Medelhöjd från konturhärledd pseudo-DEM</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Contour-derived mean slope</td>
+<td style="text-align: left;">Continuous metric</td>
+<td style="text-align: left;">Topography</td>
+<td style="text-align: left;">Härlett från höjdkurvor och terrängunderlag</td>
+<td style="text-align: left;">Medellutning från konturhärledd pseudo-DEM</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Contour-derived valley depth (local max)</td>
+<td style="text-align: left;">Continuous metric</td>
+<td style="text-align: left;">Topography</td>
+<td style="text-align: left;">Härlett från höjdkurvor och terrängunderlag</td>
+<td style="text-align: left;">Lokalt max daldjup från konturhärledd pseudo-DEM</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">High agricultural plateau proxy</td>
+<td style="text-align: left;">Continuous metric</td>
+<td style="text-align: left;">Land use</td>
+<td style="text-align: left;">Härlett från höjdkurvor och terrängunderlag</td>
+<td style="text-align: left;">Proxy för hög jordbruksplatå</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div class="cell">
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<colgroup>
+<col style="width: 12%">
+<col style="width: 8%">
+<col style="width: 78%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Tema</th>
+<th style="text-align: right;">Antal lager</th>
+<th style="text-align: left;">Exempel</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Geology</td>
+<td style="text-align: right;">21</td>
+<td style="text-align: left;">Jordart - ML - Moræneler, Jordart - MS - Morænsand, Jordart - FP - Ferskvandsgytje</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Topography</td>
+<td style="text-align: right;">11</td>
+<td style="text-align: left;">Relief, Highest contour value, Relief band: flat to weak</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Blue-green</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: left;">Ecological connectivity, Protected watercourses, Lake</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Protected nature</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: left;">Protected areas (fredede omrader), Natura 2000 specially designated land areas, Natura 2000 bird protection</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Settlement</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: left;">Permanent population, Industry and business land, Built centre</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Coast</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: left;">Coastal zone (3 km), Coastline, Sand dune</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Access</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: left;">Road length (medium), Road length (large), Ferry routes</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Restriction</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: left;">Aviation approach zones, Aviation bird-collision zones, Military areas</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Culture</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: left;">Cultural and historical conservation values, Valuable cultural environment</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Land use</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: left;">Agricultural land (Markblokke), High agricultural plateau proxy</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Vegetation</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: left;">Fredskov, Forest</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p>Tabellen ovan visar hur brett modellen faktiskt täcker ön. Den ska läsas som en snabb översikt: vissa teman består av många lager därför att de har splittrats i mer tolkbara undergrupper, medan andra teman representeras av färre men mycket starka signaler.</p>
+<div class="cell">
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 10%">
+<col style="width: 56%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Ej aktiv grupp</th>
+<th style="text-align: right;">Antal lager</th>
+<th style="text-align: left;">Exempel</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Energiinfrastruktur</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: left;">Transformatorstationer, Markkablar, Högspänningsledningar</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Skyddade naturtyper: underkategorier</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: left;">BES naturtyper: overdrev, BES naturtyper: hede, BES naturtyper: eng</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Vattendrag: underkategorier</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: left;">River 0-2.5 m, River 2.5-12 m, River okänd bredd</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Vägar: ej använda varianter</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: left;">Vägar small, Vägar other, Vägar total</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Parentgeologi ersatt av underkategorier</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: left;">Jordart parentlager, Prekvart parentlager</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Bevaringsvärda landskap</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: left;">Bevaringsvärdiga landskap</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Dubbel kulturmiljösignal</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: left;">Kulturhistorisk bevaringsværdi vedtaget</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p><strong>Styrka i datagrunden:</strong> modellen täcker nu Bornholms huvudsakliga landskapssystem på ett sätt som gör den användbar som sammanhållen typologi och inte bara som en preliminär testkörning.</p>
+<p><strong>Det som fortfarande står utanför den aktiva 58-lagersmodellen:</strong> totalt 22 lager finns i den sammanfogade råmatrisen men används inte i den aktiva analysen. Vissa av dessa är medvetet ersatta av bättre representationer, till exempel att parentlagren för Jordart och Prekvart har bytts ut mot mer tolkbara underkategorier. Andra är rimliga kandidater för nästa prövning, särskilt energiinfrastruktur, bevaringsvärda landskap samt finare uppdelningar av vattendrag och naturtyper.</p>
+</section>
+<section id="metod-och-transparens" class="level2">
+<h2 class="anchored" data-anchor-id="metod-och-transparens">4. Metod och transparens</h2>
+<p>Metoden följer samma grundidé som i Juta Kawalerowicz och Bo Malmbergs multiskalära typologiarbete (<a href="https://su.figshare.com/articles/dataset/Multiscalar_typology_of_residential_areas_in_Sweden/14753826">Multiscalar Typology of Residential Areas in Sweden</a>): en plats ska inte bara beskrivas av vad som finns <strong>i själva rutan</strong>, utan också av <strong>vilket sammanhang rutan ligger i</strong> när omgivningen läses på flera skalor. I deras fall gäller det bostadsområden; här överförs samma logik till landskapstyper på Bornholm.</p>
+<p>Översatt till denna rapport betyder det:</p>
+<ul>
+<li>först samlas många olika landskapssignaler i samma hexagonala analysenhet</li>
+<li>sedan beskrivs varje hexagon både lokalt och genom sin omgivning på flera skalor</li>
+<li>därefter komprimeras den stora mängden mönster till ett mindre antal faktorer</li>
+<li>slutligen grupperas hexagoner med liknande faktorprofiler till preliminära landskapstyper</li>
+</ul>
+<p>Analysen följer därmed en tydlig kedja från rådata till tolkning. Det gör också att varje steg kan granskas för sig: dataurvalet, kontextbyggandet, faktoranalysen, klustringen och den slutliga karttolkningen.</p>
+<div class="cell">
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<colgroup>
+<col style="width: 2%">
+<col style="width: 29%">
+<col style="width: 67%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: right;">Steg</th>
+<th style="text-align: left;">Analyssteg</th>
+<th style="text-align: left;">Vad det betyder i praktiken</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: right;">1</td>
+<td style="text-align: left;">Aggregera rådata till hexagoner</td>
+<td style="text-align: left;">Punkter, linjer och polygoner översätts till jämförbara signaler i samma R9-hexgrid.</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">2</td>
+<td style="text-align: left;">Bygg multiskalig kontext</td>
+<td style="text-align: left;">Varje hexagon får inte bara sitt lokala värde utan också information om sin omgivning på flera skalor.</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">3</td>
+<td style="text-align: left;">Rensa och standardisera analysmatrisen</td>
+<td style="text-align: left;">Kolumner utan faktisk variation eller med tekniska problem tas bort så att modellen arbetar med meningsfull signal.</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">4</td>
+<td style="text-align: left;">Extrahera faktorer</td>
+<td style="text-align: left;">Återkommande samvariationer mellan många lager komprimeras till ett mindre antal tydliga gradienter.</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">5</td>
+<td style="text-align: left;">Beräkna faktorscore per hexagon</td>
+<td style="text-align: left;">Varje hexagon får ett värde på varje faktor och kan därmed beskrivas i samma faktorrum som resten av ön.</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">6</td>
+<td style="text-align: left;">Gruppera hexagoner till preliminära landskapstyper</td>
+<td style="text-align: left;">Hexagoner med liknande faktorprofiler samlas till kluster som tolkas som preliminära landskapstyper.</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div class="cell">
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<colgroup>
+<col style="width: 7%">
+<col style="width: 92%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Metodsteg</th>
+<th style="text-align: left;">Val</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Analysenheter</td>
+<td style="text-align: left;">Hexagoner med raw_total &gt; 0 behalls som analysenheter; rena havshex tas bort fore kontextmatris och faktoranalys.</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Kontextskalor</td>
+<td style="text-align: left;">k = 10, 50, 100, 250, 1000</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Kontextvikt</td>
+<td style="text-align: left;">Per-layer robust q99 scaling, theme-balanced aggregation within each geometry type, moderate agricultural-land priority, mild continuous-metric uplift, six terrain bands from relief and absolute height, and four contour-derived terrain metrics from an interpolated pseudo-DEM.</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Skallogik</td>
+<td style="text-align: left;">kumulativ vikt, inte fasta hexringar</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Kontextmått per lager</td>
+<td style="text-align: left;">mean och std</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Antal faktorer</td>
+<td style="text-align: left;">5</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Faktoranalys</td>
+<td style="text-align: left;">minres</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Rotation</td>
+<td style="text-align: left;">varimax</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Faktorscore</td>
+<td style="text-align: left;">tenBerge</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Klusterprövning</td>
+<td style="text-align: left;">K = 5..10</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Klusterval</td>
+<td style="text-align: left;">högst silhouette, nu K = 5</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<section id="från-rådata-till-kontext" class="level3">
+<h3 class="anchored" data-anchor-id="från-rådata-till-kontext">4.1 Från rådata till kontext</h3>
+<p>Varje ingångslager aggregeras först till R9-hexagoner. Därefter byggs en <strong>kontextmatris</strong> där varje hexagon får information om sin omgivning vid <code>k = 10, 50, 100, 250, 1000</code>.</p>
+<p>I praktiken betyder det att alla geometrier först översätts till samma analysenhet. Punktlager summeras som antal eller summerade attributvärden för de punkter som faller inom hexagonen. Linjelager summeras som den linjelängd som ligger inom hexagonen. Polygonlager översätts till total area eller areaandel inom hexagonen. Kontinuerliga terrängmått sammanfattas som statistik per hexagon, till exempel medelvärde, relief eller högsta värde. Först när alla lager uttrycks i denna gemensamma form kan de jämföras, viktas och läsas tillsammans i samma analysmatris.</p>
+<p>Två mått beräknas för varje lager och varje skala:</p>
+<ul>
+<li><code>mean</code>: hur mycket av signalen som i genomsnitt finns i omgivningen</li>
+<li><code>std</code>: hur jämn eller splittrad signalen är i omgivningen</li>
+</ul>
+<p>Detta steg är avgörande. En hexagon med lite skog kan ligga mitt i ett stort skogligt inland, i en kustnära övergångszon eller i ett jordbrukslandskap med små skogsöar. Lokalt värde räcker därför inte; det är kombinationen av lokalt innehåll och omgivande struktur som gör tolkningen landskaplig.</p>
+<p>I denna modell är <code>k</code> inte samma sak som antal hexringar. I stället anger <code>k</code> hur mycket kumulativ kontextvikt som ska fångas upp när modellen går utåt genom närmaste grannar. Det betyder att samma <code>k</code> kan motsvara olika geografiska utbredningar i olika delar av ön beroende på hur stark signalstrukturen är.</p>
+<p>Den aktiva viktstrategin i denna körning är Per-layer robust q99 scaling, theme-balanced aggregation within each geometry type, moderate agricultural-land priority, mild continuous-metric uplift, six terrain bands from relief and absolute height, and four contour-derived terrain metrics from an interpolated pseudo-DEM.. Det betyder i praktiken att modellen inte bara frågar vilka grannar som ligger närmast, utan också hur mycket samlad signalvikt som fångas när kontexten byggs utåt från varje hexagon.</p>
+<p>I denna körning reskalas den balanserade kontextvikten dessutom med faktor 68.000 enligt rescale-läget ‘n_input_layers’ innan k-trösklarna beräknas.</p>
+<p>Med 68 lager och två kontextmått över fem skalor får modellen 680 kontextvariabler. Det är dessa variabler, inte de råa lagren ensamma, som utgör den egentliga analysmatrisen.</p>
+</section>
+<section id="vad-en-faktor-är-och-vad-den-inte-är" class="level3">
+<h3 class="anchored" data-anchor-id="vad-en-faktor-är-och-vad-den-inte-är">4.2 Vad en faktor är, och vad den inte är</h3>
+<p>Faktoranalys kan lätt uppfattas som abstrakt. I den här rapporten är det därför viktigt att definiera begreppet tydligt:</p>
+<ul>
+<li>en <strong>faktor</strong> är inte ett färdigt område på kartan</li>
+<li>en faktor är inte heller ett juridiskt eller administrativt lager</li>
+<li>en faktor är i stället en <strong>återkommande gradient</strong> i datan: ett sätt på vilket flera lager och flera skalor tenderar att samvariera</li>
+</ul>
+<p>Om exempelvis skog, fredskov och vissa natur- eller geologisignaler ofta förekommer tillsammans på flera skalor, kommer faktoranalysen att försöka fånga detta som en sammanhållen riktning. Varje hexagon får sedan ett faktorscore som visar hur starkt den hör ihop med just den gradienten.</p>
+<p>I denna körning görs faktoranalysen i fyra steg:</p>
+<ol type="1">
+<li>kontextmatrisen standardiseras så att olika enheter blir jämförbara</li>
+<li>kolumner med nollvarians, bara saknade värden eller infinita värden tas bort</li>
+<li>endast rader med komplett faktorinput används i själva faktorberäkningen</li>
+<li><code>minres</code> med <code>varimax</code> används för att få en tolkbar uppsättning relativt ortogonala faktorer</li>
+</ol>
+<p>Resultatet ska läsas som en komprimerad beskrivning av Bornholms viktigaste återkommande landskapssamband, inte som ett facit över färdiga landskapsrum.</p>
+</section>
+<section id="vad-ett-kluster-är-och-vad-det-inte-är" class="level3">
+<h3 class="anchored" data-anchor-id="vad-ett-kluster-är-och-vad-det-inte-är">4.3 Vad ett kluster är, och vad det inte är</h3>
+<p>Efter faktoranalysen grupperas hexagoner med liknande faktorprofiler. Det är detta som ger rapportens <strong>preliminära landskapstyper</strong>.</p>
+<p>Även här behövs en tydlig definition:</p>
+<ul>
+<li>ett <strong>kluster</strong> är en grupp hexagoner som liknar varandra i faktorrummet</li>
+<li>ett kluster behöver inte vara sammanhängande som en enda polygon på kartan</li>
+<li>klustret blir meningsfullt först när dess faktorprofil jämförs med kartläge, datainnehåll och Bornholms kända landskapsstruktur</li>
+</ul>
+<p>Klustren är alltså modellens bästa försök att översätta abstrakta faktorer till läsbara landskapstyper. Därför är klusterkartan mer konkret än faktorernas kartor, men den bygger fortfarande på en statistisk typologi och måste tolkas med landskapskunskap.</p>
+</section>
+<section id="viktiga-metodiska-förbehåll" class="level3">
+<h3 class="anchored" data-anchor-id="viktiga-metodiska-förbehåll">4.4 Viktiga metodiska förbehåll</h3>
+<ul>
+<li>Faktoranalysen bygger på 680 kontextvariabler, inte direkt på de 68 rålagren.</li>
+<li>605 rena havshex utan signal har tagits bort före kontextmatris, faktoranalys och klustring.</li>
+<li>Kust- eller havshex med faktisk signal ligger däremot kvar, till exempel om de träffas av kustlinje, kustzon, färjerutter eller andra aktiva lager. Masken är alltså en signalmask, inte en ren landmask.</li>
+<li>0 hexagoner saknar total signal i viktkolumnen. De ligger kvar i geografin men visar att vissa delar av modellen fortfarande är tunna.</li>
+<li>Den nuvarande viktlogiken blandar ytor, linjelängder och punktvärden i samma <code>total</code>, vilket kan ge slagsida redan före faktoranalysen.</li>
+<li>De fem faktorerna förklarar cirka 37.3% av totalvariansen. Det är användbart men innebär att rapporten fortfarande är en förenkling av verkligheten.</li>
+<li>Flera lager är skydds- eller restriktionslager snarare än direkta landskapsprocesser. De är viktiga för planeringsrelevans, men kräver försiktig tolkning i den rena landskapstypologin.</li>
+</ul>
+</section>
+</section>
+<section id="resultat-faktorernas-landskapsgradienter" class="level2">
+<h2 class="anchored" data-anchor-id="resultat-faktorernas-landskapsgradienter">5. Resultat: faktorernas landskapsgradienter</h2>
+<div class="cell">
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<colgroup>
+<col style="width: 51%">
+<col style="width: 9%">
+<col style="width: 9%">
+<col style="width: 9%">
+<col style="width: 9%">
+<col style="width: 9%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Metrik</th>
+<th style="text-align: right;">F1</th>
+<th style="text-align: right;">F2</th>
+<th style="text-align: right;">F3</th>
+<th style="text-align: right;">F4</th>
+<th style="text-align: right;">F5</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">SS loadings</td>
+<td style="text-align: right;">61.273</td>
+<td style="text-align: right;">55.440</td>
+<td style="text-align: right;">52.599</td>
+<td style="text-align: right;">50.954</td>
+<td style="text-align: right;">29.358</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Andel av total varians</td>
+<td style="text-align: right;">0.091</td>
+<td style="text-align: right;">0.083</td>
+<td style="text-align: right;">0.079</td>
+<td style="text-align: right;">0.076</td>
+<td style="text-align: right;">0.044</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Kumulativ andel av total varians</td>
+<td style="text-align: right;">0.091</td>
+<td style="text-align: right;">0.174</td>
+<td style="text-align: right;">0.253</td>
+<td style="text-align: right;">0.329</td>
+<td style="text-align: right;">0.373</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Andel av forklarad varians</td>
+<td style="text-align: right;">0.245</td>
+<td style="text-align: right;">0.222</td>
+<td style="text-align: right;">0.211</td>
+<td style="text-align: right;">0.204</td>
+<td style="text-align: right;">0.118</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Kumulativ andel av forklarad varians</td>
+<td style="text-align: right;">0.245</td>
+<td style="text-align: right;">0.468</td>
+<td style="text-align: right;">0.678</td>
+<td style="text-align: right;">0.882</td>
+<td style="text-align: right;">1.000</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div class="cell">
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<colgroup>
+<col style="width: 1%">
+<col style="width: 9%">
+<col style="width: 38%">
+<col style="width: 49%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Faktor</th>
+<th style="text-align: left;">Aktuell tolkning</th>
+<th style="text-align: left;">Starkaste signaler</th>
+<th style="text-align: left;">Hur faktorn ska läsas</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">F1</td>
+<td style="text-align: left;">Flygsands- och låglänta kustmiljöer</td>
+<td style="text-align: left;">Jordart - ES - Flyvesand (medel, k=1000), Jordart - ES - Flyvesand (std, k=1000), Jordart - ES - Flyvesand (medel, k=250)</td>
+<td style="text-align: left;">Domineras av flygsand, låga höjdband och låg konturhärledd medelhöjd över flera skalor. Faktorn fångar sandiga, låglänta kustmiljöer och skiljer dem från högre inlandslägen och platåsignaler på den negativa polen.</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">F2</td>
+<td style="text-align: left;">Brant relief och sprickdalspräglad terräng</td>
+<td style="text-align: left;">Contour-derived mean slope (medel, k=250), Relief (medel, k=250), Contour-derived mean slope (medel, k=100)</td>
+<td style="text-align: left;">Drivs mycket tydligt av konturhärledd lutning, relief och maximal lokal daldjupssignal. Faktorn beskriver ett brant, terrängkontrasterat och delvis sprickdalspräglat inland snarare än enbart allmän höjd.</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">F3</td>
+<td style="text-align: left;">Skogligt skyddsinland och habitatkärnor</td>
+<td style="text-align: left;">Forest (medel, k=1000), Natura 2000 habitat areas (medel, k=250), Natura 2000 habitat areas (medel, k=100)</td>
+<td style="text-align: left;">Domineras av skog, fredskov och Natura-habitat- och fågelskydd på mellanstora och stora skalor och beskriver ett skogligt skyddsinland med tydliga habitatkärnor.</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">F4</td>
+<td style="text-align: left;">Bosättning och byggd struktur</td>
+<td style="text-align: left;">Permanent population (medel, k=250), Permanent population (medel, k=1000), Permanent population (std, k=250)</td>
+<td style="text-align: left;">Drivs främst av fastboende, låg bebyggelse, centrumfunktioner, vägar och verksamhetsmark och beskriver öns bosättnings- och bebyggelsestruktur snarare än enbart tätorter.</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">F5</td>
+<td style="text-align: left;">Marina sand- och gruskuster</td>
+<td style="text-align: left;">Jordart - Marina sand och grus - ovrigt (medel, k=1000), Jordart - Marina sand och grus - ovrigt (medel, k=250), Jordart - Marina sand och grus - ovrigt (std, k=1000)</td>
+<td style="text-align: left;">Kopplar marina sand- och grusavlagringar till låga kustsedimentära miljöer och beskriver särskilda kustbundna sedimentpaket snarare än hela den generella kustzonen.</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p>Tabellen ovan är den enklaste vägen in i faktorresultatet. Om en läsare bara ska ta med sig en sak från faktorsteget är det att varje faktor får sin mening av <strong>vilka signaler som drar åt samma håll över flera skalor</strong>, inte av ett enda kartlager.</p>
+<p>Den sakliga tolkningen av faktorerna ska i första hand styras av deras starkaste och mest sammanhängande laddningar. Tabellen nedan visar därför de <code>6</code> största absoluta laddningarna per faktor och är den primära läsnyckeln till faktorernas innehåll.</p>
+<div class="cell">
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<colgroup>
+<col style="width: 40%">
+<col style="width: 52%">
+<col style="width: 7%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">factor</th>
+<th style="text-align: left;">variabel</th>
+<th style="text-align: right;">loading</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Flygsands- och låglänta kustmiljöer</td>
+<td style="text-align: left;">Jordart - ES - Flyvesand (medel, k=1000)</td>
+<td style="text-align: right;">0.846</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Flygsands- och låglänta kustmiljöer</td>
+<td style="text-align: left;">Jordart - ES - Flyvesand (std, k=1000)</td>
+<td style="text-align: right;">0.841</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Flygsands- och låglänta kustmiljöer</td>
+<td style="text-align: left;">Jordart - ES - Flyvesand (medel, k=250)</td>
+<td style="text-align: right;">0.828</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Flygsands- och låglänta kustmiljöer</td>
+<td style="text-align: left;">Jordart - ES - Flyvesand (std, k=250)</td>
+<td style="text-align: right;">0.811</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Flygsands- och låglänta kustmiljöer</td>
+<td style="text-align: left;">Jordart - ES - Flyvesand (medel, k=100)</td>
+<td style="text-align: right;">0.805</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Flygsands- och låglänta kustmiljöer</td>
+<td style="text-align: left;">Jordart - ES - Flyvesand (std, k=100)</td>
+<td style="text-align: right;">0.780</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Brant relief och sprickdalspräglad terräng</td>
+<td style="text-align: left;">Contour-derived mean slope (medel, k=250)</td>
+<td style="text-align: right;">0.925</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Brant relief och sprickdalspräglad terräng</td>
+<td style="text-align: left;">Relief (medel, k=250)</td>
+<td style="text-align: right;">0.924</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Brant relief och sprickdalspräglad terräng</td>
+<td style="text-align: left;">Contour-derived mean slope (medel, k=100)</td>
+<td style="text-align: right;">0.916</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Brant relief och sprickdalspräglad terräng</td>
+<td style="text-align: left;">Relief (medel, k=100)</td>
+<td style="text-align: right;">0.914</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Brant relief och sprickdalspräglad terräng</td>
+<td style="text-align: left;">Contour-derived mean slope (medel, k=50)</td>
+<td style="text-align: right;">0.897</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Brant relief och sprickdalspräglad terräng</td>
+<td style="text-align: left;">Relief (medel, k=50)</td>
+<td style="text-align: right;">0.894</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Skogligt skyddsinland och habitatkärnor</td>
+<td style="text-align: left;">Forest (medel, k=1000)</td>
+<td style="text-align: right;">0.862</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Skogligt skyddsinland och habitatkärnor</td>
+<td style="text-align: left;">Natura 2000 habitat areas (medel, k=250)</td>
+<td style="text-align: right;">0.862</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Skogligt skyddsinland och habitatkärnor</td>
+<td style="text-align: left;">Natura 2000 habitat areas (medel, k=100)</td>
+<td style="text-align: right;">0.856</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Skogligt skyddsinland och habitatkärnor</td>
+<td style="text-align: left;">Forest (medel, k=250)</td>
+<td style="text-align: right;">0.849</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Skogligt skyddsinland och habitatkärnor</td>
+<td style="text-align: left;">Natura 2000 habitat areas (medel, k=50)</td>
+<td style="text-align: right;">0.849</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Skogligt skyddsinland och habitatkärnor</td>
+<td style="text-align: left;">Natura 2000 habitat areas (medel, k=1000)</td>
+<td style="text-align: right;">0.848</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Bosättning och byggd struktur</td>
+<td style="text-align: left;">Permanent population (medel, k=250)</td>
+<td style="text-align: right;">0.913</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Bosättning och byggd struktur</td>
+<td style="text-align: left;">Permanent population (medel, k=1000)</td>
+<td style="text-align: right;">0.912</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Bosättning och byggd struktur</td>
+<td style="text-align: left;">Permanent population (std, k=250)</td>
+<td style="text-align: right;">0.911</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Bosättning och byggd struktur</td>
+<td style="text-align: left;">Built low selection (medel, k=1000)</td>
+<td style="text-align: right;">0.897</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Bosättning och byggd struktur</td>
+<td style="text-align: left;">Buildings low (medel, k=1000)</td>
+<td style="text-align: right;">0.884</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Bosättning och byggd struktur</td>
+<td style="text-align: left;">Permanent population (std, k=1000)</td>
+<td style="text-align: right;">0.876</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Marina sand- och gruskuster</td>
+<td style="text-align: left;">Jordart - Marina sand och grus - ovrigt (medel, k=1000)</td>
+<td style="text-align: right;">0.703</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Marina sand- och gruskuster</td>
+<td style="text-align: left;">Jordart - Marina sand och grus - ovrigt (medel, k=250)</td>
+<td style="text-align: right;">0.682</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Marina sand- och gruskuster</td>
+<td style="text-align: left;">Jordart - Marina sand och grus - ovrigt (std, k=1000)</td>
+<td style="text-align: right;">0.670</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Marina sand- och gruskuster</td>
+<td style="text-align: left;">Jordart - Marina sand och grus - ovrigt (std, k=250)</td>
+<td style="text-align: right;">0.656</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Marina sand- och gruskuster</td>
+<td style="text-align: left;">Jordart - Marina sand och grus - ovrigt (medel, k=100)</td>
+<td style="text-align: right;">0.653</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Marina sand- och gruskuster</td>
+<td style="text-align: left;">Jordart - Marina sand och grus - ovrigt (std, k=100)</td>
+<td style="text-align: right;">0.630</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p>Den kompletta laddningsmatrisen finns kvar som diagnostik och rimlighetskontroll, men den ska inte vara rapportens huvudsakliga tolkningsyta. Den lasbara huvudytan for hela matrisen finns nu som filtrerbar Excel-fil.</p>
+<p>
+<a class="btn btn-outline-primary btn-sm" href="tables/landskapsanalys_v4_factor_loadings_readable.xlsx" target="_blank" rel="noopener">Open readable loadings workbook (Excel)</a>
+</p>
+<div class="cell">
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="landskapsanalys_v4_files/figure-html/loadings-heatmap-1.png" class="img-fluid figure-img" width="1728"></p>
+</figure>
+</div>
+</div>
+</div>
+<div class="cell">
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="landskapsanalys_v4_files/figure-html/factor-maps-1.png" class="img-fluid figure-img" width="1152"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>
+<a class="btn btn-outline-primary btn-sm" href="maps/landskapsanalys_v4_factor_mapview.html" target="_blank" rel="noopener">Öppna faktorkartan i egen flik / helskärm</a>
+</p>
+<p><strong>Vad som är viktigast i faktorsteget:</strong> modellen skiljer nu tydligt mellan minst fem olika logiker i Bornholms landskap: låglänta sandkuster, brant relief och dalinslag, skogligt skyddsinland med habitatkärnor, bosättning och byggd struktur samt marina sand- och gruskuster. Ingen faktor är ensam en landskapstyp, men tillsammans beskriver de vad som återkommer på ön som stabila gradienter.</p>
+</section>
+<section id="resultat-preliminära-landskapstyper" class="level2">
+<h2 class="anchored" data-anchor-id="resultat-preliminära-landskapstyper">6. Resultat: preliminära landskapstyper</h2>
+<div class="cell">
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<thead>
+<tr class="header">
+<th style="text-align: right;">K</th>
+<th style="text-align: right;">Silhouette</th>
+<th style="text-align: left;">Beräkningsbas</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: right;">5</td>
+<td style="text-align: right;">0.252</td>
+<td style="text-align: left;">full</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">7</td>
+<td style="text-align: right;">0.225</td>
+<td style="text-align: left;">full</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">0.220</td>
+<td style="text-align: left;">full</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">9</td>
+<td style="text-align: right;">0.211</td>
+<td style="text-align: left;">full</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">0.211</td>
+<td style="text-align: left;">full</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">10</td>
+<td style="text-align: right;">0.191</td>
+<td style="text-align: left;">full</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div class="cell">
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="landskapsanalys_v4_files/figure-html/k-score-plot-1.png" class="img-fluid figure-img" width="672"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>Klustren är rapportens mest konkreta resultat. För en läsare utan förkunskaper är det därför ofta bäst att börja här: ett kluster är helt enkelt en grupp hexagoner som liknar varandra i faktorprofil och därför kan tolkas som en preliminär landskapstyp.</p>
+<div class="cell">
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<colgroup>
+<col style="width: 15%">
+<col style="width: 1%">
+<col style="width: 13%">
+<col style="width: 9%">
+<col style="width: 59%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Kluster</th>
+<th style="text-align: right;">Andel</th>
+<th style="text-align: left;">Dominerande faktor</th>
+<th style="text-align: left;">Nästa tydliga faktor</th>
+<th style="text-align: left;">Kort läsning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">1 Tätorts- och verksamhetskärnor</td>
+<td style="text-align: right;">0.041</td>
+<td style="text-align: left;">Bosättning och byggd struktur</td>
+<td style="text-align: left;">Marina sand- och gruskuster</td>
+<td style="text-align: left;">Mycket hög F4 visar öns tydligaste tätorts- och verksamhetskärnor, där byggd struktur, fastboende och tillgänglighet samlas starkare än övriga faktorer.</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">2 Vardagslandskap med blandad bakgrundskaraktär</td>
+<td style="text-align: right;">0.488</td>
+<td style="text-align: left;">Marina sand- och gruskuster</td>
+<td style="text-align: left;">Bosättning och byggd struktur</td>
+<td style="text-align: left;">Låga eller svagt negativa värden på de flesta faktorer visar öns breda bakgrundslandskap där flera signaler blandas utan stark specialisering i någon riktning.</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">3 Flygsands- och låglänta kuststråk</td>
+<td style="text-align: right;">0.218</td>
+<td style="text-align: left;">Flygsands- och låglänta kustmiljöer</td>
+<td style="text-align: left;">Marina sand- och gruskuster</td>
+<td style="text-align: left;">Hög F1 och svag bosättnings- och skogssignal visar låglänta sand- och kuststråk där flygsand, låga höjder och kustnära lågland logiskt samverkar.</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">4 Brant relief och dalpräglat inland</td>
+<td style="text-align: right;">0.136</td>
+<td style="text-align: left;">Brant relief och sprickdalspräglad terräng</td>
+<td style="text-align: left;">Marina sand- och gruskuster</td>
+<td style="text-align: left;">Mycket hög F2 tillsammans med viss positiv F5-signal markerar öns branta, terrängkontrasterade och dalpräglade inlandslägen där konturhärledd lutning och daldjup gör störst skillnad.</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">5 Skogligt skyddsinland och habitatkärnor</td>
+<td style="text-align: right;">0.117</td>
+<td style="text-align: left;">Skogligt skyddsinland och habitatkärnor</td>
+<td style="text-align: left;">Marina sand- och gruskuster</td>
+<td style="text-align: left;">Mycket hög F3 markerar Bornholms tydligaste skogliga, habitatpräglade och skyddsinriktade inlandsmiljöer.</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div class="cell">
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<colgroup>
+<col style="width: 17%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 67%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Kluster</th>
+<th style="text-align: right;">Andel</th>
+<th style="text-align: right;">F1</th>
+<th style="text-align: right;">F2</th>
+<th style="text-align: right;">F3</th>
+<th style="text-align: right;">F4</th>
+<th style="text-align: right;">F5</th>
+<th style="text-align: left;">Tolkning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">1 Tätorts- och verksamhetskärnor</td>
+<td style="text-align: right;">0.041</td>
+<td style="text-align: right;">-0.277</td>
+<td style="text-align: right;">0.003</td>
+<td style="text-align: right;">-0.195</td>
+<td style="text-align: right;">3.809</td>
+<td style="text-align: right;">0.175</td>
+<td style="text-align: left;">Mycket hög F4 visar öns tydligaste tätorts- och verksamhetskärnor, där byggd struktur, fastboende och tillgänglighet samlas starkare än övriga faktorer.</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">2 Vardagslandskap med blandad bakgrundskaraktär</td>
+<td style="text-align: right;">0.488</td>
+<td style="text-align: right;">-0.443</td>
+<td style="text-align: right;">-0.283</td>
+<td style="text-align: right;">-0.418</td>
+<td style="text-align: right;">-0.234</td>
+<td style="text-align: right;">-0.221</td>
+<td style="text-align: left;">Låga eller svagt negativa värden på de flesta faktorer visar öns breda bakgrundslandskap där flera signaler blandas utan stark specialisering i någon riktning.</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">3 Flygsands- och låglänta kuststråk</td>
+<td style="text-align: right;">0.218</td>
+<td style="text-align: right;">1.370</td>
+<td style="text-align: right;">-0.323</td>
+<td style="text-align: right;">-0.037</td>
+<td style="text-align: right;">-0.073</td>
+<td style="text-align: right;">0.059</td>
+<td style="text-align: left;">Hög F1 och svag bosättnings- och skogssignal visar låglänta sand- och kuststråk där flygsand, låga höjder och kustnära lågland logiskt samverkar.</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">4 Brant relief och dalpräglat inland</td>
+<td style="text-align: right;">0.136</td>
+<td style="text-align: right;">0.004</td>
+<td style="text-align: right;">1.737</td>
+<td style="text-align: right;">-0.177</td>
+<td style="text-align: right;">0.021</td>
+<td style="text-align: right;">0.540</td>
+<td style="text-align: left;">Mycket hög F2 tillsammans med viss positiv F5-signal markerar öns branta, terrängkontrasterade och dalpräglade inlandslägen där konturhärledd lutning och daldjup gör störst skillnad.</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">5 Skogligt skyddsinland och habitatkärnor</td>
+<td style="text-align: right;">0.117</td>
+<td style="text-align: right;">-0.620</td>
+<td style="text-align: right;">-0.236</td>
+<td style="text-align: right;">2.087</td>
+<td style="text-align: right;">-0.259</td>
+<td style="text-align: right;">0.122</td>
+<td style="text-align: left;">Mycket hög F3 markerar Bornholms tydligaste skogliga, habitatpräglade och skyddsinriktade inlandsmiljöer.</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p>I tabellen ovan betyder positiva värden att klustret har mer av en viss faktor än ö-genomsnittet, medan negativa värden betyder att faktorn är svagare där än i Bornholms typiska bakgrundslandskap. Man ska därför inte läsa siffrorna som absoluta mängder, utan som riktning och styrka i relation till resten av ön.</p>
+<div class="cell">
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="landskapsanalys_v4_files/figure-html/cluster-profile-heatmap-1.png" class="img-fluid figure-img" width="1248"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>
+<a class="btn btn-outline-primary btn-sm" href="maps/landskapsanalys_v4_cluster_map.html" target="_blank" rel="noopener">Öppna klusterkartan i egen flik / helskärm</a>
+</p>
+<p>I denna analys väljs <code>K = r k_best</code>. Det viktigaste med det valet är att lösningen ger flera tydligt olika typer utan att splittra resultatet i många små restkluster. Samtidigt visar fördelningen att kluster <code>2</code> fungerar som öns breda vardagsmatris, medan övriga kluster fångar mer specialiserade bosättnings-, låglandskust-, brant terräng- och skogliga naturmönster.</p>
+</section>
+<section id="tolkning-osäkerheter-och-begränsningar" class="level2">
+<h2 class="anchored" data-anchor-id="tolkning-osäkerheter-och-begränsningar">7. Tolkning, osäkerheter och begränsningar</h2>
+<p>Den här analysen kan beskrivas som en <strong>mogen arbetsmodell</strong>. Den är tillräckligt bred och sammanhängande för att ge en meningsfull typologi av Bornholm, men den kräver fortfarande slutlig validering och viss komplettering innan den bör behandlas som helt stabil referensmodell.</p>
+<p>Det starkaste i nuläget är att modellen kan skilja mellan flera olika landskapssammanhang som också är begripliga i kartan:</p>
+<ul>
+<li>flygsands- och låglänta kuststråk</li>
+<li>bosättnings- och bebyggelsestrukturer med olika täthet</li>
+<li>skogligt skyddsinland med habitatkärnor</li>
+<li>branta och dalpräglade inlandsmiljöer</li>
+<li>marina sand- och gruspräglade kustsedimentmiljöer</li>
+</ul>
+<p>De viktigaste kvarvarande osäkerheterna är däremot fortfarande tydliga:</p>
+<ul>
+<li>viktkolumnen i kontextsteget blandar flera måttenheter och kan därför påverka grannskap och faktorstruktur</li>
+<li>pseudo-DEM:en är härledd från höjdkurvor, inte från en fullständig laserbaserad höjdmodell</li>
+<li>vissa ännu ej använda underkategorier, energilager och bevarandelager kan förändra delar av bilden</li>
+<li>skydds- och restriktionslager bidrar till planeringsrelevans men är inte alltid samma sak som egen landskapsprocess</li>
+<li>faktor- och klusternamn är fortfarande tolkningar och bör ses som arbetsnamn tills de har verklighetskontrollerats mot kartor och Bornholmskännedom</li>
+</ul>
+<p>Rapporten bör därför användas som:</p>
+<ul>
+<li>en transparent beskrivning av Bornholms landskapstyper i flera skalor</li>
+<li>ett arbetsunderlag för fortsatt expertgranskning, karttolkning och typologisk namnsättning</li>
+<li>en möjlig grund för senare acceptans- eller känslighetsbedömningar</li>
+</ul>
+<p>Rapporten bör ännu inte användas som ensam beslutsgrund för lokalisering, tillstånd eller slutlig värdering av enskilda platser.</p>
+</section>
+<section id="typologisk-tolkning-och-nästa-steg" class="level2">
+<h2 class="anchored" data-anchor-id="typologisk-tolkning-och-nästa-steg">8. Typologisk tolkning och nästa steg</h2>
+<p>Som tolkningsram är två referenser särskilt viktiga för denna rapport. Den första är Juta Kawalerowicz och Bo Malmbergs multiskalära typologitänkande (<a href="https://su.figshare.com/articles/dataset/Multiscalar_typology_of_residential_areas_in_Sweden/14753826">Multiscalar Typology of Residential Areas in Sweden</a>): platser ska beskrivas både av sina lokala egenskaper och av sin omgivning på flera skalor. Här används det som en <strong>metodisk anpassning</strong>, inte som en direkt kopia av deras bostadstypologi. Den andra är den befintliga Bornholmsanalysen i <a href="https://github.com/gislab-se/landskapsanalys/blob/main/data/Landskapstyper%20Bornholm.pdf">Landskapstyper Bornholm (PDF)</a>, som fungerar som verklighetskontroll för hur översiktliga landskapsrum faktiskt brukar beskrivas på ön.</p>
+<p>Det viktiga är inte att denna modell ska kopiera någon tidigare typologi exakt. Det viktiga är att den ska återge huvuddragen i Bornholms landskap på ett sätt som är både statistiskt hållbart och geografiskt begripligt. Om låglänta sandkuster, skogligt skyddsinland, brant dalpräglat inland, vardagslandskap och bebyggda kärnor går att läsa tydligt i samma modell, då är typologin på väg att gå i mål.</p>
+<p>Nästa steg är därför både validerande och metodiskt riktade:</p>
+<ol type="1">
+<li>kontrollera att faktor- och klusternamn stämmer med kartornas faktiska geografi</li>
+<li>pröva om jordbruksplatå och sprickdalsmönster blir tydligare med fler konturhärledda derivat eller med verklig DEM</li>
+<li>jämföra huvudmönstren mot Bornholms befintliga landskapstypologi och lokal kunskap</li>
+<li>därefter låsa en stabil referensmodell för fortsatt planeringsanvändning</li>
+</ol>
+<p>Det betyder att rapporten nu bör läsas som en nästan färdig landskapstypologi: tillräckligt utvecklad för att diskuteras som huvudmodell, men fortfarande öppen för en sista omgång tolkning, kalibrering och expertkontroll.</p>
+</section>
+<section id="utdata-från-analysen" class="level2">
+<h2 class="anchored" data-anchor-id="utdata-från-analysen">Utdata från analysen</h2>
+<p>Rapporten bygger på ett sammanhållet analysunderlag som innehåller lagerdata, factorscores, klusterprofiler och hexagonlager för kartor och tolkning.</p>
+<p>Till analysen hör bland annat följande utdata:</p>
+<ul>
+<li>punkt- och kontextdata per hexagon</li>
+<li>factorscores per hexagon</li>
+<li>faktorladdningar och klusterprofiler</li>
+<li>hexagonlager för kartor och tolkning</li>
+</ul>
+</section>
+<section id="referenser" class="level2">
+<h2 class="anchored" data-anchor-id="referenser">Referenser</h2>
+<ul>
+<li>H3. <em>Tables of Cell Statistics Across Resolutions</em>. H3 documentation. <a href="https://h3geo.org/docs/core-library/restable/">https://h3geo.org/docs/core-library/restable/</a></li>
+<li>Kawalerowicz, J., &amp; Malmberg, B. <em>Multiscalar Typology of Residential Areas in Sweden</em>. Stockholm University / Figshare. <a href="https://su.figshare.com/articles/dataset/Multiscalar_typology_of_residential_areas_in_Sweden/14753826">https://su.figshare.com/articles/dataset/Multiscalar_typology_of_residential_areas_in_Sweden/14753826</a></li>
+<li><em>Landskapstyper Bornholm (PDF)</em>. <a href="https://github.com/gislab-se/landskapsanalys/blob/main/data/Landskapstyper%20Bornholm.pdf">https://github.com/gislab-se/landskapsanalys/blob/main/data/Landskapstyper%20Bornholm.pdf</a></li>
+</ul>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>
