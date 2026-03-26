@@ -836,11 +836,28 @@ function(el, x, data) {
   var modeControl = L.control({position: 'topleft'});
   var legendControl = L.control({position: 'bottomright'});
 
-  map.eachLayer(function(layer) {
-    if (layer instanceof L.Polygon && layer.feature && layer.feature.properties && layer.feature.properties.hex_id) {
-      polygonLayers.push(layer);
+  function collectPolygonLayers(layer, bucket) {
+    if (!layer) {
+      return;
     }
-  });
+    if (layer instanceof L.Polygon && typeof layer.setStyle === 'function') {
+      bucket.push(layer);
+      return;
+    }
+    if (layer.eachLayer && typeof layer.eachLayer === 'function') {
+      layer.eachLayer(function(childLayer) {
+        collectPolygonLayers(childLayer, bucket);
+      });
+    }
+  }
+
+  function refreshPolygonLayers() {
+    var bucket = [];
+    map.eachLayer(function(layer) {
+      collectPolygonLayers(layer, bucket);
+    });
+    polygonLayers = bucket;
+  }
 
   function escapeHtml(value) {
     return String(value)
@@ -938,6 +955,9 @@ function(el, x, data) {
   }
 
   function applyMode() {
+    if (!polygonLayers.length) {
+      refreshPolygonLayers();
+    }
     var fill = currentFillValue();
     polygonLayers.forEach(function(layer) {
       layer.setStyle(styleFor(layer, fill));
@@ -1000,6 +1020,7 @@ function(el, x, data) {
   opacityControl.addTo(map);
   modeControl.addTo(map);
   legendControl.addTo(map);
+  refreshPolygonLayers();
 
   var slider = document.getElementById('combined-opacity-slider');
   if (slider) {
@@ -1032,6 +1053,11 @@ function(el, x, data) {
       label.textContent = Math.round(data.baseFill * 100) + '%';
     }
   }
+
+  map.on('layeradd', function() {
+    refreshPolygonLayers();
+    applyMode();
+  });
 
   applyMode();
 }
