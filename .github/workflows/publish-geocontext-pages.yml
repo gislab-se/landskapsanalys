@@ -15,6 +15,7 @@ on:
       - docs/geocontext/landskapsanalys_bornholm_handledarrapport.html
       - docs/geocontext/maps/**
       - docs/geocontext/tables/**
+      - docs/geocontext/published_report/**
   workflow_dispatch:
 
 permissions:
@@ -52,6 +53,7 @@ jobs:
           cp -R docs/geocontext/acceptance_framework "$site_dir/acceptance_framework"
           cp -R docs/geocontext/maps "$site_dir/maps"
           cp -R docs/geocontext/tables "$site_dir/tables"
+          cp -R docs/geocontext/published_report "$site_dir/published_report"
           touch "$site_dir/.nojekyll"
 
       - name: Upload Pages artifact
