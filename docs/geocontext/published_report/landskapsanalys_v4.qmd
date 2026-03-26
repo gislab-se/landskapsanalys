@@ -786,49 +786,21 @@ combined_map_widget <- leaflet(options = leafletOptions(zoomSnap = 0.25)) |>
     group = txt("Ljus baskarta", "Light basemap")
   ) |>
   addPolygons(
-    data = cluster_map_data,
-    group = combined_cluster_group,
-    options = pathOptions(className = "theme-layer theme-cluster"),
-    fillColor = ~cluster_pal(as.character(class_km)),
-    fillOpacity = cluster_fill_opacity_default,
+    data = cluster_map_data |>
+      transmute(
+        hex_id,
+        popup_html,
+        fill_cluster = cluster_pal(as.character(class_km)),
+        across(all_of(factor_cols), ~factor_pal(pmax(pmin(.x, factor_limit_robust), -factor_limit_robust)), .names = "fill_{.col}")
+      ),
+    fillColor = ~fill_cluster,
+    fillOpacity = factor_fill_opacity_default,
     color = "#444444",
     opacity = cluster_line_opacity_default,
     weight = 0.25,
     popup = ~popup_html,
     popupOptions = popupOptions(maxWidth = 480)
   )
-
-for (f in factor_cols) {
-  data_factor <- hex_wgs84_display
-  data_factor$map_value <- data_factor[[f]]
-  data_factor$map_value_clipped <- pmax(
-    pmin(data_factor$map_value, factor_limit_robust),
-    -factor_limit_robust
-  )
-  data_factor$popup_html <- vapply(seq_len(nrow(data_factor)), function(i) {
-    factor_popup_html(
-      f = f,
-      hex_id = data_factor$hex_id[i],
-      score = data_factor$map_value[i],
-      class_km = data_factor$class_km[i],
-      scores = as.numeric(combined_factor_scores[i, , drop = TRUE])
-    )
-  }, character(1))
-
-  combined_map_widget <- combined_map_widget |>
-    addPolygons(
-      data = data_factor,
-      group = combined_factor_groups[[f]],
-      options = pathOptions(className = paste("theme-layer", paste0("theme-", f))),
-      fillColor = ~factor_pal(map_value_clipped),
-      fillOpacity = factor_fill_opacity_default,
-      color = "#666666",
-      opacity = factor_line_opacity_default,
-      weight = 0.15,
-      popup = ~popup_html,
-      popupOptions = popupOptions(maxWidth = 480)
-    )
-}
 
 combined_map_widget <- combined_map_widget |>
   addLayersControl(
@@ -858,31 +830,11 @@ function(el, x, data) {
   var modeControl = L.control({position: 'topleft'});
   var legendControl = L.control({position: 'bottomright'});
 
-  function collectPolygonLayers(layer, bucket) {
-    if (!layer) {
-      return;
+  map.eachLayer(function(layer) {
+    if (layer instanceof L.Polygon && layer.feature && layer.feature.properties && layer.feature.properties.hex_id) {
+      polygonLayers.push(layer);
     }
-    if (layer instanceof L.Polygon && typeof layer.setStyle === 'function') {
-      var className = (layer.options && layer.options.className) || '';
-      if (className.indexOf('theme-layer') !== -1) {
-        bucket.push(layer);
-      }
-      return;
-    }
-    if (layer.eachLayer && typeof layer.eachLayer === 'function') {
-      layer.eachLayer(function(childLayer) {
-        collectPolygonLayers(childLayer, bucket);
-      });
-    }
-  }
-
-  function refreshPolygonLayers() {
-    var bucket = [];
-    map.eachLayer(function(layer) {
-      collectPolygonLayers(layer, bucket);
-    });
-    polygonLayers = bucket;
-  }
+  });
 
   function escapeHtml(value) {
     return String(value)
@@ -897,46 +849,25 @@ function(el, x, data) {
     return mode === 'cluster';
   }
 
-  function getThemeClass(mode) {
-    return mode === 'cluster' ? 'theme-cluster' : ('theme-' + mode);
-  }
-
-  function layerHasTheme(layer, themeClass) {
-    var className = (layer.options && layer.options.className) || '';
-    return className.indexOf(themeClass) !== -1;
-  }
-
   function currentFillValue() {
     var slider = document.getElementById('combined-opacity-slider');
     return slider ? Number(slider.value) : Number(data.baseFill);
   }
 
-  function activeStyle(fill) {
+  function styleFor(layer, fill) {
+    var props = layer.feature.properties || {};
     var isCluster = isClusterMode(currentMode);
     var stroke = isCluster
       ? Math.max(0.12, Math.min(0.85, fill * 0.8))
       : Math.max(0.10, Math.min(0.8, fill * 0.45));
+    var fillKey = isCluster ? 'fill_cluster' : ('fill_' + currentMode);
     return {
+      fillColor: props[fillKey] || props.fill_cluster || '#999999',
       fillOpacity: fill,
       color: isCluster ? data.clusterStrokeColor : data.factorStrokeColor,
       opacity: stroke,
       weight: isCluster ? data.clusterWeight : data.factorWeight
     };
-  }
-
-  function hiddenStyle() {
-    return {
-      fillOpacity: 0,
-      opacity: 0,
-      weight: 0.01
-    };
-  }
-
-  function setLayerVisibility(layer, visible) {
-    if (layer._path) {
-      layer._path.style.display = visible ? '' : 'none';
-      layer._path.style.pointerEvents = visible ? 'auto' : 'none';
-    }
   }
 
   function updateModeLabel() {
@@ -983,18 +914,9 @@ function(el, x, data) {
   }
 
   function applyMode() {
-    if (!polygonLayers.length) {
-      refreshPolygonLayers();
-    }
     var fill = currentFillValue();
-    var themeClass = getThemeClass(currentMode);
     polygonLayers.forEach(function(layer) {
-      var visible = layerHasTheme(layer, themeClass);
-      layer.setStyle(visible ? activeStyle(fill) : hiddenStyle());
-      setLayerVisibility(layer, visible);
-      if (visible && layer.bringToFront) {
-        layer.bringToFront();
-      }
+      layer.setStyle(styleFor(layer, fill));
     });
     updateModeLabel();
     updateLegend();
@@ -1019,20 +941,17 @@ function(el, x, data) {
   modeControl.onAdd = function() {
     var div = L.DomUtil.create('div', 'combined-mode-control leaflet-bar');
     var optionsHtml = data.modeOptions.map(function(option) {
-      var checked = option.value === currentMode ? ' checked' : '';
-      return '<label style=\"display:flex;align-items:center;gap:8px;margin-top:6px;cursor:pointer;\">' +
-        '<input type=\"radio\" name=\"combined-map-theme\" value=\"' + escapeHtml(option.value) + '\"' + checked + '>' +
-        '<span>' + escapeHtml(option.label) + '</span>' +
-        '</label>';
+      var selected = option.value === currentMode ? ' selected' : '';
+      return '<option value=\"' + escapeHtml(option.value) + '\"' + selected + '>' + escapeHtml(option.label) + '</option>';
     }).join('');
     div.style.background = 'rgba(255,255,255,0.94)';
     div.style.padding = '10px 12px';
     div.style.borderRadius = '8px';
     div.style.boxShadow = '0 1px 6px rgba(0,0,0,0.22)';
     div.style.minWidth = '230px';
-    div.innerHTML = '<div style=\"font-weight:600;margin-bottom:4px;\">' + escapeHtml(data.modeControlTitle) + '</div>' +
-      optionsHtml +
-      '<div id=\"combined-mode-value\" style=\"margin-top:8px;font-size:12px;color:#555;\"></div>';
+    div.innerHTML = '<div style=\"font-weight:600;margin-bottom:6px;\">' + escapeHtml(data.modeControlTitle) + '</div>' +
+      '<select id=\"combined-mode-select\" style=\"width:100%;padding:6px 8px;\">' + optionsHtml + '</select>' +
+      '<div id=\"combined-mode-value\" style=\"margin-top:6px;font-size:12px;color:#555;\"></div>';
     L.DomEvent.disableClickPropagation(div);
     L.DomEvent.disableScrollPropagation(div);
     return div;
@@ -1053,34 +972,35 @@ function(el, x, data) {
   opacityControl.addTo(map);
   modeControl.addTo(map);
   legendControl.addTo(map);
-  refreshPolygonLayers();
 
   var slider = document.getElementById('combined-opacity-slider');
   if (slider) {
-    var handleOpacity = function(evt) {
+    slider.addEventListener('input', function(evt) {
+      var fill = Number(evt.target.value);
+      polygonLayers.forEach(function(layer) {
+        layer.setStyle(styleFor(layer, fill));
+      });
       var label = document.getElementById('combined-opacity-value');
       if (label) {
-        label.textContent = Math.round(Number(evt.target.value) * 100) + '%';
+        label.textContent = Math.round(fill * 100) + '%';
       }
-      applyMode();
-    };
-    slider.addEventListener('input', handleOpacity);
-    slider.addEventListener('change', handleOpacity);
+    });
   }
 
-  var radios = document.querySelectorAll('input[name=\"combined-map-theme\"]');
-  radios.forEach(function(radio) {
-    var handleModeChange = function(evt) {
+  var select = document.getElementById('combined-mode-select');
+  if (select) {
+    select.addEventListener('change', function(evt) {
       currentMode = evt.target.value;
       applyMode();
-    };
-    radio.addEventListener('change', handleModeChange);
-    radio.addEventListener('input', handleModeChange);
-  });
+    });
+  }
 
-  map.on('zoomend moveend layeradd', function() {
-    applyMode();
-  });
+  if (!slider) {
+    var label = document.getElementById('combined-opacity-value');
+    if (label) {
+      label.textContent = Math.round(data.baseFill * 100) + '%';
+    }
+  }
 
   applyMode();
 }
