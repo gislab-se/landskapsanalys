@@ -475,7 +475,7 @@ factor_top_loadings_lookup <- purrr::map(factor_cols, function(f) {
       abs_loading = abs(.data[[f]])
     ) |>
     arrange(desc(abs_loading)) |>
-    slice_head(n = 10)
+    slice_head(n = 5)
 }) |>
   purrr::set_names(factor_cols)
 
@@ -487,7 +487,7 @@ factor_top_loadings_html_lookup <- purrr::imap_chr(factor_top_loadings_lookup, f
   )
   paste0(
     "<div style='margin-top:8px;'><strong>",
-    txt("Topp 10 laddningar", "Top 10 loadings"),
+    txt("Topp 5 laddningar", "Top 5 loadings"),
     ":</strong><ol style='margin:6px 0 0 18px;padding:0;'>",
     items,
     "</ol></div>"
@@ -571,7 +571,7 @@ layer_popup_lookup <- purrr::set_names(
       ) |>
       filter(!is.na(raw_value), abs(raw_value) > 1e-9) |>
       arrange(desc(tidyr::replace_na(contribution, -Inf)), desc(abs(raw_value))) |>
-      slice_head(n = 10)
+      slice_head(n = 5)
 
     if (nrow(layer_tbl) == 0) {
       return("")
@@ -590,7 +590,7 @@ layer_popup_lookup <- purrr::set_names(
 
     paste0(
       "<div style='margin-top:8px;'><strong>",
-      txt("Topplager i detta hex", "Top layers in this hex"),
+      txt("Topp 5 lager i detta hex", "Top 5 layers in this hex"),
       ":</strong>",
       "<div style='font-size:12px;color:#666;margin-top:2px;'>",
       txt(
@@ -687,42 +687,33 @@ layer_popup_html <- function(hex_id) {
   popup_html
 }
 
-factor_popup_html <- function(f, hex_id, score, class_km, scores) {
-  factor_sections <- factor_sections_html(scores)
-
+factor_popup_html <- function(f, hex_id, score, class_km) {
   paste0(
-    "<div style='min-width:360px;'>",
+    "<div style='min-width:320px;'>",
     "<div style='font-weight:700;margin-bottom:6px;'>", htmltools::htmlEscape(factor_label(f)), "</div>",
     "<div style='margin-bottom:8px;'>", htmltools::htmlEscape(unname(factor_explanations[f])), "</div>",
     "<div><strong>", txt("Hex", "Hex"), ":</strong> ", htmltools::htmlEscape(as.character(hex_id)),
     "<br><strong>", txt("Typ", "Type"), ":</strong> ", htmltools::htmlEscape(factor_label(f)),
     "<br><strong>", txt("Kluster", "Cluster"), ":</strong> ", htmltools::htmlEscape(cluster_display_label(class_km)),
     "<br><strong>", txt("Score", "Score"), ":</strong> ", format_signed(score), "</div>",
-    factor_sections$factor_profile_html,
-    factor_sections$strongest_factor_html,
-    layer_popup_html(hex_id),
     factor_top_loadings_html_lookup[[f]],
     "</div>"
   )
 }
 
-cluster_popup_html <- function(class_km, hex_id, scores) {
-  factor_sections <- factor_sections_html(scores)
-
+cluster_popup_html <- function(class_km, hex_id) {
   builder_html <- cluster_builder_lookup[[as.character(class_km)]]
   if (is.null(builder_html)) {
     builder_html <- ""
   }
 
   paste0(
-    "<div style='min-width:360px;'>",
+    "<div style='min-width:320px;'>",
     "<div style='font-weight:700;margin-bottom:6px;'>", htmltools::htmlEscape(cluster_display_label(class_km)), "</div>",
     "<div style='margin-bottom:8px;'>", htmltools::htmlEscape(unname(cluster_explanations[as.character(class_km)])), "</div>",
     "<div><strong>", txt("Hex", "Hex"), ":</strong> ", htmltools::htmlEscape(as.character(hex_id)),
     "<br><strong>", txt("Typ", "Type"), ":</strong> ", htmltools::htmlEscape(cluster_display_label(class_km)), "</div>",
     builder_html,
-    factor_sections$factor_profile_html,
-    factor_sections$strongest_factor_html,
     layer_popup_html(hex_id),
     "</div>"
   )
@@ -737,23 +728,44 @@ Den samlade kartan ligger först i rapporten och är tänkt som huvudytan för t
 #| label: combined-map-top
 #| fig-width: 13
 #| fig-height: 9
-cluster_map_data <- hex_wgs84_display |>
-  rowwise() |>
-  mutate(
-    popup_html = cluster_popup_html(
-      class_km = class_km,
-      hex_id = hex_id,
-      scores = c_across(all_of(factor_cols))
-    )
-  ) |>
-  ungroup()
+combined_map_data <- hex_wgs84_display |>
+  transmute(
+    hex_id,
+    class_km,
+    popup_cluster = vapply(
+      seq_len(n()),
+      function(i) {
+        cluster_popup_html(
+          class_km = class_km[i],
+          hex_id = hex_id[i]
+        )
+      },
+      character(1)
+    ),
+    fill_cluster = cluster_pal(as.character(class_km))
+  )
 
-class_vals <- sort(unique(as.character(cluster_map_data$class_km)))
+class_vals <- sort(unique(as.character(hex_wgs84_display$class_km)))
 combined_cluster_group <- txt("Kluster", "Clusters")
 combined_factor_groups <- stats::setNames(factor_label(factor_cols), factor_cols)
-combined_factor_scores <- hex_wgs84_display |>
-  st_drop_geometry() |>
-  select(all_of(factor_cols))
+
+for (f in factor_cols) {
+  combined_map_data[[paste0("fill_", f)]] <- factor_pal(
+    pmax(pmin(hex_wgs84_display[[f]], factor_limit_robust), -factor_limit_robust)
+  )
+  combined_map_data[[paste0("popup_", f)]] <- vapply(
+    seq_len(nrow(hex_wgs84_display)),
+    function(i) {
+      factor_popup_html(
+        f = f,
+        hex_id = hex_wgs84_display$hex_id[i],
+        score = hex_wgs84_display[[f]][i],
+        class_km = hex_wgs84_display$class_km[i]
+      )
+    },
+    character(1)
+  )
+}
 
 combined_mode_options <- c(
   list(list(value = "cluster", label = combined_cluster_group)),
@@ -786,19 +798,13 @@ combined_map_widget <- leaflet(options = leafletOptions(zoomSnap = 0.25)) |>
     group = txt("Ljus baskarta", "Light basemap")
   ) |>
   addPolygons(
-    data = cluster_map_data |>
-      transmute(
-        hex_id,
-        popup_html,
-        fill_cluster = cluster_pal(as.character(class_km)),
-        across(all_of(factor_cols), ~factor_pal(pmax(pmin(.x, factor_limit_robust), -factor_limit_robust)), .names = "fill_{.col}")
-      ),
+    data = combined_map_data,
     fillColor = ~fill_cluster,
-    fillOpacity = factor_fill_opacity_default,
+    fillOpacity = cluster_fill_opacity_default,
     color = "#444444",
     opacity = cluster_line_opacity_default,
     weight = 0.25,
-    popup = ~popup_html,
+    popup = ~popup_cluster,
     popupOptions = popupOptions(maxWidth = 480)
   )
 
@@ -849,6 +855,10 @@ function(el, x, data) {
     return mode === 'cluster';
   }
 
+  function currentPopupKey() {
+    return isClusterMode(currentMode) ? 'popup_cluster' : ('popup_' + currentMode);
+  }
+
   function currentFillValue() {
     var slider = document.getElementById('combined-opacity-slider');
     return slider ? Number(slider.value) : Number(data.baseFill);
@@ -868,6 +878,20 @@ function(el, x, data) {
       opacity: stroke,
       weight: isCluster ? data.clusterWeight : data.factorWeight
     };
+  }
+
+  function updateLayerPopup(layer) {
+    var props = layer.feature.properties || {};
+    var popupKey = currentPopupKey();
+    var popupHtml = props[popupKey] || props.popup_cluster || '';
+    if (!popupHtml) {
+      return;
+    }
+    if (layer.getPopup && layer.getPopup()) {
+      layer.setPopupContent(popupHtml);
+    } else if (layer.bindPopup) {
+      layer.bindPopup(popupHtml, {maxWidth: 480});
+    }
   }
 
   function updateModeLabel() {
@@ -917,6 +941,7 @@ function(el, x, data) {
     var fill = currentFillValue();
     polygonLayers.forEach(function(layer) {
       layer.setStyle(styleFor(layer, fill));
+      updateLayerPopup(layer);
     });
     updateModeLabel();
     updateLegend();
@@ -941,17 +966,20 @@ function(el, x, data) {
   modeControl.onAdd = function() {
     var div = L.DomUtil.create('div', 'combined-mode-control leaflet-bar');
     var optionsHtml = data.modeOptions.map(function(option) {
-      var selected = option.value === currentMode ? ' selected' : '';
-      return '<option value=\"' + escapeHtml(option.value) + '\"' + selected + '>' + escapeHtml(option.label) + '</option>';
+      var checked = option.value === currentMode ? ' checked' : '';
+      return '<label style=\"display:flex;align-items:center;gap:8px;margin-top:6px;cursor:pointer;\">' +
+        '<input type=\"radio\" name=\"combined-map-theme\" value=\"' + escapeHtml(option.value) + '\"' + checked + '>' +
+        '<span>' + escapeHtml(option.label) + '</span>' +
+        '</label>';
     }).join('');
     div.style.background = 'rgba(255,255,255,0.94)';
     div.style.padding = '10px 12px';
     div.style.borderRadius = '8px';
     div.style.boxShadow = '0 1px 6px rgba(0,0,0,0.22)';
     div.style.minWidth = '230px';
-    div.innerHTML = '<div style=\"font-weight:600;margin-bottom:6px;\">' + escapeHtml(data.modeControlTitle) + '</div>' +
-      '<select id=\"combined-mode-select\" style=\"width:100%;padding:6px 8px;\">' + optionsHtml + '</select>' +
-      '<div id=\"combined-mode-value\" style=\"margin-top:6px;font-size:12px;color:#555;\"></div>';
+    div.innerHTML = '<div style=\"font-weight:600;margin-bottom:4px;\">' + escapeHtml(data.modeControlTitle) + '</div>' +
+      optionsHtml +
+      '<div id=\"combined-mode-value\" style=\"margin-top:8px;font-size:12px;color:#555;\"></div>';
     L.DomEvent.disableClickPropagation(div);
     L.DomEvent.disableScrollPropagation(div);
     return div;
@@ -979,6 +1007,7 @@ function(el, x, data) {
       var fill = Number(evt.target.value);
       polygonLayers.forEach(function(layer) {
         layer.setStyle(styleFor(layer, fill));
+        updateLayerPopup(layer);
       });
       var label = document.getElementById('combined-opacity-value');
       if (label) {
@@ -987,13 +1016,15 @@ function(el, x, data) {
     });
   }
 
-  var select = document.getElementById('combined-mode-select');
-  if (select) {
-    select.addEventListener('change', function(evt) {
+  var radios = document.querySelectorAll('input[name=\"combined-map-theme\"]');
+  radios.forEach(function(radio) {
+    var handleModeChange = function(evt) {
       currentMode = evt.target.value;
       applyMode();
-    });
-  }
+    };
+    radio.addEventListener('change', handleModeChange);
+    radio.addEventListener('input', handleModeChange);
+  });
 
   if (!slider) {
     var label = document.getElementById('combined-opacity-value');
