@@ -1,0 +1,17 @@
+{
+  "region_id": "trondelag",
+  "display_name": "Trondelag",
+  "country": "Norway",
+  "status": "planned",
+  "native_crs": "TBD",
+  "web_crs": "EPSG:4326",
+  "nominal_scale": "1:1000000",
+  "default_map_center": [63.43, 10.39],
+  "default_zoom": 6,
+  "available_h3_resolutions": [],
+  "default_h3_resolution": null,
+  "scenario_manifest": null,
+  "landscape_manifest": null,
+  "potential_manifest": null
+}
+

@@ -1,0 +1,9 @@
+{
+  "region_id": "bornholm",
+  "scenario_set_id": "bornholm_scenarios_placeholder",
+  "status": "placeholder",
+  "scenario_levels": ["low", "medium", "high"],
+  "layers": [],
+  "note": "Scenario outputs from energy modelers will be attached here when the regional scenario products are ready."
+}
+

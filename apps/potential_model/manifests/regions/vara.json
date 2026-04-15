@@ -1,0 +1,17 @@
+{
+  "region_id": "vara",
+  "display_name": "Vara",
+  "country": "Sweden",
+  "status": "planned",
+  "native_crs": "TBD",
+  "web_crs": "EPSG:4326",
+  "nominal_scale": "TBD",
+  "default_map_center": [58.26, 12.95],
+  "default_zoom": 9,
+  "available_h3_resolutions": [],
+  "default_h3_resolution": null,
+  "scenario_manifest": null,
+  "landscape_manifest": null,
+  "potential_manifest": null
+}
+

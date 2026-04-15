@@ -1,0 +1,34 @@
+[
+  {
+    "technology": "solar",
+    "h3_resolution": 9,
+    "source_resolution": 9,
+    "path": "docs/geocontext/potential_framework/data/bornholm_solar_potential_v0/h3_rollups/bornholm_solar_potential_res_9.csv",
+    "summary_path": "docs/geocontext/potential_framework/data/bornholm_solar_potential_v0/h3_rollups/bornholm_solar_potential_res_9_summary.csv",
+    "feature_count": 7286
+  },
+  {
+    "technology": "solar",
+    "h3_resolution": 8,
+    "source_resolution": 9,
+    "path": "docs/geocontext/potential_framework/data/bornholm_solar_potential_v0/h3_rollups/bornholm_solar_potential_res_8_rollup_from_res_9.csv",
+    "summary_path": "docs/geocontext/potential_framework/data/bornholm_solar_potential_v0/h3_rollups/bornholm_solar_potential_res_8_rollup_from_res_9_summary.csv",
+    "feature_count": 1098
+  },
+  {
+    "technology": "solar",
+    "h3_resolution": 7,
+    "source_resolution": 9,
+    "path": "docs/geocontext/potential_framework/data/bornholm_solar_potential_v0/h3_rollups/bornholm_solar_potential_res_7_rollup_from_res_9.csv",
+    "summary_path": "docs/geocontext/potential_framework/data/bornholm_solar_potential_v0/h3_rollups/bornholm_solar_potential_res_7_rollup_from_res_9_summary.csv",
+    "feature_count": 178
+  },
+  {
+    "technology": "solar",
+    "h3_resolution": 6,
+    "source_resolution": 9,
+    "path": "docs/geocontext/potential_framework/data/bornholm_solar_potential_v0/h3_rollups/bornholm_solar_potential_res_6_rollup_from_res_9.csv",
+    "summary_path": "docs/geocontext/potential_framework/data/bornholm_solar_potential_v0/h3_rollups/bornholm_solar_potential_res_6_rollup_from_res_9_summary.csv",
+    "feature_count": 35
+  }
+]
