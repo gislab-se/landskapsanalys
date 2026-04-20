@@ -1,0 +1,50 @@
+<!doctype html><html lang='sv'><head><meta charset='utf-8'><title>Bornholm v1 higher H3 local sprickdal</title><style>body{font-family:Georgia,'Times New Roman',serif;margin:36px;line-height:1.55;color:#172018;background:#f7f4ed;}
+main{max-width:1040px;margin:0 auto;}
+h1,h2{line-height:1.05;}
+table{border-collapse:collapse;width:100%;margin:16px 0;background:#fff;}
+th,td{border:1px solid #ddd;padding:7px 9px;text-align:left;font-size:14px;}
+th{background:#e9e4d7;}
+code,pre{font-family:Consolas,monospace;}
+pre{background:#fff;border:1px solid #ddd;padding:12px;overflow:auto;}
+.links a{display:inline-block;margin:4px 8px 4px 0;padding:8px 12px;border:1px solid #d7d2c8;border-radius:8px;color:#172018;text-decoration:none;background:#fff;}
+.links a.primary{background:#31553f;color:#fff;border-color:#31553f;}</style></head><body><main><h1>Bornholm v1 higher H3 local sprickdal</h1><p>Controlled Prompt 1 rerun. H3 resolution changes from res9 to res10; modelling choices stay aligned with the current published Bornholm baseline.</p><div class='links'><a class='primary' href='../map/bornholm_v1_higher_h3_local_sprickdal_combined_map.html'>Kartan</a><a href='../model/bornholm_v1_higher_h3_local_sprickdal_factor_loadings.csv'>Faktorladdningar</a><a href='bornholm_v1_higher_h3_local_sprickdal_report.md'>Ladda ner rapport</a></div><h2>Run Summary</h2><table><thead><tr><th>metric</th><th>value</th></tr></thead><tbody><tr><td>analysis_id</td><td>bornholm_v1_higher_h3_local_sprickdal</td></tr>
+<tr><td>n_hex</td><td>50189</td></tr>
+<tr><td>n_input_layers</td><td>68</td></tr>
+<tr><td>n_context_columns</td><td>680</td></tr>
+<tr><td>n_factor_columns</td><td>5</td></tr>
+<tr><td>k_best</td><td>7</td></tr>
+<tr><td>weight_strategy</td><td>geometry_balanced_q99</td></tr>
+<tr><td>weight_quantile</td><td>0.99</td></tr>
+<tr><td>theme_balance_mode</td><td>within_geometry</td></tr>
+<tr><td>layer_weight_spec</td><td>gc_agricultural_land_share=1.40; gc_relief_m=1.05; gc_highest_point_m=1.05; gc_contour_mean_elevation_m=1.10; gc_contour_mean_slope_deg=1.15; gc_contour_valley_depth_max_m=1.25; gc_high_agri_plateau_proxy=1.35</td></tr>
+<tr><td>theme_weight_spec</td><td>Land use=1.60</td></tr>
+<tr><td>geometry_weight_spec</td><td>Continuous metric=1.20</td></tr>
+<tr><td>weight_rescale_mode</td><td>n_input_layers</td></tr>
+<tr><td>weight_rescale_factor</td><td>68</td></tr>
+<tr><td>raw_total_sum</td><td>9521262.98738869</td></tr>
+<tr><td>base_total_sum</td><td>6505.50995232733</td></tr>
+<tr><td>total_weight_sum</td><td>442374.676758258</td></tr>
+<tr><td>zero_raw_total_hex</td><td>0</td></tr>
+<tr><td>zero_total_hex</td><td>0</td></tr>
+<tr><td>excluded_zero_signal_hex</td><td>5048</td></tr></tbody></table><h2>K Scores</h2><table><thead><tr><th>K</th><th>silhouette</th><th>silhouette_basis</th></tr></thead><tbody><tr><td> 7</td><td>0.3365440</td><td>full</td></tr>
+<tr><td> 6</td><td>0.3353997</td><td>full</td></tr>
+<tr><td> 5</td><td>0.3089320</td><td>full</td></tr>
+<tr><td> 8</td><td>0.2992256</td><td>full</td></tr>
+<tr><td>10</td><td>0.2803762</td><td>full</td></tr>
+<tr><td> 9</td><td>0.2772974</td><td>full</td></tr></tbody></table><h2>Cluster Sizes</h2><table><thead><tr><th>class_km</th><th>n_hex</th><th>share</th></tr></thead><tbody><tr><td>1</td><td>1337</td><td>0.0266393034330232</td></tr>
+<tr><td>2</td><td>5671</td><td>0.112992886887565</td></tr>
+<tr><td>3</td><td>3767</td><td>0.0750562872342545</td></tr>
+<tr><td>4</td><td>2084</td><td>0.0415230428978461</td></tr>
+<tr><td>5</td><td>21006</td><td>0.418537926637311</td></tr>
+<tr><td>6</td><td>12013</td><td>0.239355237203371</td></tr>
+<tr><td>7</td><td>4311</td><td>0.0858953157066289</td></tr></tbody></table><h2>Cluster Profile</h2><table><thead><tr><th>class_km</th><th>F1</th><th>F2</th><th>F3</th><th>F4</th><th>F5</th><th>n_hex</th></tr></thead><tbody><tr><td>1</td><td>-0.474326332380937</td><td>4.23444758538275</td><td>-0.148046990970417</td><td>-0.657434148286627</td><td>-0.580735516198686</td><td>1337</td></tr>
+<tr><td>2</td><td>-0.0958350721272232</td><td>-0.143378690406494</td><td>2.15899134455749</td><td>-0.184612656403288</td><td>-0.59545707750778</td><td>5671</td></tr>
+<tr><td>3</td><td>-0.20516768584894</td><td>1.65045383482077</td><td>-0.080140692157531</td><td>0.366956513042298</td><td>0.396886079159854</td><td>3767</td></tr>
+<tr><td>4</td><td>-0.165139603754487</td><td>-0.0937459533355069</td><td>-0.142535761871502</td><td>3.90723668643595</td><td>-0.0473625547053082</td><td>2084</td></tr>
+<tr><td>5</td><td>-0.153058875790545</td><td>-0.423877829420897</td><td>-0.512882806911645</td><td>-0.261403046335787</td><td>-0.579430012640688</td><td>21006</td></tr>
+<tr><td>6</td><td>-0.384116165113734</td><td>-0.188992308383565</td><td>-0.0268773338191592</td><td>-0.178844670269763</td><td>1.19514872102266</td><td>12013</td></tr>
+<tr><td>7</td><td>2.34846087766448</td><td>0.0705389441073777</td><td>-0.0812509672477215</td><td>0.00937481021566825</td><td>0.132474932823038</td><td>4311</td></tr></tbody></table><h2>Factor Variance</h2><table><thead><tr><th>metric</th><th>F1</th><th>F2</th><th>F3</th><th>F4</th><th>F5</th></tr></thead><tbody><tr><td>SS loadings</td><td>49.51101982</td><td>46.25312830</td><td>38.2283941</td><td>36.25951308</td><td>33.17278807</td></tr>
+<tr><td>Proportion Var</td><td> 0.07389704</td><td> 0.06903452</td><td> 0.0570573</td><td> 0.05411868</td><td> 0.04951162</td></tr>
+<tr><td>Cumulative Var</td><td> 0.07389704</td><td> 0.14293156</td><td> 0.1999889</td><td> 0.25410755</td><td> 0.30361917</td></tr>
+<tr><td>Proportion Explained</td><td> 0.24338728</td><td> 0.22737207</td><td> 0.1879239</td><td> 0.17824526</td><td> 0.16307147</td></tr>
+<tr><td>Cumulative Proportion</td><td> 0.24338728</td><td> 0.47075936</td><td> 0.6586833</td><td> 0.83692853</td><td> 1.00000000</td></tr></tbody></table><h2>Review Questions</h2><ul><li>Does the northwest sprickdalslandskap become spatially clearer?</li><li>Does it become a cluster, a subcluster-like pattern, or only a stronger factor-score zone?</li><li>Are there new artifacts from smaller hexes?</li><li>Did the higher resolution improve interpretation enough to justify the extra detail?</li></ul></main></body></html>

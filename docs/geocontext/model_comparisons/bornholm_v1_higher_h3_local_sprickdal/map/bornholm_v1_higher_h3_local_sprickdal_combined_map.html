@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bornholm v1 res10 - kluster och faktorer</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+  <style>
+    html, body, #map { height: 100%; margin: 0; }
+    body { font-family: Georgia, "Times New Roman", serif; background: #d7ddd9; }
+    .panel { background: rgba(255,255,255,0.92); border: 1px solid rgba(23,33,27,0.16); border-radius: 6px; box-shadow: 0 10px 26px rgba(23,33,27,0.14); color: #17211b; }
+    .layer-panel { padding: 10px 12px; max-width: 340px; }
+    .layer-panel h1 { font-size: 15px; margin: 0 0 8px; }
+    .layer-panel label { display: block; line-height: 1.45; margin: 4px 0; font-size: 13px; }
+    .legend { padding: 10px 12px; min-width: 260px; font-size: 12px; }
+    .legend h2 { font-size: 13px; margin: 0 0 8px; }
+    .swatch { display: inline-block; width: 13px; height: 13px; margin-right: 7px; vertical-align: -2px; border: 1px solid rgba(0,0,0,0.2); }
+    .factor-ramp { height: 12px; margin: 6px 0 5px; background: linear-gradient(90deg, #4f6d9a, #f7f4ec, #b65f57); border: 1px solid rgba(0,0,0,0.18); }
+    .factor-scale { display: flex; justify-content: space-between; color: #4d5550; }
+  </style>
+</head>
+<body>
+<div id="map"></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script>
+const DATA_URL = "bornholm_v1_higher_h3_local_sprickdal_map_data.geojson";
+const clusterStyles = {
+  "1": {name: "Flygsands- och l\u00e5gl\u00e4nta kustk\u00e4rnor", color: "#D5B08A"},
+  "2": {name: "Skogligt skyddsinland och habitatk\u00e4rnor", color: "#5B7F4A"},
+  "3": {name: "Kustn\u00e4ra sand- och bebyggelse\u00f6verg\u00e5ngar", color: "#C99A8F"},
+  "4": {name: "T\u00e4torts- och verksamhetsk\u00e4rnor", color: "#6E7C91"},
+  "5": {name: "Vardagslandskap med blandad bakgrundskarakt\u00e4r", color: "#D8C97A"},
+  "6": {name: "L\u00e5gl\u00e4nta \u00f6ppna inland och kust\u00f6verg\u00e5ngar", color: "#9AA8B8"},
+  "7": {name: "Brant relief och sprickdalspr\u00e4glad terr\u00e4ng", color: "#8B6B45"}
+};
+const factors = {
+  F1: "Brant relief och sprickdalspr\u00e4glad terr\u00e4ng",
+  F2: "Flygsand / sand / kust",
+  F3: "Skog och skyddad natur",
+  F4: "Permanent befolkning och bebyggelse",
+  F5: "L\u00e5gl\u00e4nt och \u00f6ppet land"
+};
+let currentLayer = "cluster";
+let geoLayer = null;
+const renderer = L.canvas({padding: 0.35});
+const map = L.map("map", {zoomSnap: 0.25, renderer}).setView([55.13, 14.92], 10.5);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 18,
+  attribution: "&copy; OpenStreetMap contributors"
+}).addTo(map);
+L.control.scale({imperial: false}).addTo(map);
+function clamp(x, lo, hi) { return Math.max(lo, Math.min(hi, x)); }
+function hexToRgb(hex) {
+  const v = hex.replace("#", "");
+  return [parseInt(v.slice(0,2), 16), parseInt(v.slice(2,4), 16), parseInt(v.slice(4,6), 16)];
+}
+function rgbToHex(rgb) {
+  return "#" + rgb.map(v => clamp(Math.round(v), 0, 255).toString(16).padStart(2, "0")).join("");
+}
+function lerpColor(a, b, t) {
+  const ar = hexToRgb(a), br = hexToRgb(b);
+  return rgbToHex(ar.map((v, i) => v + (br[i] - v) * t));
+}
+function factorColor(value) {
+  const v = clamp(Number(value || 0), -4.1, 4.1);
+  if (v < 0) return lerpColor("#4f6d9a", "#f7f4ec", (v + 4.1) / 4.1);
+  return lerpColor("#f7f4ec", "#b65f57", v / 4.1);
+}
+function featureStyle(feature) {
+  const p = feature.properties;
+  const color = currentLayer === "cluster"
+    ? (clusterStyles[String(p.class_km)] || {color: "#999"}).color
+    : factorColor(p[currentLayer]);
+  return {color: "rgba(40,40,40,0.18)", weight: 0.25, fillColor: color, fillOpacity: 0.72};
+}
+function popupHtml(p) {
+  const cluster = clusterStyles[String(p.class_km)] || {name: "Ok\u00e4nt kluster"};
+  return `<strong>${p.hex_id}</strong><br>Kluster ${p.class_km}: ${cluster.name}<br>F1 ${p.F1}<br>F2 ${p.F2}<br>F3 ${p.F3}<br>F4 ${p.F4}<br>F5 ${p.F5}`;
+}
+function refreshLegend() {
+  const el = document.getElementById("legend-content");
+  if (!el) return;
+  if (currentLayer === "cluster") {
+    el.innerHTML = "<h2>Kluster</h2>" + Object.keys(clusterStyles).map(k => `<div><span class=\"swatch\" style=\"background:${clusterStyles[k].color}\"></span>${k} ${clusterStyles[k].name}</div>`).join("");
+  } else {
+    el.innerHTML = `<h2>Faktorscore - ${factors[currentLayer]}</h2><div class=\"factor-ramp\"></div><div class=\"factor-scale\"><span>l\u00e5g -4.1</span><span>0</span><span>h\u00f6g +4.1</span></div>`;
+  }
+}
+const layerControl = L.control({position: "topright"});
+layerControl.onAdd = function() {
+  const div = L.DomUtil.create("div", "panel layer-panel");
+  div.innerHTML = `<h1>Bornholm v1 res10</h1>
+<label><input type=\"radio\" name=\"view\" value=\"cluster\" checked> Kluster</label>
+${Object.keys(factors).map(k => `<label><input type=\"radio\" name=\"view\" value=\"${k}\"> ${k} - ${factors[k]}</label>`).join("")}`;
+  L.DomEvent.disableClickPropagation(div);
+  return div;
+};
+layerControl.addTo(map);
+const legend = L.control({position: "bottomright"});
+legend.onAdd = function() {
+  const div = L.DomUtil.create("div", "panel legend");
+  div.id = "legend-content";
+  return div;
+};
+legend.addTo(map);
+refreshLegend();
+document.addEventListener("change", (event) => {
+  if (event.target && event.target.name === "view") {
+    currentLayer = event.target.value;
+    if (geoLayer) geoLayer.setStyle(featureStyle);
+    refreshLegend();
+  }
+});
+fetch(DATA_URL)
+  .then(response => response.json())
+  .then(data => {
+    geoLayer = L.geoJSON(data, {
+      renderer,
+      style: featureStyle,
+      onEachFeature: (feature, layer) => layer.bindPopup(popupHtml(feature.properties), {maxWidth: 360})
+    }).addTo(map);
+    map.fitBounds(geoLayer.getBounds(), {padding: [18, 18]});
+  });
+</script>
+</body>
+</html>
