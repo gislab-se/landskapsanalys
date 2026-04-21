@@ -237,6 +237,21 @@
         color: var(--muted);
       }
 
+      .run-command {
+        padding: 10px 12px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.64);
+        color: var(--ink);
+        font-family: Consolas, "SFMono-Regular", monospace;
+        font-size: 0.84rem;
+        line-height: 1.55;
+      }
+
+      .run-command code {
+        font-family: inherit;
+      }
+
       .actions {
         display: flex;
         flex-wrap: wrap;
@@ -312,12 +327,12 @@
           <h1>Landskapsanalys Bornholm</h1>
           <p class="lead">
             Här samlas den publicerade landskapsanalysen för Bornholm tillsammans med kartor,
-            vindacceptans och scenarioapp v1 för sol och vind. Sidan är byggd som en enkel ingång
+            vindpotential, den äldre scenarioappen och potentialapp v1 för sol och vind. Sidan är byggd som en enkel ingång
             till att först förstå modellen och sedan använda den i fortsatt analys.
           </p>
           <p class="mini-note">
             <strong>Börja med rapporten</strong> om du vill få grepp om modellen.
-            Gå sedan vidare till vindacceptans eller scenarioapp v1 om du vill använda den.
+            Gå sedan vidare till vindpotential, den äldre scenarioappen eller potentialapp v1 om du vill använda den.
           </p>
         </div>
 
@@ -359,35 +374,51 @@
 
         <article class="card card-wind">
           <div class="tag alt">Vind</div>
-          <h2>Vindacceptans</h2>
+          <h2>Vindpotential</h2>
           <p>
-            Här finns acceptansramverket för vindkraft, med rapport, karta och app som bygger vidare
+            Här finns potentialramverket för vindkraft, med rapport, karta och app som bygger vidare
             på landskapsanalysen som underlag.
           </p>
           <div class="actions">
             <a class="button primary" href="acceptance_framework/bornholm_vindacceptans_stage1_v4_res9.html">Rapport</a>
             <a class="button secondary" href="acceptance_framework/maps/bornholm_vindacceptans_stage1_v4_res9_map.html">Karta</a>
-            <a class="button secondary" href="https://landskapsacceptans-vind.streamlit.app/" target="_blank" rel="noreferrer">Starta app</a>
+            <a class="button secondary" href="https://landskapsacceptans-vind.streamlit.app/" target="_blank" rel="noreferrer">Starta vindpotentialapp</a>
           </div>
         </article>
 
         <article class="card card-scenario">
-          <div class="tag primary">Scenario v1</div>
-          <h2>Scenarioapp v1 för sol och vind</h2>
+          <div class="tag primary">Scenario</div>
+          <h2>Scenarioapp för sol och vind</h2>
           <p>
-            Första publicerade scenarioappen för Bornholm, där sol- och vindpotential visas med
-            H3-rollups, valbara scenarier och landskapsanalys som kontext.
+            Den tidigare förenklade scenarioappen för Bornholm, där energiscenarier för vind och sol
+            kombineras med markintensitet och landskapsanalys. Den ligger kvar oförändrad tills vidare.
           </p>
           <div class="actions">
-            <a class="button primary" href="https://speedlocal-bornholm-2.streamlit.app/" target="_blank" rel="noreferrer">Starta scenarioapp v1</a>
+            <a class="button primary" href="https://speedlocal-bornholm-2.streamlit.app/" target="_blank" rel="noreferrer">Starta scenarioapp</a>
+          </div>
+        </article>
+
+        <article class="card card-scenario">
+          <div class="tag primary">Potential v1</div>
+          <h2>Sol- och vindpotential v1</h2>
+          <p>
+            Ny Streamlit-version som visar sol- och vindpotential med H3-rollups på flera
+            hexresolutioner, scenarioval och landskapsanalys som kontext.
+          </p>
+          <p class="run-command">
+            <code>cd C:\gislab\landskapsanalys</code><br>
+            <code>streamlit run potential_app.py</code>
+          </p>
+          <div class="actions">
+            <a class="button primary" href="http://localhost:8501" target="_blank" rel="noreferrer">Öppna lokal v1</a>
           </div>
         </article>
 
         <article class="card card-soon">
           <div class="tag soft">Snart</div>
-          <h2>Solacceptansapp</h2>
+          <h2>Solpotentialapp</h2>
           <p>
-            En separat app för solacceptans kommer när det lagret och arbetsflödet är färdigt.
+            En separat app för solpotential kommer när det lagret och arbetsflödet är färdigt.
           </p>
           <div class="actions">
             <a class="button secondary disabled" href="#" aria-disabled="true">Kommer snart</a>
