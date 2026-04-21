@@ -8,7 +8,7 @@ v10 är en tolkad landskapstyp-version ovanpå v9 K=8. Den ersätter inte v9 som
 
 - Utgångspunkt: v9/v3 K=8 med fem faktorer och åtta ursprungliga kluster.
 - Reklassning: v9-kluster förs till fem landskapstyper genom en dokumenterad crosswalk.
-- Delning: det stora lågprofilerade kluster 3 delas mellan jordbruksdominerat sprickdalslandskap och slätt-/jordbrukslandskap.
+- Delning: det stora lågprofilerade kluster 3 delas mellan jordbruksdominerat sprickdalslandskap och slätt-/jordbrukslandskap med en F1-styrd gräns (F1 >= -0.45 till LT03).
 - Absorbering: tätort/verksamhet blir inte egen landskapstyp, utan förs till närmaste tolkade omgivande typ.
 - Status: pedagogisk syntes och kartografisk tolkning, inte ny oövervakad klustring och inte fältverifierad klassning.
 

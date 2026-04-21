@@ -14,24 +14,24 @@ th{background:#e9e4d7;}
 <tr><td>LT04</td><td>Skogsklätt sprickdalslandskap</td><td>Skogsklädda sprickdals- och naturmiljöer med stark skog/naturfaktor.</td></tr>
 <tr><td>LT05</td><td>Slätt- och jordbrukslandskap</td><td>Större öppna, låglänta och jordbruksdominerade landskapsrum.</td></tr></tbody></table><h2>Crosswalk fr&aring;n v9 till v10</h2><table><thead><tr><th>v9_class_k8</th><th>v9_name</th><th>v10_type_id</th><th>v10_type_name</th><th>interpretation_rule</th><th>confidence</th></tr></thead><tbody><tr><td>1</td><td>Tätorts- och verksamhetskärnor</td><td>absorberas</td><td>Närmaste tolkade landskapstyp</td><td>Tätort/verksamhet behandlas inte som egen landskapstyp i v10 utan förs till närmaste tolkade omgivning.</td><td>medel</td></tr>
 <tr><td>2</td><td>Sprickdalspåverkat övergångslandskap</td><td>LT03</td><td>Jordbruksdominerat sprickdalslandskap</td><td>Sprickdalssignal utan stark skogsfaktor tolkas som jordbruksdominerad sprickdalsstruktur.</td><td>hög</td></tr>
-<tr><td>3a</td><td>Blandat vardagslandskap - nord/svag sprickdal</td><td>LT03</td><td>Jordbruksdominerat sprickdalslandskap</td><td>Del av lågprofilerat blandkluster som ligger nordligare eller har svag F1-signal.</td><td>medel</td></tr>
-<tr><td>3b</td><td>Blandat vardagslandskap - syd/flackare</td><td>LT05</td><td>Slätt- och jordbrukslandskap</td><td>Del av lågprofilerat blandkluster som ligger sydligare/flackare och stärker jordbruksdominansen.</td><td>medel</td></tr>
+<tr><td>3a</td><td>Blandat vardagslandskap - F1 &gt;= -0.45</td><td>LT03</td><td>Jordbruksdominerat sprickdalslandskap</td><td>Del av lågprofilerat blandkluster där F1 visar sprickdals-/reliefpåverkan. Detta styr särskilt den östra gränsen.</td><td>medel</td></tr>
+<tr><td>3b</td><td>Blandat vardagslandskap - F1 &lt; -0.45</td><td>LT05</td><td>Slätt- och jordbrukslandskap</td><td>Del av lågprofilerat blandkluster med lägre F1, tolkat som flackare jordbruksdominerat slättlandskap.</td><td>medel</td></tr>
 <tr><td>4</td><td>Flygsand och sandkust - kärnzon</td><td>LT02</td><td>Sandigt kustlandskap</td><td>Stark F2 sand/kust.</td><td>hög</td></tr>
 <tr><td>5</td><td>Sprickdal och brant relief - kärnzon med sand/kust</td><td>LT01</td><td>Klippigt kustlandskap</td><td>Stark F1 relief/sprickdal och sekundär kust/sand.</td><td>hög</td></tr>
 <tr><td>6</td><td>Öppet och låglänt blandlandskap</td><td>LT05</td><td>Slätt- och jordbrukslandskap</td><td>Stark F5 låglänt öppet land.</td><td>hög</td></tr>
 <tr><td>7</td><td>Skog och skyddad natur - kärnzon</td><td>LT04</td><td>Skogsklätt sprickdalslandskap</td><td>Stark F3 skog/natur.</td><td>hög</td></tr>
 <tr><td>8</td><td>Sand- och kustpräglat landskap</td><td>LT02</td><td>Sandigt kustlandskap</td><td>F2 sand/kust med öppnare låglänt karaktär.</td><td>hög</td></tr></tbody></table><h2>Ytf&ouml;rdelning</h2><table><thead><tr><th>v10_type_id</th><th>v10_type_name</th><th>n_hex</th><th>pct</th></tr></thead><tbody><tr><td>LT01</td><td>Klippigt kustlandskap</td><td> 2257</td><td> 4.8</td></tr>
 <tr><td>LT02</td><td>Sandigt kustlandskap</td><td> 2984</td><td> 6.3</td></tr>
-<tr><td>LT03</td><td>Jordbruksdominerat sprickdalslandskap</td><td>18771</td><td>39.8</td></tr>
+<tr><td>LT03</td><td>Jordbruksdominerat sprickdalslandskap</td><td>17073</td><td>36.2</td></tr>
 <tr><td>LT04</td><td>Skogsklätt sprickdalslandskap</td><td> 5336</td><td>11.3</td></tr>
-<tr><td>LT05</td><td>Slätt- och jordbrukslandskap</td><td>17769</td><td>37.7</td></tr></tbody></table><h2>v9 till v10 sammanfattning</h2><table><thead><tr><th>class_k8</th><th>v10_type_id</th><th>v10_type_name</th><th>n_hex</th><th>class_pct</th></tr></thead><tbody><tr><td>1</td><td>LT01</td><td>Klippigt kustlandskap</td><td>  253</td><td> 14.6</td></tr>
+<tr><td>LT05</td><td>Slätt- och jordbrukslandskap</td><td>19467</td><td>41.3</td></tr></tbody></table><h2>v9 till v10 sammanfattning</h2><table><thead><tr><th>class_k8</th><th>v10_type_id</th><th>v10_type_name</th><th>n_hex</th><th>class_pct</th></tr></thead><tbody><tr><td>1</td><td>LT01</td><td>Klippigt kustlandskap</td><td>  253</td><td> 14.6</td></tr>
 <tr><td>1</td><td>LT02</td><td>Sandigt kustlandskap</td><td>  457</td><td> 26.5</td></tr>
-<tr><td>1</td><td>LT03</td><td>Jordbruksdominerat sprickdalslandskap</td><td>  285</td><td> 16.5</td></tr>
+<tr><td>1</td><td>LT03</td><td>Jordbruksdominerat sprickdalslandskap</td><td>  344</td><td> 19.9</td></tr>
 <tr><td>1</td><td>LT04</td><td>Skogsklätt sprickdalslandskap</td><td>    6</td><td>  0.3</td></tr>
-<tr><td>1</td><td>LT05</td><td>Slätt- och jordbrukslandskap</td><td>  726</td><td> 42.0</td></tr>
+<tr><td>1</td><td>LT05</td><td>Slätt- och jordbrukslandskap</td><td>  667</td><td> 38.6</td></tr>
 <tr><td>2</td><td>LT03</td><td>Jordbruksdominerat sprickdalslandskap</td><td> 7188</td><td>100.0</td></tr>
-<tr><td>3</td><td>LT03</td><td>Jordbruksdominerat sprickdalslandskap</td><td>11298</td><td> 67.5</td></tr>
-<tr><td>3</td><td>LT05</td><td>Slätt- och jordbrukslandskap</td><td> 5439</td><td> 32.5</td></tr>
+<tr><td>3</td><td>LT03</td><td>Jordbruksdominerat sprickdalslandskap</td><td> 9541</td><td> 57.0</td></tr>
+<tr><td>3</td><td>LT05</td><td>Slätt- och jordbrukslandskap</td><td> 7196</td><td> 43.0</td></tr>
 <tr><td>4</td><td>LT02</td><td>Sandigt kustlandskap</td><td>  640</td><td>100.0</td></tr>
 <tr><td>5</td><td>LT01</td><td>Klippigt kustlandskap</td><td> 2004</td><td>100.0</td></tr>
 <tr><td>6</td><td>LT05</td><td>Slätt- och jordbrukslandskap</td><td>11604</td><td>100.0</td></tr>
