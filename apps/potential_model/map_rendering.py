@@ -30,7 +30,7 @@ def build_landscape_map_html(
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     html, body, #map {{ height: 100%; margin: 0; }}
-    #map {{ min-height: 720px; border-radius: 8px; overflow: hidden; }}
+    #map {{ min-height: 800px; border-radius: 4px; overflow: hidden; }}
     .leaflet-control-layers, .map-note, .map-legend {{ font-family: sans-serif; font-size: 12px; }}
     .map-note {{ background: rgba(255,255,255,0.94); padding: 8px 10px; border-radius: 4px; box-shadow: 0 1px 4px rgba(0,0,0,0.2); max-width: 240px; }}
     .map-legend {{ background: rgba(255,255,255,0.94); padding: 9px 10px; border-radius: 4px; box-shadow: 0 1px 4px rgba(0,0,0,0.2); line-height: 1.25; max-width: 260px; }}
@@ -84,7 +84,7 @@ def build_landscape_map_html(
 
     const overlays = {{}};
     overlays[mapTitle] = landscape;
-    L.control.layers({{ 'OSM': osm, 'Satellite': satellite }}, overlays, {{ collapsed: false }}).addTo(map);
+    L.control.layers({{ 'OSM': osm, 'Satellite': satellite }}, overlays, {{ collapsed: true }}).addTo(map);
 
     const note = L.control({{ position: 'topright' }});
     note.onAdd = function() {{
@@ -133,11 +133,15 @@ def build_layered_hex_map_html(
     zoom: int,
     bounds: list[list[float]] | None = None,
     fill_opacity: float = 0.78,
+    map_state_key: str | None = None,
+    map_reset_token: int | str = 0,
 ) -> str:
     layers_payload = json.dumps(layers, ensure_ascii=False)
     center_payload = json.dumps(center)
     bounds_payload = json.dumps(bounds)
     opacity_payload = json.dumps(max(0.0, min(1.0, float(fill_opacity))))
+    map_state_key_payload = json.dumps(map_state_key or "")
+    map_reset_token_payload = json.dumps(str(map_reset_token))
     return f"""
 <!DOCTYPE html>
 <html>
@@ -147,7 +151,7 @@ def build_layered_hex_map_html(
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     html, body, #map {{ height: 100%; margin: 0; }}
-    #map {{ min-height: 720px; border-radius: 8px; overflow: hidden; }}
+    #map {{ min-height: 800px; border-radius: 4px; overflow: hidden; }}
     .leaflet-control-layers, .map-note, .map-legend {{ font-family: sans-serif; font-size: 12px; }}
     .map-note, .map-legend {{ background: rgba(255,255,255,0.94); padding: 9px 10px; border-radius: 4px; box-shadow: 0 1px 4px rgba(0,0,0,0.2); max-width: 280px; }}
     .map-legend {{ line-height: 1.25; max-height: 420px; overflow-y: auto; }}
@@ -165,7 +169,87 @@ def build_layered_hex_map_html(
     const defaultCenter = {center_payload};
     const defaultBounds = {bounds_payload};
     const hexFillOpacity = {opacity_payload};
-    const map = L.map('map', {{ preferCanvas: true }}).setView(defaultCenter, {int(zoom)});
+    const mapStateKey = {map_state_key_payload};
+    const mapResetToken = {map_reset_token_payload};
+
+    function browserStorage() {{
+      try {{
+        const storage = window.localStorage;
+        const testKey = '__regional_energy_potential_map_test__';
+        storage.setItem(testKey, '1');
+        storage.removeItem(testKey);
+        return storage;
+      }} catch (err) {{
+        return null;
+      }}
+    }}
+
+    const viewStorage = browserStorage();
+
+    function storageKey(kind) {{
+      return 'regional-energy-potential:' + mapStateKey + ':' + kind;
+    }}
+
+    function applyResetToken() {{
+      if (!viewStorage || !mapStateKey) {{
+        return false;
+      }}
+      const tokenKey = storageKey('reset-token');
+      const previousToken = viewStorage.getItem(tokenKey);
+      if (previousToken !== String(mapResetToken)) {{
+        viewStorage.removeItem(storageKey('view'));
+        viewStorage.setItem(tokenKey, String(mapResetToken));
+        return true;
+      }}
+      return false;
+    }}
+
+    const resetRequested = applyResetToken();
+
+    function readSavedView() {{
+      if (!viewStorage || !mapStateKey || resetRequested) {{
+        return null;
+      }}
+      try {{
+        const raw = viewStorage.getItem(storageKey('view'));
+        if (!raw) {{
+          return null;
+        }}
+        const parsed = JSON.parse(raw);
+        const lat = Number(parsed.lat);
+        const lng = Number(parsed.lng);
+        const viewZoom = Number(parsed.zoom);
+        if (
+          Number.isFinite(lat) && Number.isFinite(lng) && Number.isFinite(viewZoom) &&
+          lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180 &&
+          viewZoom >= 0 && viewZoom <= 22
+        ) {{
+          return {{ lat, lng, zoom: viewZoom }};
+        }}
+      }} catch (err) {{}}
+      return null;
+    }}
+
+    function storeMapView() {{
+      if (!viewStorage || !mapStateKey) {{
+        return;
+      }}
+      const currentCenter = map.getCenter();
+      viewStorage.setItem(
+        storageKey('view'),
+        JSON.stringify({{
+          lat: currentCenter.lat,
+          lng: currentCenter.lng,
+          zoom: map.getZoom()
+        }})
+      );
+    }}
+
+    const savedView = readSavedView();
+    const mapStartCenter = savedView ? [savedView.lat, savedView.lng] : defaultCenter;
+    const mapStartZoom = savedView ? savedView.zoom : {int(zoom)};
+    const map = L.map('map', {{ preferCanvas: true }}).setView(mapStartCenter, mapStartZoom);
+    map.on('moveend zoomend', storeMapView);
 
     const osm = L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
       maxZoom: 20,
@@ -208,7 +292,7 @@ def build_layered_hex_map_html(
       }}
     }});
 
-    L.control.layers({{ 'OSM': osm, 'Satellite': satellite }}, overlays, {{ collapsed: false }}).addTo(map);
+    L.control.layers({{ 'OSM': osm, 'Satellite': satellite }}, overlays, {{ collapsed: true }}).addTo(map);
 
     const note = L.control({{ position: 'topright' }});
     note.onAdd = function() {{
@@ -253,8 +337,13 @@ def build_layered_hex_map_html(
 
     function fitInitialBounds() {{
       map.invalidateSize();
+      if (savedView) {{
+        storeMapView();
+        return;
+      }}
       if (defaultBounds && defaultBounds.length === 2) {{
         map.fitBounds(defaultBounds, {{ padding: [18, 18] }});
+        storeMapView();
         return;
       }}
       const group = L.featureGroup(renderedLayers);
@@ -262,6 +351,7 @@ def build_layered_hex_map_html(
       if (dataBounds && dataBounds.isValid()) {{
         map.fitBounds(dataBounds.pad(0.04));
       }}
+      storeMapView();
     }}
     setTimeout(fitInitialBounds, 80);
   </script>
@@ -294,7 +384,7 @@ def build_potential_map_html(
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     html, body, #map {{ height: 100%; margin: 0; }}
-    #map {{ min-height: 720px; border-radius: 8px; overflow: hidden; }}
+    #map {{ min-height: 800px; border-radius: 4px; overflow: hidden; }}
     .leaflet-control-layers, .map-note, .map-legend {{ font-family: sans-serif; font-size: 12px; }}
     .map-note {{ background: rgba(255,255,255,0.94); padding: 8px 10px; border-radius: 4px; box-shadow: 0 1px 4px rgba(0,0,0,0.2); max-width: 260px; }}
     .map-legend {{ background: rgba(255,255,255,0.94); padding: 9px 10px; border-radius: 4px; box-shadow: 0 1px 4px rgba(0,0,0,0.2); line-height: 1.25; max-width: 260px; }}
@@ -346,7 +436,7 @@ def build_potential_map_html(
 
     const overlays = {{}};
     overlays[mapTitle] = potential;
-    L.control.layers({{ 'OSM': osm, 'Satellite': satellite }}, overlays, {{ collapsed: false }}).addTo(map);
+    L.control.layers({{ 'OSM': osm, 'Satellite': satellite }}, overlays, {{ collapsed: true }}).addTo(map);
 
     const note = L.control({{ position: 'topright' }});
     note.onAdd = function() {{

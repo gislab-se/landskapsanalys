@@ -112,17 +112,28 @@ def rollup_potential_frame(
     work = frame.copy()
     work["hex_id"] = work["hex_id"].astype(str).map(lambda value: h3.cell_to_parent(value, target_resolution))
     work["is_high_potential"] = work[cols["class"]].isin(["high", "very_high"]).astype(float)
-    grouped = (
-        work.groupby("hex_id", as_index=False)
-        .agg(
-            source_child_count=(cols["score"], "count"),
-            potential_score=(cols["score"], "mean"),
-            high_potential_share=("is_high_potential", "mean"),
-            class_km=("class_km", _mode_or_first),
-            landscape_type=("landscape_type", _mode_or_first),
-        )
-        .sort_values("hex_id")
-    )
+    aggregations: dict[str, tuple[str, str | Any]] = {
+        "source_child_count": (cols["score"], "count"),
+        "potential_score": (cols["score"], "mean"),
+        "high_potential_share": ("is_high_potential", "mean"),
+        "class_km": ("class_km", _mode_or_first),
+        "landscape_type": ("landscape_type", _mode_or_first),
+    }
+    optional_mean_columns = [
+        "wind_acceptance",
+        "wind_landscape_score",
+        "wind_potential_area",
+        "wind_rule_blocked",
+        "wind_hard_blocked",
+    ]
+    for column in optional_mean_columns:
+        if column in work.columns:
+            aggregations[column] = (column, "mean")
+    for column in ["wind_active_rule_groups", "wind_blocking_groups"]:
+        if column in work.columns:
+            aggregations[column] = (column, _mode_or_first)
+
+    grouped = work.groupby("hex_id", as_index=False).agg(**aggregations).sort_values("hex_id")
     grouped[cols["score"]] = grouped.pop("potential_score").round(1)
     grouped["high_potential_share"] = grouped["high_potential_share"].round(3)
     grouped["h3_resolution"] = target_resolution

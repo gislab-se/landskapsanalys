@@ -1,0 +1,401 @@
+from __future__ import annotations
+
+from io import StringIO
+from typing import Any
+
+import h3
+import pandas as pd
+import streamlit as st
+
+from acceptance_model.layers import distance_table_for_layer, load_registry
+
+from .geometry import geometry_for_hex, load_h3_display_geometries
+from .potential import apply_potential_classes, rollup_potential_frame, wind_potential_frame
+
+
+SOURCE_RESOLUTION = 9
+POTENTIAL_MIN_SCORE = 45.0
+
+WIND_GROUP_LAYER_DEFAULTS: dict[str, list[str]] = {
+    "settlement": [
+        "population_points",
+        "buildings_low",
+        "buildings_high",
+        "built_centre",
+        "built_low_selection",
+    ],
+    "transport": ["roads_medium", "roads_large"],
+    "electrical": [
+        "high_voltage_lines",
+        "underground_cables",
+        "power_substations",
+        "existing_wind_turbines",
+    ],
+    "protected": [
+        "protected_areas",
+        "natura_designated_land",
+        "natura_bird_protection",
+        "natura_habitat_areas",
+        "nature_wildlife_reserve",
+    ],
+    "coastal": ["coastal_zone_3km", "strand_protection"],
+    "culture": [
+        "cultural_preservation",
+        "valuable_cultural_environment",
+        "cultural_conservation_values",
+    ],
+    "aviation_approach": ["aviation_approach_zones"],
+    "aviation_bird": ["aviation_bird_collision"],
+    "military": ["military_areas"],
+}
+
+GROUP_PARAM_MAP = {
+    "settlement": "settlement_distance_m",
+    "transport": "road_distance_m",
+    "electrical": "grid_max_distance_m",
+    "protected": "protected_buffer_m",
+    "coastal": "coastal_buffer_m",
+    "culture": "culture_buffer_m",
+    "aviation_approach": "aviation_approach_buffer_m",
+    "aviation_bird": "aviation_bird_distance_m",
+    "military": "military_buffer_m",
+}
+
+GROUP_LABELS = {
+    "settlement": "Boende och bebyggelse",
+    "transport": "Vagar och transport",
+    "electrical": "Elinfrastruktur",
+    "protected": "Skyddad natur",
+    "coastal": "Kust och strand",
+    "culture": "Kulturmiljo",
+    "aviation_approach": "Inflygning",
+    "aviation_bird": "Fagelkollision",
+    "military": "Militara omraden",
+}
+
+HARD_EXCLUSION_GROUPS = {"protected", "coastal", "culture", "aviation_approach", "military"}
+ALWAYS_ACTIVE_GROUPS = {"settlement", "transport", "electrical"}
+
+
+def _closed_ring(hex_id: str) -> list[list[float]] | None:
+    try:
+        boundary = h3.cell_to_boundary(str(hex_id))
+    except Exception:
+        return None
+    ring = [[float(lng), float(lat)] for lat, lng in boundary]
+    if ring and ring[0] != ring[-1]:
+        ring.append(ring[0])
+    return ring or None
+
+
+def _group_distance_frame(
+    hex_ids: pd.Series,
+    registry_meta: dict[str, Any],
+    layer_ids: list[str],
+) -> pd.DataFrame:
+    work = pd.DataFrame({"hex_id": hex_ids.astype(str).unique()})
+    distance_cols: list[str] = []
+    overlap_cols: list[str] = []
+
+    for layer_id in layer_ids:
+        layer_frame = distance_table_for_layer(registry_meta, layer_id)
+        if layer_frame.empty:
+            continue
+        distance_col = f"{layer_id}__distance_m"
+        overlap_col = f"{layer_id}__intersects"
+        renamed = layer_frame.rename(columns={"distance_m": distance_col, "intersects": overlap_col})
+        work = work.merge(renamed[["hex_id", distance_col, overlap_col]], on="hex_id", how="left")
+        distance_cols.append(distance_col)
+        overlap_cols.append(overlap_col)
+
+    if not distance_cols:
+        return pd.DataFrame(columns=["hex_id", "min_distance_m", "any_intersection"])
+
+    out = work[["hex_id"]].copy()
+    out["min_distance_m"] = work[distance_cols].min(axis=1, skipna=True)
+    out["any_intersection"] = work[overlap_cols].fillna(False).astype(bool).any(axis=1)
+    return out
+
+
+def _distance_conflict_acceptance(
+    min_distance_m: pd.Series,
+    threshold_m: float,
+    any_intersection: pd.Series,
+) -> tuple[pd.Series, pd.Series]:
+    distance = pd.to_numeric(min_distance_m, errors="coerce")
+    if threshold_m <= 0:
+        blocked = any_intersection.astype(bool)
+        return (~blocked).astype(float), blocked
+    ramp_end = max(float(threshold_m * 2), float(threshold_m + 1))
+    acceptance = ((distance - threshold_m) / (ramp_end - threshold_m)).clip(lower=0.0, upper=1.0).fillna(0.0)
+    acceptance.loc[any_intersection.astype(bool)] = 0.0
+    blocked = any_intersection.astype(bool) | (distance <= float(threshold_m))
+    return acceptance, blocked
+
+
+def _proximity_acceptance(
+    min_distance_m: pd.Series,
+    threshold_m: float,
+    any_intersection: pd.Series,
+) -> tuple[pd.Series, pd.Series]:
+    threshold = max(float(threshold_m), 1.0)
+    distance = pd.to_numeric(min_distance_m, errors="coerce")
+    acceptance = (1.0 - (distance / threshold)).clip(lower=0.0, upper=1.0).fillna(0.0)
+    acceptance.loc[any_intersection.astype(bool)] = 1.0
+    blocked = ~any_intersection.astype(bool) & (distance > threshold)
+    return acceptance, blocked
+
+
+def _hard_exclusion_acceptance(
+    min_distance_m: pd.Series,
+    threshold_m: float,
+    any_intersection: pd.Series,
+) -> tuple[pd.Series, pd.Series]:
+    distance = pd.to_numeric(min_distance_m, errors="coerce")
+    if threshold_m <= 0:
+        blocked = any_intersection.astype(bool)
+    else:
+        blocked = any_intersection.astype(bool) | (distance <= float(threshold_m))
+    return (~blocked).astype(float), blocked
+
+
+def _acceptance_for_kind(
+    analysis_kind: str,
+    min_distance_m: pd.Series,
+    threshold_m: float,
+    any_intersection: pd.Series,
+) -> tuple[pd.Series, pd.Series]:
+    if analysis_kind == "proximity_feasibility":
+        return _proximity_acceptance(min_distance_m, threshold_m, any_intersection)
+    if analysis_kind == "distance_conflict":
+        return _distance_conflict_acceptance(min_distance_m, threshold_m, any_intersection)
+    return _hard_exclusion_acceptance(min_distance_m, threshold_m, any_intersection)
+
+
+def wind_acceptance_group_summary() -> pd.DataFrame:
+    groups, layers, _ = load_registry()
+    rows: list[dict[str, Any]] = []
+    for group_id, layer_ids in WIND_GROUP_LAYER_DEFAULTS.items():
+        group = groups[group_id]
+        rows.append(
+            {
+                "regelgrupp": GROUP_LABELS.get(group_id, group.label),
+                "typ": group.analysis_kind,
+                "lager": len([layer_id for layer_id in layer_ids if layer_id in layers]),
+                "kallager": ", ".join(layers[layer_id].label for layer_id in layer_ids if layer_id in layers),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+@st.cache_data(show_spinner=False)
+def _build_wind_acceptance_frame_cached(
+    factor_scores_path: str,
+    landscape_manifest_json: str,
+    score_params_json: str,
+    ui_params_json: str,
+    breaks_json: str,
+) -> pd.DataFrame:
+    import json
+
+    landscape_manifest = json.loads(landscape_manifest_json)
+    score_params = json.loads(score_params_json)
+    ui_params = json.loads(ui_params_json)
+    breaks = json.loads(breaks_json)
+
+    base = wind_potential_frame(landscape_manifest, breaks, score_params).copy()
+    groups, _, registry_meta = load_registry()
+    acceptance_cols: list[str] = []
+    blocked_cols: list[str] = []
+    hard_blocked_cols: list[str] = []
+    active_labels: list[str] = []
+
+    for group_id, layer_ids in WIND_GROUP_LAYER_DEFAULTS.items():
+        group = groups.get(group_id)
+        param_key = GROUP_PARAM_MAP.get(group_id)
+        if group is None or param_key is None:
+            continue
+
+        threshold_m = float(ui_params.get(param_key, group.analysis_default_m))
+        if group_id not in ALWAYS_ACTIVE_GROUPS and threshold_m <= 0:
+            continue
+
+        distance_frame = _group_distance_frame(base["hex_id"], registry_meta, layer_ids)
+        if distance_frame.empty:
+            continue
+
+        acceptance, blocked = _acceptance_for_kind(
+            group.analysis_kind,
+            distance_frame["min_distance_m"],
+            threshold_m,
+            distance_frame["any_intersection"],
+        )
+
+        group_label = GROUP_LABELS.get(group_id, group.label)
+        active_labels.append(group_label)
+        group_acceptance_col = f"{group_id}_acceptance"
+        group_blocked_col = f"{group_id}_blocked"
+        group_distance_col = f"{group_id}_distance_m"
+
+        group_result = distance_frame[["hex_id", "min_distance_m"]].copy()
+        group_result[group_acceptance_col] = acceptance.astype(float)
+        group_result[group_blocked_col] = blocked.astype(bool)
+        group_result = group_result.rename(columns={"min_distance_m": group_distance_col})
+        base = base.merge(group_result, on="hex_id", how="left")
+
+        base[group_acceptance_col] = base[group_acceptance_col].fillna(0.0)
+        base[group_blocked_col] = base[group_blocked_col].fillna(False).astype(bool)
+        acceptance_cols.append(group_acceptance_col)
+        blocked_cols.append(group_blocked_col)
+        if group_id in HARD_EXCLUSION_GROUPS:
+            hard_blocked_cols.append(group_blocked_col)
+
+    if acceptance_cols:
+        base["wind_acceptance"] = base[acceptance_cols].min(axis=1, skipna=True).fillna(0.0)
+    else:
+        base["wind_acceptance"] = 1.0
+
+    if blocked_cols:
+        base["wind_rule_blocked"] = base[blocked_cols].any(axis=1)
+    else:
+        base["wind_rule_blocked"] = False
+
+    if hard_blocked_cols:
+        base["wind_hard_blocked"] = base[hard_blocked_cols].any(axis=1)
+    else:
+        base["wind_hard_blocked"] = False
+
+    base["wind_landscape_score"] = base["wind_score"].astype(float)
+    base["wind_score"] = (base["wind_landscape_score"] * base["wind_acceptance"]).clip(lower=0.0, upper=100.0)
+    base.loc[base["wind_hard_blocked"], "wind_score"] = 0.0
+    base["wind_potential_area"] = (base["wind_score"] >= POTENTIAL_MIN_SCORE) & (~base["wind_hard_blocked"])
+    base["wind_active_rule_groups"] = ", ".join(active_labels)
+    base["wind_blocking_groups"] = base.apply(
+        lambda row: ", ".join(
+            GROUP_LABELS.get(col.removesuffix("_blocked"), col.removesuffix("_blocked"))
+            for col in blocked_cols
+            if bool(row.get(col, False))
+        ),
+        axis=1,
+    )
+    return apply_potential_classes(base, "wind", breaks)
+
+
+def wind_acceptance_potential_frame(
+    landscape_manifest: dict[str, Any],
+    breaks: list[dict[str, Any]],
+    score_params: dict[str, float],
+    ui_params: dict[str, float],
+) -> pd.DataFrame:
+    import json
+
+    factor_scores_path = landscape_manifest.get("factor_scores")
+    if not factor_scores_path:
+        raise ValueError("Landscape manifest is missing factor_scores.")
+    from .manifests import resolve_repo_path
+
+    path = resolve_repo_path(str(factor_scores_path))
+    if path is None:
+        raise ValueError("Landscape factor_scores path could not be resolved.")
+    return _build_wind_acceptance_frame_cached(
+        str(path),
+        json.dumps(landscape_manifest, sort_keys=True, ensure_ascii=False),
+        json.dumps(score_params, sort_keys=True, ensure_ascii=False),
+        json.dumps(ui_params, sort_keys=True, ensure_ascii=False),
+        json.dumps(breaks, sort_keys=True, ensure_ascii=False),
+    )
+
+
+def wind_acceptance_rollup_frame(
+    source_frame: pd.DataFrame,
+    target_resolution: int,
+    breaks: list[dict[str, Any]],
+) -> pd.DataFrame:
+    return rollup_potential_frame(source_frame, target_resolution, breaks, "wind", SOURCE_RESOLUTION)
+
+
+@st.cache_data(show_spinner=False)
+def _build_wind_vector_feature_collection(
+    frame_json: str,
+    display_geometry_path: str | None,
+    only_potential_area: bool,
+) -> dict[str, Any]:
+    frame = pd.read_json(StringIO(frame_json), orient="records")
+    display_geometries = load_h3_display_geometries(display_geometry_path) if display_geometry_path else None
+    features: list[dict[str, Any]] = []
+    if only_potential_area and "wind_potential_area" in frame.columns:
+        frame = frame.loc[frame["wind_potential_area"].astype(bool)].copy()
+
+    for row in frame.itertuples(index=False):
+        hex_id = str(row.hex_id)
+        geometry = geometry_for_hex(hex_id, display_geometries)
+        if geometry is None and display_geometry_path:
+            continue
+        if geometry is None:
+            ring = _closed_ring(hex_id)
+            if ring is None:
+                continue
+            geometry = {"type": "Polygon", "coordinates": [ring]}
+        if not geometry.get("coordinates"):
+            continue
+
+        blocking = str(getattr(row, "wind_blocking_groups", "") or "Inga")
+        score = float(getattr(row, "wind_score", 0.0))
+        acceptance = float(getattr(row, "wind_acceptance", 0.0))
+        popup = (
+            f"<strong>Vindpotentialyta</strong><br>"
+            f"H3-kalla: {hex_id}<br>"
+            f"Potential: {getattr(row, 'wind_class_label', '')} ({score:.1f})<br>"
+            f"Regelacceptans: {acceptance:.2f}<br>"
+            f"Blockerande grupper: {blocking}"
+        )
+        features.append(
+            {
+                "type": "Feature",
+                "geometry": geometry,
+                "properties": {
+                    "hex_id": hex_id,
+                    "score": score,
+                    "class": str(getattr(row, "wind_class", "")),
+                    "class_label": str(getattr(row, "wind_class_label", "")),
+                    "fill": str(getattr(row, "wind_color", "#999999")),
+                    "popup": popup,
+                    "vector_role": "wind_candidate_area",
+                },
+            }
+        )
+    return {"type": "FeatureCollection", "features": features}
+
+
+def wind_vector_feature_collection(
+    source_frame: pd.DataFrame,
+    display_geometry_path: str | None,
+    only_potential_area: bool = True,
+) -> dict[str, Any]:
+    map_columns = [
+        "hex_id",
+        "wind_score",
+        "wind_class",
+        "wind_class_label",
+        "wind_color",
+        "wind_acceptance",
+        "wind_potential_area",
+        "wind_blocking_groups",
+    ]
+    available = [column for column in map_columns if column in source_frame.columns]
+    return _build_wind_vector_feature_collection(
+        source_frame[available].to_json(orient="records", force_ascii=False),
+        display_geometry_path,
+        only_potential_area,
+    )
+
+
+def wind_candidate_summary(frame: pd.DataFrame) -> dict[str, Any]:
+    if frame.empty:
+        return {"candidate_cells": 0, "candidate_share": 0.0, "mean_acceptance": 0.0}
+    candidate = frame.get("wind_potential_area", pd.Series(False, index=frame.index)).astype(bool)
+    return {
+        "candidate_cells": int(candidate.sum()),
+        "candidate_share": float(candidate.mean() * 100.0),
+        "mean_acceptance": float(frame.get("wind_acceptance", pd.Series(0.0, index=frame.index)).mean()),
+    }
