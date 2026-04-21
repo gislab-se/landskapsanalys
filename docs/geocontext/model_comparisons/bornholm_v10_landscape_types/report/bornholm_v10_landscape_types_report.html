@@ -1,0 +1,95 @@
+<!doctype html><html lang='sv'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>Bornholm v10 landskapstyper</title><style>body{font-family:Georgia,'Times New Roman',serif;margin:36px;line-height:1.55;color:#172018;background:#f7f4ed;}
+main{max-width:1120px;margin:0 auto;}
+h1,h2{line-height:1.08;}
+p{max-width:900px;}
+table{border-collapse:collapse;width:100%;margin:16px 0;background:#fff;}
+th,td{border:1px solid #ddd;padding:7px 9px;text-align:left;font-size:14px;vertical-align:top;}
+th{background:#e9e4d7;}
+.links{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 24px;}
+.links a{display:inline-block;padding:8px 12px;border:1px solid #d7d2c8;border-radius:8px;color:#172018;text-decoration:none;background:#fff;}
+.links a.primary{background:#31553f;color:#fff;border-color:#31553f;}
+.note{padding:12px 14px;border-left:4px solid #c8a55b;background:#fff;border-radius:0 8px 8px 0;}</style></head><body><main><h1>Bornholm v10: landskapstyper</h1><p>v10 &auml;r en tolkad landskapstyp-version ovanp&aring; v9 K=8. Den g&ouml;r kartan mer kommunikativ genom att &ouml;vers&auml;tta v9-kluster och faktorer till fem breda landskapstyper inspirerade av referenskartan <em>Bornholms Landskapstyper</em>.</p><div class='links'><a class='primary' href='../map/bornholm_v10_landscape_types_map.html'>Kartan</a><a href='../report/bornholm_v10_landscape_types_report.md' download>Ladda ner rapport</a><a href='../model/bornholm_v10_landscape_types_crosswalk.csv'>Crosswalk</a><a href='../model/bornholm_v10_landscape_types_factor_loadings_from_v1.csv'>Faktorladdningar</a></div><div class='note'><strong>Status:</strong> pedagogisk syntes och kartografisk tolkning, inte ny o&ouml;vervakad klustring och inte f&auml;ltverifierad klassning.</div><h2>Landskapstyper</h2><table><thead><tr><th>v10_type_id</th><th>v10_type_name</th><th>description</th></tr></thead><tbody><tr><td>LT01</td><td>Klippigt kustlandskap</td><td>Kust- och reliefpräglade delar där brant/sprickdalsrelief och kustsignal sammanfaller.</td></tr>
+<tr><td>LT02</td><td>Sandigt kustlandskap</td><td>Sand- och kustpräglade delar, främst där flygsand/sandkustfaktorn är stark.</td></tr>
+<tr><td>LT03</td><td>Jordbruksdominerat sprickdalslandskap</td><td>Öppet jordbruksdominerat landskap med tydlig sprickdals- eller lågkullig struktur.</td></tr>
+<tr><td>LT04</td><td>Skogsklätt sprickdalslandskap</td><td>Skogsklädda sprickdals- och naturmiljöer med stark skog/naturfaktor.</td></tr>
+<tr><td>LT05</td><td>Slätt- och jordbrukslandskap</td><td>Större öppna, låglänta och jordbruksdominerade landskapsrum.</td></tr></tbody></table><h2>Crosswalk fr&aring;n v9 till v10</h2><table><thead><tr><th>v9_class_k8</th><th>v9_name</th><th>v10_type_id</th><th>v10_type_name</th><th>interpretation_rule</th><th>confidence</th></tr></thead><tbody><tr><td>1</td><td>Tätorts- och verksamhetskärnor</td><td>absorberas</td><td>Närmaste tolkade landskapstyp</td><td>Tätort/verksamhet behandlas inte som egen landskapstyp i v10 utan förs till närmaste tolkade omgivning.</td><td>medel</td></tr>
+<tr><td>2</td><td>Sprickdalspåverkat övergångslandskap</td><td>LT03</td><td>Jordbruksdominerat sprickdalslandskap</td><td>Sprickdalssignal utan stark skogsfaktor tolkas som jordbruksdominerad sprickdalsstruktur.</td><td>hög</td></tr>
+<tr><td>3a</td><td>Blandat vardagslandskap - nord/svag sprickdal</td><td>LT03</td><td>Jordbruksdominerat sprickdalslandskap</td><td>Del av lågprofilerat blandkluster som ligger nordligare eller har svag F1-signal.</td><td>medel</td></tr>
+<tr><td>3b</td><td>Blandat vardagslandskap - syd/flackare</td><td>LT05</td><td>Slätt- och jordbrukslandskap</td><td>Del av lågprofilerat blandkluster som ligger sydligare/flackare och stärker jordbruksdominansen.</td><td>medel</td></tr>
+<tr><td>4</td><td>Flygsand och sandkust - kärnzon</td><td>LT02</td><td>Sandigt kustlandskap</td><td>Stark F2 sand/kust.</td><td>hög</td></tr>
+<tr><td>5</td><td>Sprickdal och brant relief - kärnzon med sand/kust</td><td>LT01</td><td>Klippigt kustlandskap</td><td>Stark F1 relief/sprickdal och sekundär kust/sand.</td><td>hög</td></tr>
+<tr><td>6</td><td>Öppet och låglänt blandlandskap</td><td>LT05</td><td>Slätt- och jordbrukslandskap</td><td>Stark F5 låglänt öppet land.</td><td>hög</td></tr>
+<tr><td>7</td><td>Skog och skyddad natur - kärnzon</td><td>LT04</td><td>Skogsklätt sprickdalslandskap</td><td>Stark F3 skog/natur.</td><td>hög</td></tr>
+<tr><td>8</td><td>Sand- och kustpräglat landskap</td><td>LT02</td><td>Sandigt kustlandskap</td><td>F2 sand/kust med öppnare låglänt karaktär.</td><td>hög</td></tr></tbody></table><h2>Ytf&ouml;rdelning</h2><table><thead><tr><th>v10_type_id</th><th>v10_type_name</th><th>n_hex</th><th>pct</th></tr></thead><tbody><tr><td>LT01</td><td>Klippigt kustlandskap</td><td> 2257</td><td> 4.8</td></tr>
+<tr><td>LT02</td><td>Sandigt kustlandskap</td><td> 2984</td><td> 6.3</td></tr>
+<tr><td>LT03</td><td>Jordbruksdominerat sprickdalslandskap</td><td>18771</td><td>39.8</td></tr>
+<tr><td>LT04</td><td>Skogsklätt sprickdalslandskap</td><td> 5336</td><td>11.3</td></tr>
+<tr><td>LT05</td><td>Slätt- och jordbrukslandskap</td><td>17769</td><td>37.7</td></tr></tbody></table><h2>v9 till v10 sammanfattning</h2><table><thead><tr><th>class_k8</th><th>v10_type_id</th><th>v10_type_name</th><th>n_hex</th><th>class_pct</th></tr></thead><tbody><tr><td>1</td><td>LT01</td><td>Klippigt kustlandskap</td><td>  253</td><td> 14.6</td></tr>
+<tr><td>1</td><td>LT02</td><td>Sandigt kustlandskap</td><td>  457</td><td> 26.5</td></tr>
+<tr><td>1</td><td>LT03</td><td>Jordbruksdominerat sprickdalslandskap</td><td>  285</td><td> 16.5</td></tr>
+<tr><td>1</td><td>LT04</td><td>Skogsklätt sprickdalslandskap</td><td>    6</td><td>  0.3</td></tr>
+<tr><td>1</td><td>LT05</td><td>Slätt- och jordbrukslandskap</td><td>  726</td><td> 42.0</td></tr>
+<tr><td>2</td><td>LT03</td><td>Jordbruksdominerat sprickdalslandskap</td><td> 7188</td><td>100.0</td></tr>
+<tr><td>3</td><td>LT03</td><td>Jordbruksdominerat sprickdalslandskap</td><td>11298</td><td> 67.5</td></tr>
+<tr><td>3</td><td>LT05</td><td>Slätt- och jordbrukslandskap</td><td> 5439</td><td> 32.5</td></tr>
+<tr><td>4</td><td>LT02</td><td>Sandigt kustlandskap</td><td>  640</td><td>100.0</td></tr>
+<tr><td>5</td><td>LT01</td><td>Klippigt kustlandskap</td><td> 2004</td><td>100.0</td></tr>
+<tr><td>6</td><td>LT05</td><td>Slätt- och jordbrukslandskap</td><td>11604</td><td>100.0</td></tr>
+<tr><td>7</td><td>LT04</td><td>Skogsklätt sprickdalslandskap</td><td> 5330</td><td>100.0</td></tr>
+<tr><td>8</td><td>LT02</td><td>Sandigt kustlandskap</td><td> 1887</td><td>100.0</td></tr></tbody></table><h2>Run summary</h2><table><thead><tr><th>metric</th><th>value</th></tr></thead><tbody><tr><td>analysis_id</td><td>bornholm_v10_landscape_types</td></tr>
+<tr><td>source_analysis</td><td>bornholm_v9_k8_interactive_layers</td></tr>
+<tr><td>source_cluster_solution</td><td>v9/v3 K=8</td></tr>
+<tr><td>method_status</td><td>interpreted synthesis / reclassification, not a new unsupervised clustering</td></tr>
+<tr><td>main_output</td><td>five Bornholm landscape types</td></tr>
+<tr><td>reference_typology</td><td>Bornholms Landskapstyper PDF, local reference material</td></tr>
+<tr><td>method_reference</td><td>Kawalerowicz &amp; Malmberg 2021, factor scores -&gt; clustering -&gt; interpreted naming</td></tr>
+<tr><td>map_hex_count</td><td>47117</td></tr></tbody></table><h2>Topp faktorloadings</h2><table><thead><tr><th>factor</th><th>variable</th><th>loading</th></tr></thead><tbody><tr><td>F1</td><td>mean_gc_contour_mean_slope_deg_k250</td><td> 0.9324</td></tr>
+<tr><td>F1</td><td>mean_gc_relief_m_k250</td><td> 0.9295</td></tr>
+<tr><td>F1</td><td>mean_gc_contour_mean_slope_deg_k100</td><td> 0.9289</td></tr>
+<tr><td>F1</td><td>mean_gc_relief_m_k100</td><td> 0.9241</td></tr>
+<tr><td>F1</td><td>mean_gc_contour_mean_slope_deg_k50</td><td> 0.9151</td></tr>
+<tr><td>F1</td><td>mean_gc_relief_m_k50</td><td> 0.9011</td></tr>
+<tr><td>F1</td><td>mean_gc_contour_mean_slope_deg_k1000</td><td> 0.8919</td></tr>
+<tr><td>F1</td><td>mean_gc_relief_m_k1000</td><td> 0.8894</td></tr>
+<tr><td>F1</td><td>mean_gc_contour_mean_slope_deg_k10</td><td> 0.8619</td></tr>
+<tr><td>F1</td><td>std_gc_contour_valley_depth_max_m_k250</td><td> 0.8501</td></tr>
+<tr><td>F2</td><td>mean_gc_jordart_es_flyvesand_share_k1000</td><td> 0.8437</td></tr>
+<tr><td>F2</td><td>std_gc_sand_dune_share_k1000</td><td> 0.8208</td></tr>
+<tr><td>F2</td><td>std_gc_sand_dune_share_k250</td><td> 0.8103</td></tr>
+<tr><td>F2</td><td>mean_gc_jordart_es_flyvesand_share_k250</td><td> 0.7983</td></tr>
+<tr><td>F2</td><td>std_gc_sand_dune_share_k100</td><td> 0.7641</td></tr>
+<tr><td>F2</td><td>mean_gc_sand_dune_share_k1000</td><td> 0.7634</td></tr>
+<tr><td>F2</td><td>mean_gc_strand_protection_share_k1000</td><td> 0.7578</td></tr>
+<tr><td>F2</td><td>mean_gc_sand_dune_share_k250</td><td> 0.7472</td></tr>
+<tr><td>F2</td><td>mean_gc_strand_protection_share_k250</td><td> 0.7373</td></tr>
+<tr><td>F2</td><td>mean_gc_jordart_es_flyvesand_share_k100</td><td> 0.7304</td></tr>
+<tr><td>F3</td><td>mean_gc_fredskov_share_k250</td><td> 0.7965</td></tr>
+<tr><td>F3</td><td>mean_gc_fredskov_share_k1000</td><td> 0.7957</td></tr>
+<tr><td>F3</td><td>mean_gc_fredskov_share_k100</td><td> 0.7854</td></tr>
+<tr><td>F3</td><td>mean_gc_forest_share_k250</td><td> 0.7827</td></tr>
+<tr><td>F3</td><td>mean_gc_forest_share_k1000</td><td> 0.7820</td></tr>
+<tr><td>F3</td><td>mean_gc_natura_habitat_areas_share_k1000</td><td> 0.7764</td></tr>
+<tr><td>F3</td><td>mean_gc_natura_bird_protection_share_k1000</td><td> 0.7755</td></tr>
+<tr><td>F3</td><td>mean_gc_forest_share_k100</td><td> 0.7719</td></tr>
+<tr><td>F3</td><td>mean_gc_fredskov_share_k50</td><td> 0.7711</td></tr>
+<tr><td>F3</td><td>mean_gc_natura_habitat_areas_share_k250</td><td> 0.7624</td></tr>
+<tr><td>F4</td><td>mean_gc_fastboende_count_k1000</td><td> 0.8759</td></tr>
+<tr><td>F4</td><td>std_gc_fastboende_count_k250</td><td> 0.8463</td></tr>
+<tr><td>F4</td><td>mean_gc_fastboende_count_k250</td><td> 0.8462</td></tr>
+<tr><td>F4</td><td>std_gc_fastboende_count_k1000</td><td> 0.8415</td></tr>
+<tr><td>F4</td><td>mean_gc_fastboende_count_k100</td><td> 0.7969</td></tr>
+<tr><td>F4</td><td>std_gc_fastboende_count_k100</td><td> 0.7932</td></tr>
+<tr><td>F4</td><td>mean_gc_built_low_selection_share_k1000</td><td> 0.7910</td></tr>
+<tr><td>F4</td><td>mean_gc_buildings_low_share_k1000</td><td> 0.7700</td></tr>
+<tr><td>F4</td><td>mean_gc_fastboende_count_k50</td><td> 0.7548</td></tr>
+<tr><td>F4</td><td>mean_gc_built_low_selection_share_k250</td><td> 0.7472</td></tr>
+<tr><td>F5</td><td>mean_gc_highest_point_low_band_k100</td><td> 0.7156</td></tr>
+<tr><td>F5</td><td>mean_gc_highest_point_low_band_k250</td><td> 0.7155</td></tr>
+<tr><td>F5</td><td>mean_gc_highest_point_low_band_k50</td><td> 0.7120</td></tr>
+<tr><td>F5</td><td>mean_gc_highest_point_low_band_k1000</td><td> 0.6989</td></tr>
+<tr><td>F5</td><td>mean_gc_highest_point_m_k1000</td><td>-0.6907</td></tr>
+<tr><td>F5</td><td>mean_gc_highest_point_low_band_k10</td><td> 0.6868</td></tr>
+<tr><td>F5</td><td>mean_gc_highest_point_m_k250</td><td>-0.6846</td></tr>
+<tr><td>F5</td><td>mean_gc_highest_point_m_k100</td><td>-0.6750</td></tr>
+<tr><td>F5</td><td>mean_gc_contour_mean_elevation_m_k1000</td><td>-0.6737</td></tr>
+<tr><td>F5</td><td>mean_gc_contour_mean_elevation_m_k250</td><td>-0.6689</td></tr></tbody></table><h2>K&auml;llor</h2><p>Kawalerowicz, Juta &amp; Malmberg, Bo. 2021. <em>Multiscalar Typology of Residential Areas in Sweden</em>. Kulturgeografiskt seminarium 2021:1. Kulturgeografiska institutionen, Stockholms universitet.</p><p><em>Bornholms Landskapstyper</em>. PDF, lokalt referensmaterial, 2025.</p><p>Kawalerowicz och Malmberg anv&auml;nder faktoranalys f&ouml;r att reducera m&aring;nga multiskal&auml;ra kontextm&aring;tt till faktorpo&auml;ng, anv&auml;nder faktorpo&auml;ngen i klustring och tolkar/namnger sedan klustertyper utifr&aring;n egenskaper och geografisk utbredning. v10 f&ouml;ljer samma principiella arbetsg&aring;ng, men med landskapsdata och en explicit manuell crosswalk.</p></main></body></html>

@@ -1,0 +1,9 @@
+"K","class_km","name","color","factor","second_factor","primary_score","second_score","F1","F2","F3","F4","F5","n_hex"
+8,1,"Tatorts- och verksamhetskarnor","#6E7C91","F4","F5",3.91,-0.042,-0.165,-0.097,-0.143,3.91,-0.042,2080
+8,2,"Sprickdalspaverkat overgangslandskap","#8B6B45","F1","F3",0.932,-0.098,0.932,-0.473,-0.098,-0.322,-0.234,7188
+8,3,"Blandat vardagslandskap - lag faktorprofil","#D8C97A","mixed","F1",-0.239,-0.363,-0.363,-0.404,-0.586,-0.239,-0.628,16737
+8,4,"Flygsand och sandkust - karnzon","#D5B08A","F2","F3",4.24,-0.174,-0.556,4.24,-0.174,-0.675,-0.546,1312
+8,5,"Sprickdal och brant relief - karnzon med sand/kust","#8B6B45","F1","F2",3.133,0.633,3.133,0.633,-0.135,0.314,0.261,2131
+8,6,"Oppet och laglant blandlandskap","#9AA8B8","F5","F3",1.222,-0.023,-0.402,-0.18,-0.023,-0.176,1.222,11635
+8,7,"Skog och skyddad natur - karnzon","#5B7F4A","F3","F2",2.226,-0.122,-0.148,-0.122,2.226,-0.174,-0.609,5336
+8,8,"Sand- och kustpraglat landskap","#D5B08A","F2","F5",1.644,0.39,-0.202,1.644,-0.078,0.367,0.39,3770
