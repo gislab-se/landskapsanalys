@@ -1,0 +1,92 @@
+<!doctype html><html lang='sv'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>Bornholm v9 K=8 lagerkarta</title><style>body{font-family:Georgia,'Times New Roman',serif;margin:36px;line-height:1.55;color:#172018;background:#f7f4ed;}
+main{max-width:1120px;margin:0 auto;}
+h1,h2{line-height:1.08;}
+p{max-width:860px;}
+table{border-collapse:collapse;width:100%;margin:16px 0;background:#fff;}
+th,td{border:1px solid #ddd;padding:7px 9px;text-align:left;font-size:14px;vertical-align:top;}
+th{background:#e9e4d7;}
+.links{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 24px;}
+.links a{display:inline-block;padding:8px 12px;border:1px solid #d7d2c8;border-radius:8px;color:#172018;text-decoration:none;background:#fff;}
+.links a.primary{background:#31553f;color:#fff;border-color:#31553f;}</style></head><body><main><h1>Bornholm v9: K=8 lagerkarta</h1><p>Publicerad demo f&ouml;r att visa K=8 fr&aring;n v3/v1-sp&aring;ret med alla kluster, individuella klustertoggles, faktorlager och opacitetskontroll. Den &auml;r gjord f&ouml;r samtal med kollegor snarare &auml;n som slutlig modell.</p><div class='links'><a class='primary' href='../map/bornholm_v9_k8_interactive_layers_map.html'>Kartan</a><a href='../report/bornholm_v9_k8_interactive_layers_report.md' download>Ladda ner rapport</a><a href='../model/bornholm_v9_k8_interactive_layers_factor_loadings_from_v1.csv'>Faktorladdningar</a><a href='../model/bornholm_v9_k8_interactive_layers_cluster_legend.csv'>Klusterlegend</a></div><h2>Versioner v1-v9</h2><table><thead><tr><th>version</th><th>kort_beskrivning</th></tr></thead><tbody><tr><td>v1</td><td>Forsta hogre-H3/local-context-sparet. K=7 blev en stark kandidat och gav tydlig landskapsstruktur.</td></tr>
+<tr><td>v2</td><td>Skalad k-variant. Gav ringartefakter och anvands inte som huvudtolkning.</td></tr>
+<tr><td>v3</td><td>K-genomgang pa v1/v3-underlaget. K=8 ar pedagogiskt stark for sprickdalarna.</td></tr>
+<tr><td>v4</td><td>Temabalanserade indata. F1 visar sprickdalar/brant relief tydligt som faktor.</td></tr>
+<tr><td>v5</td><td>Temabalanserad K-genomgang. K=9 visar sprickdalarna fint men behovde tydligare legendnamn.</td></tr>
+<tr><td>v6</td><td>Mean-only K=8 som diagnostik. Visade att standardavvikelserna bar viktig lokal heterogenitet.</td></tr>
+<tr><td>v7</td><td>Pedagogisk demo med K=5 till K=10 och sprickdalsreferenser fran v4/v5.</td></tr>
+<tr><td>v8</td><td>Reserverad mellanversion utan separat publicerat run-id. Anvandes inte som egen modellkandidat.</td></tr>
+<tr><td>v9</td><td>Denna publicerade lagerdemo: fast K=8, alla kluster, individuella klustertoggles, faktorlager och opacitet.</td></tr></tbody></table><h2>Run summary</h2><table><thead><tr><th>metric</th><th>value</th></tr></thead><tbody><tr><td>analysis_id</td><td>bornholm_v9_k8_interactive_layers</td></tr>
+<tr><td>source_analysis</td><td>bornholm_v3_higher_h3_cluster_k_review</td></tr>
+<tr><td>cluster_solution</td><td>K=8</td></tr>
+<tr><td>h3_resolution</td><td>res10</td></tr>
+<tr><td>context_mode</td><td>mean + std, v1/v3 higher-H3 local context series</td></tr>
+<tr><td>map_hex_count</td><td>47117</td></tr>
+<tr><td>factor_views</td><td>F1, F2, F3, F4, F5</td></tr>
+<tr><td>layer_modes</td><td>all clusters; individual cluster toggles; factor toggles; opacity slider</td></tr>
+<tr><td>status</td><td>published pedagogical v9 demo</td></tr></tbody></table><h2>Klusterlegend K=8</h2><table><thead><tr><th>K</th><th>class_km</th><th>name</th><th>color</th><th>factor</th><th>second_factor</th><th>primary_score</th><th>second_score</th><th>F1</th><th>F2</th><th>F3</th><th>F4</th><th>F5</th><th>n_hex</th></tr></thead><tbody><tr><td>8</td><td>1</td><td>Tatorts- och verksamhetskarnor</td><td>#6E7C91</td><td>F4</td><td>F5</td><td> 3.910</td><td>-0.042</td><td>-0.165</td><td>-0.097</td><td>-0.143</td><td> 3.910</td><td>-0.042</td><td> 2080</td></tr>
+<tr><td>8</td><td>2</td><td>Sprickdalspaverkat overgangslandskap</td><td>#8B6B45</td><td>F1</td><td>F3</td><td> 0.932</td><td>-0.098</td><td> 0.932</td><td>-0.473</td><td>-0.098</td><td>-0.322</td><td>-0.234</td><td> 7188</td></tr>
+<tr><td>8</td><td>3</td><td>Blandat vardagslandskap - lag faktorprofil</td><td>#D8C97A</td><td>mixed</td><td>F1</td><td>-0.239</td><td>-0.363</td><td>-0.363</td><td>-0.404</td><td>-0.586</td><td>-0.239</td><td>-0.628</td><td>16737</td></tr>
+<tr><td>8</td><td>4</td><td>Flygsand och sandkust - karnzon</td><td>#D5B08A</td><td>F2</td><td>F3</td><td> 4.240</td><td>-0.174</td><td>-0.556</td><td> 4.240</td><td>-0.174</td><td>-0.675</td><td>-0.546</td><td> 1312</td></tr>
+<tr><td>8</td><td>5</td><td>Sprickdal och brant relief - karnzon med sand/kust</td><td>#8B6B45</td><td>F1</td><td>F2</td><td> 3.133</td><td> 0.633</td><td> 3.133</td><td> 0.633</td><td>-0.135</td><td> 0.314</td><td> 0.261</td><td> 2131</td></tr>
+<tr><td>8</td><td>6</td><td>Oppet och laglant blandlandskap</td><td>#9AA8B8</td><td>F5</td><td>F3</td><td> 1.222</td><td>-0.023</td><td>-0.402</td><td>-0.180</td><td>-0.023</td><td>-0.176</td><td> 1.222</td><td>11635</td></tr>
+<tr><td>8</td><td>7</td><td>Skog och skyddad natur - karnzon</td><td>#5B7F4A</td><td>F3</td><td>F2</td><td> 2.226</td><td>-0.122</td><td>-0.148</td><td>-0.122</td><td> 2.226</td><td>-0.174</td><td>-0.609</td><td> 5336</td></tr>
+<tr><td>8</td><td>8</td><td>Sand- och kustpraglat landskap</td><td>#D5B08A</td><td>F2</td><td>F5</td><td> 1.644</td><td> 0.390</td><td>-0.202</td><td> 1.644</td><td>-0.078</td><td> 0.367</td><td> 0.390</td><td> 3770</td></tr></tbody></table><h2>Topp faktorloadings</h2><table><thead><tr><th>factor</th><th>variable</th><th>loading</th></tr></thead><tbody><tr><td>F1</td><td>mean_gc_contour_mean_slope_deg_k250</td><td> 0.9324</td></tr>
+<tr><td>F1</td><td>mean_gc_relief_m_k250</td><td> 0.9295</td></tr>
+<tr><td>F1</td><td>mean_gc_contour_mean_slope_deg_k100</td><td> 0.9289</td></tr>
+<tr><td>F1</td><td>mean_gc_relief_m_k100</td><td> 0.9241</td></tr>
+<tr><td>F1</td><td>mean_gc_contour_mean_slope_deg_k50</td><td> 0.9151</td></tr>
+<tr><td>F1</td><td>mean_gc_relief_m_k50</td><td> 0.9011</td></tr>
+<tr><td>F1</td><td>mean_gc_contour_mean_slope_deg_k1000</td><td> 0.8919</td></tr>
+<tr><td>F1</td><td>mean_gc_relief_m_k1000</td><td> 0.8894</td></tr>
+<tr><td>F1</td><td>mean_gc_contour_mean_slope_deg_k10</td><td> 0.8619</td></tr>
+<tr><td>F1</td><td>std_gc_contour_valley_depth_max_m_k250</td><td> 0.8501</td></tr>
+<tr><td>F1</td><td>std_gc_contour_mean_elevation_m_k100</td><td> 0.8411</td></tr>
+<tr><td>F1</td><td>mean_gc_contour_valley_depth_max_m_k1000</td><td> 0.8354</td></tr>
+<tr><td>F2</td><td>mean_gc_jordart_es_flyvesand_share_k1000</td><td> 0.8437</td></tr>
+<tr><td>F2</td><td>std_gc_sand_dune_share_k1000</td><td> 0.8208</td></tr>
+<tr><td>F2</td><td>std_gc_sand_dune_share_k250</td><td> 0.8103</td></tr>
+<tr><td>F2</td><td>mean_gc_jordart_es_flyvesand_share_k250</td><td> 0.7983</td></tr>
+<tr><td>F2</td><td>std_gc_sand_dune_share_k100</td><td> 0.7641</td></tr>
+<tr><td>F2</td><td>mean_gc_sand_dune_share_k1000</td><td> 0.7634</td></tr>
+<tr><td>F2</td><td>mean_gc_strand_protection_share_k1000</td><td> 0.7578</td></tr>
+<tr><td>F2</td><td>mean_gc_sand_dune_share_k250</td><td> 0.7472</td></tr>
+<tr><td>F2</td><td>mean_gc_strand_protection_share_k250</td><td> 0.7373</td></tr>
+<tr><td>F2</td><td>mean_gc_jordart_es_flyvesand_share_k100</td><td> 0.7304</td></tr>
+<tr><td>F2</td><td>std_gc_jordart_es_flyvesand_share_k1000</td><td> 0.7267</td></tr>
+<tr><td>F2</td><td>std_gc_strand_protection_share_k1000</td><td> 0.7265</td></tr>
+<tr><td>F3</td><td>mean_gc_fredskov_share_k250</td><td> 0.7965</td></tr>
+<tr><td>F3</td><td>mean_gc_fredskov_share_k1000</td><td> 0.7957</td></tr>
+<tr><td>F3</td><td>mean_gc_fredskov_share_k100</td><td> 0.7854</td></tr>
+<tr><td>F3</td><td>mean_gc_forest_share_k250</td><td> 0.7827</td></tr>
+<tr><td>F3</td><td>mean_gc_forest_share_k1000</td><td> 0.7820</td></tr>
+<tr><td>F3</td><td>mean_gc_natura_habitat_areas_share_k1000</td><td> 0.7764</td></tr>
+<tr><td>F3</td><td>mean_gc_natura_bird_protection_share_k1000</td><td> 0.7755</td></tr>
+<tr><td>F3</td><td>mean_gc_forest_share_k100</td><td> 0.7719</td></tr>
+<tr><td>F3</td><td>mean_gc_fredskov_share_k50</td><td> 0.7711</td></tr>
+<tr><td>F3</td><td>mean_gc_natura_habitat_areas_share_k250</td><td> 0.7624</td></tr>
+<tr><td>F3</td><td>mean_gc_forest_share_k50</td><td> 0.7582</td></tr>
+<tr><td>F3</td><td>mean_gc_river_length_m_k1000</td><td> 0.7551</td></tr>
+<tr><td>F4</td><td>mean_gc_fastboende_count_k1000</td><td> 0.8759</td></tr>
+<tr><td>F4</td><td>std_gc_fastboende_count_k250</td><td> 0.8463</td></tr>
+<tr><td>F4</td><td>mean_gc_fastboende_count_k250</td><td> 0.8462</td></tr>
+<tr><td>F4</td><td>std_gc_fastboende_count_k1000</td><td> 0.8415</td></tr>
+<tr><td>F4</td><td>mean_gc_fastboende_count_k100</td><td> 0.7969</td></tr>
+<tr><td>F4</td><td>std_gc_fastboende_count_k100</td><td> 0.7932</td></tr>
+<tr><td>F4</td><td>mean_gc_built_low_selection_share_k1000</td><td> 0.7910</td></tr>
+<tr><td>F4</td><td>mean_gc_buildings_low_share_k1000</td><td> 0.7700</td></tr>
+<tr><td>F4</td><td>mean_gc_fastboende_count_k50</td><td> 0.7548</td></tr>
+<tr><td>F4</td><td>mean_gc_built_low_selection_share_k250</td><td> 0.7472</td></tr>
+<tr><td>F4</td><td>std_gc_fastboende_count_k50</td><td> 0.7416</td></tr>
+<tr><td>F4</td><td>mean_gc_buildings_low_share_k250</td><td> 0.7232</td></tr>
+<tr><td>F5</td><td>mean_gc_highest_point_low_band_k100</td><td> 0.7156</td></tr>
+<tr><td>F5</td><td>mean_gc_highest_point_low_band_k250</td><td> 0.7155</td></tr>
+<tr><td>F5</td><td>mean_gc_highest_point_low_band_k50</td><td> 0.7120</td></tr>
+<tr><td>F5</td><td>mean_gc_highest_point_low_band_k1000</td><td> 0.6989</td></tr>
+<tr><td>F5</td><td>mean_gc_highest_point_m_k1000</td><td>-0.6907</td></tr>
+<tr><td>F5</td><td>mean_gc_highest_point_low_band_k10</td><td> 0.6868</td></tr>
+<tr><td>F5</td><td>mean_gc_highest_point_m_k250</td><td>-0.6846</td></tr>
+<tr><td>F5</td><td>mean_gc_highest_point_m_k100</td><td>-0.6750</td></tr>
+<tr><td>F5</td><td>mean_gc_contour_mean_elevation_m_k1000</td><td>-0.6737</td></tr>
+<tr><td>F5</td><td>mean_gc_contour_mean_elevation_m_k250</td><td>-0.6689</td></tr>
+<tr><td>F5</td><td>mean_gc_highest_point_m_k50</td><td>-0.6663</td></tr>
+<tr><td>F5</td><td>mean_gc_contour_mean_elevation_m_k100</td><td>-0.6649</td></tr></tbody></table><h2>K=8 diagnostik</h2><table><thead><tr><th>K</th><th>silhouette</th><th>silhouette_basis</th><th>sample_n</th></tr></thead><tbody><tr><td>8</td><td>0.3033752</td><td>sample</td><td>3000</td></tr></tbody></table><h2>Terrangkoppling K=8</h2><table><thead><tr><th>K</th><th>terrain_cluster</th><th>terrain_cluster_name</th><th>terrain_cluster_n_hex</th><th>terrain_cluster_share</th><th>terrain_cluster_F1</th><th>terrain_cluster_F2</th><th>terrain_cluster_F3</th><th>terrain_cluster_F4</th><th>terrain_cluster_F5</th></tr></thead><tbody><tr><td>8</td><td>5</td><td>Brant relief och sprickdalspräglad terräng</td><td>2131</td><td>0.0424595</td><td>3.132649</td><td>0.6325147</td><td>-0.1346874</td><td>0.3137</td><td>0.260592</td></tr></tbody></table></main></body></html>
