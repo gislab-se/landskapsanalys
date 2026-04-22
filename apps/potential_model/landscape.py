@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from io import StringIO
 from pathlib import Path
 from typing import Any
 
@@ -13,11 +14,23 @@ from .manifests import resolve_repo_path
 
 
 CLUSTER_COLORS = {
-    "1": "#b95f38",
-    "2": "#d9c36a",
-    "3": "#5da9b1",
-    "4": "#7b6fa6",
-    "5": "#3f7f58",
+    "1": "#6E7C91",
+    "2": "#9A7A3F",
+    "3": "#D8C97A",
+    "4": "#E2C98E",
+    "5": "#6F4E37",
+    "6": "#8FA7A5",
+    "7": "#4E7A45",
+    "8": "#C89A5A",
+}
+
+
+V10_TYPE_COLORS = {
+    "LT01": "#5F625C",
+    "LT02": "#E2DB9B",
+    "LT03": "#5B4938",
+    "LT04": "#183D24",
+    "LT05": "#EFE36F",
 }
 
 
@@ -37,13 +50,50 @@ def _manifest_path(manifest: dict[str, Any], key: str) -> Path:
     return path
 
 
+def _optional_manifest_path(manifest: dict[str, Any], *keys: str) -> Path | None:
+    for key in keys:
+        value = manifest.get(key)
+        if not value:
+            continue
+        path = resolve_repo_path(str(value))
+        if path is not None and path.exists():
+            return path
+    return None
+
+
 @st.cache_data(show_spinner=False)
 def _read_csv(path_str: str) -> pd.DataFrame:
     return pd.read_csv(path_str)
 
 
+@st.cache_data(show_spinner=False)
+def _read_landscape_geojson_frame(path_str: str) -> pd.DataFrame:
+    data = json.loads(Path(path_str).read_text(encoding="utf-8"))
+    rows: list[dict[str, Any]] = []
+    for feature in data.get("features") or []:
+        props = dict(feature.get("properties") or {})
+        if not props.get("hex_id"):
+            continue
+        if "class_km" not in props and "class_k8" in props:
+            props["class_km"] = props["class_k8"]
+        if "landscape_type" not in props:
+            props["landscape_type"] = props.get("v10_type_name") or props.get("v10_type_id") or props.get("class_km")
+        rows.append(props)
+
+    frame = pd.DataFrame(rows)
+    for column in ["class_km", "class_k8", "F1", "F2", "F3", "F4", "F5"]:
+        if column in frame.columns:
+            frame[column] = pd.to_numeric(frame[column], errors="coerce")
+    return frame
+
+
 def load_factor_scores(manifest: dict[str, Any]) -> pd.DataFrame:
-    return _read_csv(str(_manifest_path(manifest, "factor_scores")))
+    path = _optional_manifest_path(manifest, "factor_scores", "landscape_geojson", "factor_scores_geojson")
+    if path is None:
+        raise ValueError("Landscape manifest is missing factor_scores or landscape_geojson.")
+    if path.suffix.lower() in {".geojson", ".json"}:
+        return _read_landscape_geojson_frame(str(path))
+    return _read_csv(str(path))
 
 
 def load_cluster_profile(manifest: dict[str, Any]) -> pd.DataFrame:
@@ -70,6 +120,10 @@ def factor_columns(manifest: dict[str, Any], frame: pd.DataFrame | None = None) 
     return [col for col in frame.columns if col.startswith("F") and col[1:].isdigit()]
 
 
+def landscape_source_resolution(manifest: dict[str, Any]) -> int:
+    return int(manifest.get("source_h3_resolution", manifest.get("default_h3_resolution", 9)))
+
+
 def _mode_or_first(values: pd.Series) -> Any:
     mode = values.mode(dropna=True)
     if not mode.empty:
@@ -79,7 +133,7 @@ def _mode_or_first(values: pd.Series) -> Any:
 
 
 def landscape_frame_for_resolution(manifest: dict[str, Any], resolution: int) -> pd.DataFrame:
-    source_resolution = int(manifest.get("default_h3_resolution", 9))
+    source_resolution = landscape_source_resolution(manifest)
     frame = load_factor_scores(manifest).copy()
     if int(resolution) == source_resolution:
         return frame
@@ -93,6 +147,18 @@ def landscape_frame_for_resolution(manifest: dict[str, Any], resolution: int) ->
         if factor in work.columns
     }
     aggregations["class_km"] = ("class_km", _mode_or_first)
+    for column in [
+        "class_k8",
+        "v10_type_id",
+        "v10_type_name",
+        "v10_type_name_en",
+        "v10_confidence",
+        "v10_rule",
+        "v10_rule_en",
+        "landscape_type",
+    ]:
+        if column in work.columns:
+            aggregations[column] = (column, _mode_or_first)
     return (
         work.groupby("hex_id", as_index=False)
         .agg(**aggregations)
@@ -170,7 +236,7 @@ def build_landscape_feature_collection_from_frame(
     factor: str,
     display_geometry_path: str | None = None,
 ) -> dict[str, Any]:
-    frame = pd.read_json(frame_json, orient="records")
+    frame = pd.read_json(StringIO(frame_json), orient="records")
     factor_labels = json.loads(factor_labels_json)
     cluster_labels = json.loads(cluster_labels_json)
     display_geometries = load_h3_display_geometries(display_geometry_path) if display_geometry_path else None
@@ -277,13 +343,7 @@ def feature_collection_for_manifest(
     factor: str,
     display_geometry_path: str | None = None,
 ) -> dict[str, Any]:
-    return build_landscape_feature_collection(
-        str(_manifest_path(manifest, "factor_scores")),
-        json.dumps(manifest.get("factor_labels") or {}, sort_keys=True, ensure_ascii=False),
-        json.dumps(manifest.get("cluster_labels") or {}, sort_keys=True, ensure_ascii=False),
-        factor,
-        display_geometry_path,
-    )
+    return feature_collection_for_frame(manifest, load_factor_scores(manifest), factor, display_geometry_path)
 
 
 def feature_collection_for_frame(
@@ -297,5 +357,77 @@ def feature_collection_for_frame(
         json.dumps(manifest.get("factor_labels") or {}, sort_keys=True, ensure_ascii=False),
         json.dumps(manifest.get("cluster_labels") or {}, sort_keys=True, ensure_ascii=False),
         factor,
+        display_geometry_path,
+    )
+
+
+@st.cache_data(show_spinner=False)
+def build_landscape_type_feature_collection_from_frame(
+    frame_json: str,
+    type_labels_json: str,
+    type_colors_json: str,
+    display_geometry_path: str | None = None,
+) -> dict[str, Any]:
+    frame = pd.read_json(StringIO(frame_json), orient="records")
+    type_labels = json.loads(type_labels_json)
+    type_colors = json.loads(type_colors_json)
+    display_geometries = load_h3_display_geometries(display_geometry_path) if display_geometry_path else None
+    features: list[dict[str, Any]] = []
+
+    for row in frame.itertuples(index=False):
+        hex_id = str(getattr(row, "hex_id"))
+        geometry = geometry_for_hex(hex_id, display_geometries)
+        if geometry is None and display_geometry_path:
+            continue
+        if geometry is None:
+            ring = _closed_ring(hex_id)
+            if ring is None:
+                continue
+            geometry = {"type": "Polygon", "coordinates": [ring]}
+        if not geometry.get("coordinates"):
+            continue
+
+        type_id = str(getattr(row, "v10_type_id", "") or "LT?")
+        type_name = str(getattr(row, "v10_type_name", "") or type_labels.get(type_id, type_id))
+        class_raw = getattr(row, "class_km", None)
+        cluster_key = str(int(class_raw)) if pd.notna(class_raw) else "?"
+        confidence = str(getattr(row, "v10_confidence", "") or "")
+        rule = str(getattr(row, "v10_rule", "") or "")
+        popup = (
+            f"<strong>{hex_id}</strong><br>"
+            f"v10: {type_id} - {type_name}<br>"
+            f"v9 kluster: {cluster_key}<br>"
+            f"Säkerhet: {confidence}"
+        )
+        if rule:
+            popup = f"{popup}<br>{rule}"
+
+        features.append(
+            {
+                "type": "Feature",
+                "geometry": geometry,
+                "properties": {
+                    "hex_id": hex_id,
+                    "v10_type_id": type_id,
+                    "v10_type_name": type_name,
+                    "v9_cluster": cluster_key,
+                    "confidence": confidence,
+                    "landscape_type_fill": type_colors.get(type_id, "#999999"),
+                    "popup": popup,
+                },
+            }
+        )
+    return {"type": "FeatureCollection", "features": features}
+
+
+def landscape_type_feature_collection_for_frame(
+    manifest: dict[str, Any],
+    frame: pd.DataFrame,
+    display_geometry_path: str | None = None,
+) -> dict[str, Any]:
+    return build_landscape_type_feature_collection_from_frame(
+        frame.to_json(orient="records", force_ascii=False),
+        json.dumps(manifest.get("landscape_type_labels") or {}, sort_keys=True, ensure_ascii=False),
+        json.dumps(manifest.get("landscape_type_colors") or V10_TYPE_COLORS, sort_keys=True, ensure_ascii=False),
         display_geometry_path,
     )

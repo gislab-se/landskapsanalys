@@ -18,10 +18,13 @@ from potential_model.geometry import load_h3_display_geometries  # noqa: E402
 from potential_model.landscape import (  # noqa: E402
     CLUSTER_COLORS,
     FACTOR_STOPS,
+    V10_TYPE_COLORS,
     cluster_summary,
     factor_columns,
     factor_label,
     feature_collection_for_frame,
+    landscape_source_resolution,
+    landscape_type_feature_collection_for_frame,
     landscape_frame_for_resolution,
     load_cluster_profile,
     load_factor_scores,
@@ -55,6 +58,10 @@ from potential_model.wind_acceptance import (  # noqa: E402
 
 PAGE_TITLE = "Sol- och vindpotential"
 VIEW_OPTIONS = ["Samlad potential", "Bygg solpotential", "Bygg vindpotential"]
+ACTIVE_VIEW_KEY = "potential_active_view"
+LEGACY_ACTIVE_VIEW_KEY = "active_view"
+LEFT_VIEW_WIDGET_KEY = "potential_active_view_left"
+MAIN_VIEW_WIDGET_KEY = "potential_active_view_main"
 MAP_VIEW_RESET_TOKEN_KEY = "potential_map_view_reset_token"
 LEFT_PANEL_OPEN_KEY = "potential_left_panel_open"
 RIGHT_PANEL_OPEN_KEY = "potential_right_panel_open"
@@ -79,6 +86,22 @@ def _init_panel_state() -> None:
 
 def _toggle_panel(key: str) -> None:
     st.session_state[key] = not bool(st.session_state.get(key, True))
+
+
+def _valid_view(value: object) -> str:
+    text = str(value)
+    return text if text in VIEW_OPTIONS else VIEW_OPTIONS[0]
+
+
+def _active_view() -> str:
+    if ACTIVE_VIEW_KEY not in st.session_state and LEGACY_ACTIVE_VIEW_KEY in st.session_state:
+        st.session_state[ACTIVE_VIEW_KEY] = _valid_view(st.session_state.get(LEGACY_ACTIVE_VIEW_KEY))
+    st.session_state.setdefault(ACTIVE_VIEW_KEY, VIEW_OPTIONS[0])
+    return _valid_view(st.session_state.get(ACTIVE_VIEW_KEY))
+
+
+def _sync_active_view_from_widget(widget_key: str) -> None:
+    st.session_state[ACTIVE_VIEW_KEY] = _valid_view(st.session_state.get(widget_key))
 
 
 def _panel_shell() -> tuple[Any | None, Any | None]:
@@ -260,7 +283,6 @@ def _panel_shell() -> tuple[Any | None, Any | None]:
 
 def _workspace_shell() -> tuple[Any | None, Any, Any | None]:
     _init_panel_state()
-    left_open = bool(st.session_state.get(LEFT_PANEL_OPEN_KEY, True))
     right_open = bool(st.session_state.get(RIGHT_PANEL_OPEN_KEY, True))
     st.markdown(
         """
@@ -314,20 +336,9 @@ def _workspace_shell() -> tuple[Any | None, Any, Any | None]:
         unsafe_allow_html=True,
     )
 
-    left_width = 0.24 if left_open else 0.035
     right_width = 0.26 if right_open else 0.035
-    left_col, main_col, right_col = st.columns([left_width, 1.0, right_width], gap="small")
-
-    left_panel = None
-    with left_col:
-        st.markdown('<span id="left-panel-toggle-anchor"></span>', unsafe_allow_html=True)
-        if st.button("<" if left_open else ">", key="left_panel_edge_toggle", help="Visa/dolj kartlager"):
-            _toggle_panel(LEFT_PANEL_OPEN_KEY)
-            st.rerun()
-        if left_open:
-            left_panel = st.container(border=True)
-            with left_panel:
-                st.markdown('<span id="left-panel-content-anchor"></span>', unsafe_allow_html=True)
+    main_col, right_col = st.columns([1.0, right_width], gap="small")
+    left_panel = st.sidebar
 
     right_panel = None
     with right_col:
@@ -444,12 +455,10 @@ def _render_region_scenario_panel(panel: Any | None) -> tuple[dict[str, Any], di
         region = _select_region(None)
         return region, _scenario_state(region, None)
 
-    panel.header("Region")
-    region = _select_region(panel)
-    panel.divider()
-    panel.header("Scenarier")
-    scenario_state = _scenario_state(region, panel)
-    panel.divider()
+    with panel.expander("Region", expanded=True):
+        region = _select_region(st)
+    with panel.expander("Scenarier", expanded=True):
+        scenario_state = _scenario_state(region, st)
     return region, scenario_state
 
 
@@ -528,8 +537,34 @@ def _h3_option_label(region: dict[str, Any], resolution: int) -> str:
     return f"R{resolution}"
 
 
+def _opacity_key(key_prefix: str) -> str:
+    return f"{key_prefix}_hex_opacity"
+
+
+def _current_opacity(key_prefix: str) -> float:
+    try:
+        opacity = float(st.session_state.get(_opacity_key(key_prefix), 0.78))
+    except Exception:
+        opacity = 0.78
+    return max(0.15, min(1.0, opacity))
+
+
+def _render_opacity_control(key_prefix: str) -> None:
+    control_left, control_center, control_right = st.columns([0.22, 0.56, 0.22], gap="small")
+    with control_center:
+        st.slider(
+            "Opacitet hexlager",
+            min_value=0.15,
+            max_value=1.0,
+            value=0.78,
+            step=0.05,
+            key=_opacity_key(key_prefix),
+            help="Styr genomskinligheten för aktiva hexagonlager i kartan.",
+        )
+
+
 def _map_controls(region: dict[str, Any], key_prefix: str) -> tuple[int, float, bool, int]:
-    rollup_col, opacity_col, view_col = st.columns([0.46, 0.32, 0.22], gap="large")
+    rollup_col, info_col = st.columns([0.62, 0.38], gap="large")
     with rollup_col:
         h3_resolution = st.radio(
             "H3-rollup",
@@ -539,32 +574,9 @@ def _map_controls(region: dict[str, Any], key_prefix: str) -> tuple[int, float, 
             horizontal=True,
             key=f"{key_prefix}_h3_resolution",
         )
-    with opacity_col:
-        opacity = st.slider(
-            "Opacitet hexlager",
-            min_value=0.15,
-            max_value=1.0,
-            value=0.78,
-            step=0.05,
-            key=f"{key_prefix}_hex_opacity",
-        )
-    with view_col:
-        preserve_map_view = st.checkbox(
-            "Behåll kartvy",
-            value=True,
-            key=f"{key_prefix}_preserve_map_view",
-            help="Behåller pan/zoom när Streamlit bygger om kartlagren.",
-        )
-        if st.button(
-            "Återställ kartvy",
-            disabled=not preserve_map_view,
-            key=f"{key_prefix}_reset_map_view",
-            use_container_width=True,
-        ):
-            _request_browser_map_view_reset()
-        if preserve_map_view:
-            st.caption("Pan/zoom behålls vid lagerbyte.")
-    return int(h3_resolution), float(opacity), bool(preserve_map_view), _map_view_reset_token()
+    with info_col:
+        st.markdown("[Learn more about H3 resolutions](https://h3geo.org/).")
+    return int(h3_resolution), _current_opacity(key_prefix), True, _map_view_reset_token()
 
 
 def _display_mode_control(key_prefix: str) -> str:
@@ -575,7 +587,7 @@ def _display_mode_control(key_prefix: str) -> str:
             index=0,
             horizontal=True,
             key=f"{key_prefix}_display_mode",
-            help="Vind kan visas som kandidatvektor från R9 och som H3-rollup. Solvektor kopplas in i senare datasteg.",
+            help="Vind kan visas som kandidatvektor från källhex och som H3-rollup. Solvektor kopplas in i senare datasteg.",
         )
     )
 
@@ -597,22 +609,14 @@ def _map_control_values(region: dict[str, Any], key_prefix: str) -> tuple[int, f
         h3_resolution = available_resolutions[0]
     if h3_resolution not in available_resolutions:
         h3_resolution = available_resolutions[0]
-    try:
-        opacity = float(st.session_state.get(f"{key_prefix}_hex_opacity", 0.78))
-    except Exception:
-        opacity = 0.78
-    opacity = max(0.15, min(1.0, opacity))
-    preserve_map_view = bool(st.session_state.get(f"{key_prefix}_preserve_map_view", True))
-    return h3_resolution, opacity, preserve_map_view, _map_view_reset_token()
+    return h3_resolution, _current_opacity(key_prefix), True, _map_view_reset_token()
 
 
 def _map_panel_controls(region: dict[str, Any], key_prefix: str, panel: Any | None) -> tuple[int, float, bool, int]:
     if panel is None:
         return _map_control_values(region, key_prefix)
 
-    panel.subheader("Visning")
-    rollup_col, opacity_col = panel.columns(2)
-    with rollup_col:
+    with panel.expander("H3 resolution", expanded=True):
         h3_resolution = st.radio(
             "H3-rollup",
             options=_available_h3_resolutions(region),
@@ -621,26 +625,8 @@ def _map_panel_controls(region: dict[str, Any], key_prefix: str, panel: Any | No
             horizontal=False,
             key=f"{key_prefix}_h3_resolution",
         )
-    with opacity_col:
-        opacity = st.slider(
-            "Opacitet",
-            min_value=0.15,
-            max_value=1.0,
-            value=0.78,
-            step=0.05,
-            key=f"{key_prefix}_hex_opacity",
-        )
-    preserve_map_view = panel.checkbox(
-        "Behåll kartvy",
-        value=True,
-        key=f"{key_prefix}_preserve_map_view",
-        help="Behåller pan/zoom när Streamlit bygger om kartlagren.",
-    )
-    if panel.button("Återställ kartvy", disabled=not preserve_map_view, key=f"{key_prefix}_reset_map_view", use_container_width=True):
-        _request_browser_map_view_reset()
-    if preserve_map_view:
-        panel.caption("Pan/zoom behålls vid lagerbyte.")
-    return int(h3_resolution), float(opacity), bool(preserve_map_view), _map_view_reset_token()
+        st.markdown("[Learn more about H3 resolutions](https://h3geo.org/).")
+    return int(h3_resolution), _current_opacity(key_prefix), True, _map_view_reset_token()
 
 
 def _display_mode_value(key_prefix: str) -> str:
@@ -651,16 +637,17 @@ def _display_mode_value(key_prefix: str) -> str:
 def _display_mode_panel(key_prefix: str, panel: Any | None) -> str:
     if panel is None:
         return _display_mode_value(key_prefix)
-    return str(
-        panel.radio(
-            "Potentialläge",
-            options=["Hexagon", "Vektor", "Båda"],
-            index=0,
-            horizontal=True,
-            key=f"{key_prefix}_display_mode",
-            help="Vind kan visas som kandidatvektor från R9 och som H3-rollup. Solvektor kopplas in i senare datasteg.",
+    with panel.expander("Potentialläge", expanded=False):
+        return str(
+            st.radio(
+                "Potentialläge",
+                options=["Hexagon", "Vektor", "Båda"],
+                index=0,
+                horizontal=True,
+                key=f"{key_prefix}_display_mode",
+                help="Vind kan visas som kandidatvektor från källhex och som H3-rollup. Solvektor kopplas in i senare datasteg.",
+            )
         )
-    )
 
 
 def _mode_wants_hex(display_mode: str) -> bool:
@@ -706,8 +693,9 @@ def _default_solar_frame(
     solar_rules: dict[str, Any],
     resolution: int,
 ) -> pd.DataFrame:
+    source_resolution = landscape_source_resolution(landscape_manifest)
     entry = _solar_rollup_entry(potential_manifest, resolution)
-    if entry is not None:
+    if entry is not None and int(entry.get("source_resolution", -1)) == source_resolution:
         frame = rollup_frame_for_entry(entry)
     else:
         frame = rollup_potential_frame(
@@ -715,6 +703,7 @@ def _default_solar_frame(
             resolution,
             _class_breaks(solar_rules),
             "solar",
+            source_resolution=source_resolution,
         )
     return _filter_frame_to_display_geometries(frame, _h3_display_geometry_path(region, resolution))
 
@@ -728,7 +717,7 @@ def _custom_solar_frame(
 ) -> pd.DataFrame:
     rules = _solar_rules_from_params(solar_rules, params)
     base = solar_capacity_frame(landscape_manifest, rules)
-    frame = rollup_potential_frame(base, resolution, _class_breaks(rules), "solar")
+    frame = rollup_potential_frame(base, resolution, _class_breaks(rules), "solar", source_resolution=landscape_source_resolution(landscape_manifest))
     return _filter_frame_to_display_geometries(frame, _h3_display_geometry_path(region, resolution))
 
 
@@ -785,6 +774,12 @@ def _cluster_legend_items(landscape_manifest: dict[str, Any]) -> list[dict[str, 
     ]
 
 
+def _landscape_type_legend_items(landscape_manifest: dict[str, Any]) -> list[dict[str, str]]:
+    labels = landscape_manifest.get("landscape_type_labels") or {}
+    colors = landscape_manifest.get("landscape_type_colors") or V10_TYPE_COLORS
+    return [{"label": f"{key} - {labels.get(key, key)}", "color": colors.get(key, "#999999")} for key in sorted(colors)]
+
+
 def _factor_legend_items() -> list[dict[str, str]]:
     labels = ["≤ -2", "-1", "0", "1", "≥ 2"]
     return [{"label": label, "color": color} for label, (_, color) in zip(labels, FACTOR_STOPS)]
@@ -797,7 +792,7 @@ def _default_solar_params(solar_rules: dict[str, Any]) -> dict[str, float]:
     return {
         "base_score": float(score_model.get("base_score", 55)),
         "grid_access_bonus": 0.0,
-        "everyday_matrix_bonus": cluster_terms.get("class_km:2", 15.0),
+        "everyday_matrix_bonus": max(cluster_terms.get("class_km:3", 0.0), cluster_terms.get("class_km:6", 0.0), cluster_terms.get("class_km:2", 15.0)),
         "coastal_penalty": abs(role_terms.get("coastal_lowland", -12.0)),
         "terrain_penalty": abs(role_terms.get("steep_valley_relief", -12.0)),
         "protected_penalty": abs(role_terms.get("protected_forest_habitat", -18.0)),
@@ -818,7 +813,7 @@ def _solar_rules_from_params(solar_rules: dict[str, Any], params: dict[str, floa
     score_model = rules["score_model"]
     score_model["base_score"] = float(params.get("base_score", 55.0)) + float(params.get("grid_access_bonus", 0.0))
     for term in score_model.get("cluster_terms") or []:
-        if term.get("cluster_ref") == "class_km:2":
+        if term.get("cluster_ref") in {"class_km:2", "class_km:3", "class_km:6"}:
             term["weight"] = float(params.get("everyday_matrix_bonus", term.get("weight", 15.0)))
     role_weight_map = {
         "coastal_lowland": -float(params.get("coastal_penalty", 12.0)),
@@ -936,7 +931,7 @@ def _saved_wind_params() -> dict[str, float] | None:
 
 
 def _set_active_view(view: str) -> None:
-    st.session_state["active_view"] = view
+    st.session_state[ACTIVE_VIEW_KEY] = _valid_view(view)
 
 
 def _render_layers(
@@ -945,6 +940,7 @@ def _render_layers(
     opacity: float,
     map_state_key: str | None = None,
     map_reset_token: int = 0,
+    opacity_key_prefix: str | None = None,
 ) -> None:
     if not layers:
         st.info("Välj minst ett kartlager.")
@@ -960,7 +956,9 @@ def _render_layers(
     )
     map_left, map_center, map_right = st.columns([0.04, 0.92, 0.04], gap="small")
     with map_center:
-        components.html(map_html, height=920)
+        components.html(map_html, height=820)
+        if opacity_key_prefix:
+            _render_opacity_control(opacity_key_prefix)
 
 
 def _potential_layer(
@@ -970,9 +968,10 @@ def _potential_layer(
     display_geometry_path: str | None,
     legend_items: list[dict[str, str]],
 ) -> dict[str, Any]:
+    land_frame = _filter_frame_to_display_geometries(frame, display_geometry_path)
     return {
         "name": name,
-        "feature_collection": potential_feature_collection(frame, technology, display_geometry_path),
+        "feature_collection": potential_feature_collection(land_frame, technology, None),
         "fill_property": "fill",
         "legend_items": legend_items,
         "legend_id": "potential_classes",
@@ -987,9 +986,10 @@ def _wind_vector_layer(
     display_geometry_path: str | None,
     legend_items: list[dict[str, str]],
 ) -> dict[str, Any]:
+    land_frame = _filter_frame_to_display_geometries(source_frame, display_geometry_path)
     return {
         "name": name,
-        "feature_collection": wind_vector_feature_collection(source_frame, display_geometry_path, only_potential_area=True),
+        "feature_collection": wind_vector_feature_collection(land_frame, None, only_potential_area=True),
         "fill_property": "fill",
         "legend_items": legend_items,
         "legend_id": "potential_classes",
@@ -1006,12 +1006,31 @@ def _landscape_layer(
     display_geometry_path: str | None,
     mode: str,
 ) -> dict[str, Any]:
+    land_frame = _filter_frame_to_display_geometries(frame, display_geometry_path)
     return {
         "name": name,
-        "feature_collection": feature_collection_for_frame(manifest, frame, factor, display_geometry_path),
+        "feature_collection": feature_collection_for_frame(manifest, land_frame, factor, None),
         "fill_property": "factor_fill" if mode == "factor" else "cluster_fill",
         "legend_items": _factor_legend_items() if mode == "factor" else _cluster_legend_items(manifest),
         "legend_id": f"landscape_{mode}_{factor}",
+        "legend_title": name,
+        "default_visible": True,
+    }
+
+
+def _landscape_type_layer(
+    name: str,
+    frame: pd.DataFrame,
+    manifest: dict[str, Any],
+    display_geometry_path: str | None,
+) -> dict[str, Any]:
+    land_frame = _filter_frame_to_display_geometries(frame, display_geometry_path)
+    return {
+        "name": name,
+        "feature_collection": landscape_type_feature_collection_for_frame(manifest, land_frame, None),
+        "fill_property": "landscape_type_fill",
+        "legend_items": _landscape_type_legend_items(manifest),
+        "legend_id": "landscape_v10_types",
         "legend_title": name,
         "default_visible": True,
     }
@@ -1037,7 +1056,7 @@ def _combined_summary(map_state: dict[str, Any], scenario_state: dict[str, Any])
 
     if map_state.get("landscape_active"):
         with st.expander("Landskapsanalys", expanded=False):
-            st.write("Landskapslager visas med samma H3-rollup som potentiallagren.")
+            st.write("v9-kluster, v10-landskapstyper och faktorlager visas med samma H3-rollup som potentiallagren.")
 
 
 def _potential_detail_panel(label: str, frame: pd.DataFrame, technology: str, resolution: int) -> None:
@@ -1098,36 +1117,35 @@ def _combined_layer_controls(
             "show_user_solar": bool(st.session_state.get("show_user_solar", False)),
             "show_default_wind": bool(st.session_state.get("show_default_wind", False)),
             "show_user_wind": bool(st.session_state.get("show_user_wind", False)),
+            "show_v10": bool(st.session_state.get("show_landscape_v10", False)),
             "show_cluster": bool(st.session_state.get("show_landscape_cluster", False)),
             "show_factor": bool(st.session_state.get("show_landscape_factor", False)),
             "selected_factor": selected_factor,
         }
 
-    panel.header("Kartlager")
     h3_resolution, opacity, preserve_map_view, map_reset_token = _map_panel_controls(region, "combined", panel)
     display_mode = _display_mode_panel("combined", panel)
 
-    panel.divider()
-    panel.subheader("Potential")
-    show_default_solar = panel.checkbox("Default solpotential", value=True, key="show_default_solar")
-    show_user_solar = panel.checkbox("Egen solpotential", value=False, key="show_user_solar")
-    panel.caption("Egen sol: sparad" if saved_solar_params is not None else "Egen sol: ej sparad")
-    show_default_wind = panel.checkbox("Default vindpotential", value=False, key="show_default_wind")
-    show_user_wind = panel.checkbox("Egen vindpotential", value=False, key="show_user_wind")
-    panel.caption("Egen vind: sparad" if saved_wind_ui_params is not None else "Egen vind: ej sparad")
+    with panel.expander("Potential", expanded=True):
+        show_default_solar = st.checkbox("Default solpotential", value=True, key="show_default_solar")
+        show_user_solar = st.checkbox("Egen solpotential", value=False, key="show_user_solar")
+        st.caption("Egen sol: sparad" if saved_solar_params is not None else "Egen sol: ej sparad")
+        show_default_wind = st.checkbox("Default vindpotential", value=False, key="show_default_wind")
+        show_user_wind = st.checkbox("Egen vindpotential", value=False, key="show_user_wind")
+        st.caption("Egen vind: sparad" if saved_wind_ui_params is not None else "Egen vind: ej sparad")
 
-    panel.divider()
-    panel.subheader("Landskap")
-    show_cluster = panel.checkbox("Landskapskluster", value=False, key="show_landscape_cluster")
-    show_factor = panel.checkbox("Landskapsfaktor", value=False, key="show_landscape_factor")
-    selected_factor = panel.selectbox(
-        "Faktor",
-        options=factors,
-        index=0,
-        format_func=lambda factor: f"{factor} - {factor_label(landscape_manifest, factor)}",
-        disabled=not show_factor,
-        key="combined_landscape_factor",
-    )
+    with panel.expander("Landskap", expanded=True):
+        show_v10 = st.checkbox("v10 landskapstyper", value=False, key="show_landscape_v10")
+        show_cluster = st.checkbox("v9 kluster K=8", value=False, key="show_landscape_cluster")
+        show_factor = st.checkbox("v9 faktorlager", value=False, key="show_landscape_factor")
+        selected_factor = st.selectbox(
+            "Faktor",
+            options=factors,
+            index=0,
+            format_func=lambda factor: f"{factor} - {factor_label(landscape_manifest, factor)}",
+            disabled=not show_factor,
+            key="combined_landscape_factor",
+        )
     return {
         "h3_resolution": int(h3_resolution),
         "opacity": float(opacity),
@@ -1138,6 +1156,7 @@ def _combined_layer_controls(
         "show_user_solar": bool(show_user_solar),
         "show_default_wind": bool(show_default_wind),
         "show_user_wind": bool(show_user_wind),
+        "show_v10": bool(show_v10),
         "show_cluster": bool(show_cluster),
         "show_factor": bool(show_factor),
         "selected_factor": str(selected_factor),
@@ -1163,19 +1182,19 @@ def _combined_tab(
     saved_wind_ui_params = _saved_wind_params()
 
     if left_panel is not None:
-        with left_panel.expander("Kartlager", expanded=True):
-            st.subheader("Potential")
+        with left_panel.expander("Potential", expanded=True):
             show_default_solar = st.checkbox("Default solpotential", value=True, key="show_default_solar")
             show_user_solar = st.checkbox("Egen solpotential", value=False, key="show_user_solar")
             st.caption("Egen sol: sparad" if saved_solar_params is not None else "Egen sol: ej sparad")
             show_default_wind = st.checkbox("Default vindpotential", value=False, key="show_default_wind")
             show_user_wind = st.checkbox("Egen vindpotential", value=False, key="show_user_wind")
             st.caption("Egen vind: sparad" if saved_wind_ui_params is not None else "Egen vind: ej sparad")
-            st.subheader("Landskap")
-            show_cluster = st.checkbox("Landskapskluster", value=False, key="show_landscape_cluster")
-            show_factor = st.checkbox("Landskapsfaktor", value=False, key="show_landscape_factor")
+        with left_panel.expander("Landskap", expanded=True):
+            show_v10 = st.checkbox("v10 landskapstyper", value=False, key="show_landscape_v10")
+            show_cluster = st.checkbox("v9 kluster K=8", value=False, key="show_landscape_cluster")
+            show_factor = st.checkbox("v9 faktorlager", value=False, key="show_landscape_factor")
             selected_factor = st.selectbox(
-            "Faktor för landskapsfaktor",
+                "Faktor för v9 faktorlager",
                 options=factors,
                 index=0,
                 format_func=lambda factor: f"{factor} - {factor_label(landscape_manifest, factor)}",
@@ -1188,6 +1207,7 @@ def _combined_tab(
         show_user_solar = bool(st.session_state.get("show_user_solar", False))
         show_default_wind = bool(st.session_state.get("show_default_wind", False))
         show_user_wind = bool(st.session_state.get("show_user_wind", False))
+        show_v10 = bool(st.session_state.get("show_landscape_v10", False))
         show_cluster = bool(st.session_state.get("show_landscape_cluster", False))
         show_factor = bool(st.session_state.get("show_landscape_factor", False))
         selected_factor = str(st.session_state.get("combined_landscape_factor", factors[0] if factors else ""))
@@ -1247,12 +1267,14 @@ def _combined_tab(
             layers.append(_wind_vector_layer("Egen vindpotential vektor", source_frame, _h3_display_geometry_path(region, WIND_SOURCE_RESOLUTION), _solar_legend_items(solar_rules)))
         potential_frames.append({"label": "Egen vindpotential", "technology": "wind", "frame": frame})
 
-    if show_cluster or show_factor:
+    if show_v10 or show_cluster or show_factor:
         landscape_frame = _landscape_frame(region, landscape_manifest, h3_resolution)
+        if show_v10:
+            layers.append(_landscape_type_layer(f"v10 landskapstyper R{h3_resolution}", landscape_frame, landscape_manifest, display_geometry_path))
         if show_cluster:
-            layers.append(_landscape_layer(f"Landskapskluster R{h3_resolution}", landscape_frame, landscape_manifest, factors[0], display_geometry_path, "cluster"))
+            layers.append(_landscape_layer(f"v9 K=8 kluster R{h3_resolution}", landscape_frame, landscape_manifest, factors[0], display_geometry_path, "cluster"))
         if show_factor:
-            layers.append(_landscape_layer(f"{selected_factor}: {factor_label(landscape_manifest, selected_factor)} R{h3_resolution}", landscape_frame, landscape_manifest, selected_factor, display_geometry_path, "factor"))
+            layers.append(_landscape_layer(f"v9 {selected_factor}: {factor_label(landscape_manifest, selected_factor)} R{h3_resolution}", landscape_frame, landscape_manifest, selected_factor, display_geometry_path, "factor"))
 
     _vector_placeholder(vector_placeholders)
     _render_layers(
@@ -1261,6 +1283,7 @@ def _combined_tab(
         opacity,
         map_state_key=f"{region.get('region_id', 'region')}:combined" if preserve_map_view else None,
         map_reset_token=map_reset_token,
+        opacity_key_prefix="combined",
     )
     summary_target = right_panel or st.container()
     with summary_target:
@@ -1269,7 +1292,7 @@ def _combined_tab(
                 "layers": layers,
                 "potential_frames": potential_frames,
                 "resolution": h3_resolution,
-                "landscape_active": bool(show_cluster or show_factor),
+                "landscape_active": bool(show_v10 or show_cluster or show_factor),
             },
             scenario_state,
         )
@@ -1316,6 +1339,7 @@ def _solar_builder_tab(
             opacity,
             map_state_key=f"{region.get('region_id', 'region')}:solar_builder" if preserve_map_view else None,
             map_reset_token=map_reset_token,
+            opacity_key_prefix="solar_builder_preview",
         )
         summary_target = right_panel or st.container()
         with summary_target:
@@ -1368,6 +1392,7 @@ def _solar_builder_tab(
             opacity,
             map_state_key=f"{region.get('region_id', 'region')}:solar_builder" if preserve_map_view else None,
             map_reset_token=map_reset_token,
+            opacity_key_prefix="solar_builder_preview",
         )
     with info_col:
         with st.container(border=True):
@@ -1427,12 +1452,13 @@ def _wind_builder_tab(
             opacity,
             map_state_key=f"{region.get('region_id', 'region')}:wind_builder" if preserve_map_view else None,
             map_reset_token=map_reset_token,
+            opacity_key_prefix="wind_builder_preview",
         )
         summary_target = right_panel or st.container()
         with summary_target:
             _potential_detail_panel("Osparad vindförhandsvisning", frame, "wind", h3_resolution)
             vector_stats = wind_candidate_summary(source_frame)
-            st.metric("Kandidatytor R9", vector_stats["candidate_cells"])
+            st.metric(f"Kandidatytor R{WIND_SOURCE_RESOLUTION}", vector_stats["candidate_cells"])
             st.metric("Kandidatandel", f"{vector_stats['candidate_share']:.1f}%")
             with st.expander("Aktiva vindparametrar"):
                 st.json(ui_params)
@@ -1483,12 +1509,13 @@ def _wind_builder_tab(
             opacity,
             map_state_key=f"{region.get('region_id', 'region')}:wind_builder" if preserve_map_view else None,
             map_reset_token=map_reset_token,
+            opacity_key_prefix="wind_builder_preview",
         )
     with info_col:
         with st.container(border=True):
             _potential_detail_panel("Osparad vindförhandsvisning", frame, "wind", h3_resolution)
             vector_stats = wind_candidate_summary(source_frame)
-            st.metric("Kandidatytor R9", vector_stats["candidate_cells"])
+            st.metric(f"Kandidatytor R{WIND_SOURCE_RESOLUTION}", vector_stats["candidate_cells"])
             st.metric("Kandidatandel", f"{vector_stats['candidate_share']:.1f}%")
             with st.expander("Aktiva vindparametrar"):
                 st.json(ui_params)
@@ -1509,18 +1536,67 @@ def _wind_builder_tab(
 
 
 def _view_selector(panel: Any | None = None) -> str:
-    st.session_state.setdefault("active_view", VIEW_OPTIONS[0])
-    target = panel or st
+    current_view = _active_view()
+    widget_key = LEFT_VIEW_WIDGET_KEY if panel is not None else MAIN_VIEW_WIDGET_KEY
+    if widget_key not in st.session_state or _valid_view(st.session_state.get(widget_key)) != current_view:
+        st.session_state[widget_key] = current_view
     if panel is not None:
-        panel.header("Vy")
+        with panel.expander("Vy", expanded=True):
+            if hasattr(st, "segmented_control"):
+                selected = st.segmented_control(
+                    "Vy",
+                    VIEW_OPTIONS,
+                    key=widget_key,
+                    label_visibility="collapsed",
+                    on_change=_sync_active_view_from_widget,
+                    args=(widget_key,),
+                )
+                selected_view = _valid_view(selected or current_view)
+                st.session_state[ACTIVE_VIEW_KEY] = selected_view
+                return selected_view
+            selected_view = _valid_view(
+                st.radio(
+                    "Vy",
+                    VIEW_OPTIONS,
+                    horizontal=False,
+                    key=widget_key,
+                    label_visibility="collapsed",
+                    on_change=_sync_active_view_from_widget,
+                    args=(widget_key,),
+                )
+            )
+            st.session_state[ACTIVE_VIEW_KEY] = selected_view
+            return selected_view
+    target = st
     if hasattr(st, "segmented_control"):
-        selected = target.segmented_control("Vy", VIEW_OPTIONS, key="active_view", label_visibility="collapsed")
-        return str(selected or st.session_state.get("active_view", VIEW_OPTIONS[0]))
-    return str(target.radio("Vy", VIEW_OPTIONS, horizontal=panel is None, key="active_view", label_visibility="collapsed"))
+        selected = target.segmented_control(
+            "Vy",
+            VIEW_OPTIONS,
+            key=widget_key,
+            label_visibility="collapsed",
+            on_change=_sync_active_view_from_widget,
+            args=(widget_key,),
+        )
+        selected_view = _valid_view(selected or current_view)
+        st.session_state[ACTIVE_VIEW_KEY] = selected_view
+        return selected_view
+    selected_view = _valid_view(
+        target.radio(
+            "Vy",
+            VIEW_OPTIONS,
+            horizontal=panel is None,
+            key=widget_key,
+            label_visibility="collapsed",
+            on_change=_sync_active_view_from_widget,
+            args=(widget_key,),
+        )
+    )
+    st.session_state[ACTIVE_VIEW_KEY] = selected_view
+    return selected_view
 
 
 def main() -> None:
-    st.set_page_config(page_title=PAGE_TITLE, layout="wide")
+    st.set_page_config(page_title=PAGE_TITLE, layout="wide", initial_sidebar_state="expanded")
     left_panel, main_panel, right_panel = _workspace_shell()
     region, scenario_state = _render_region_scenario_panel(left_panel)
     context = _load_context(region)

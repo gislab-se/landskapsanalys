@@ -13,7 +13,7 @@ from .geometry import geometry_for_hex, load_h3_display_geometries
 from .potential import apply_potential_classes, rollup_potential_frame, wind_potential_frame
 
 
-SOURCE_RESOLUTION = 9
+SOURCE_RESOLUTION = 10
 POTENTIAL_MIN_SCORE = 45.0
 
 WIND_GROUP_LAYER_DEFAULTS: dict[str, list[str]] = {
@@ -88,12 +88,25 @@ def _closed_ring(hex_id: str) -> list[list[float]] | None:
     return ring or None
 
 
+def _h3_resolution_for_series(hex_ids: pd.Series) -> int | None:
+    resolutions: list[int] = []
+    for value in hex_ids.dropna().astype(str).head(250):
+        try:
+            resolutions.append(int(h3.get_resolution(value)))
+        except Exception:
+            continue
+    if not resolutions:
+        return None
+    return int(pd.Series(resolutions).mode().iloc[0])
+
+
 def _group_distance_frame(
     hex_ids: pd.Series,
     registry_meta: dict[str, Any],
     layer_ids: list[str],
 ) -> pd.DataFrame:
     work = pd.DataFrame({"hex_id": hex_ids.astype(str).unique()})
+    source_resolution = _h3_resolution_for_series(work["hex_id"])
     distance_cols: list[str] = []
     overlap_cols: list[str] = []
 
@@ -101,10 +114,27 @@ def _group_distance_frame(
         layer_frame = distance_table_for_layer(registry_meta, layer_id)
         if layer_frame.empty:
             continue
+        layer_frame = layer_frame.copy()
+        distance_resolution = _h3_resolution_for_series(layer_frame["hex_id"])
+        join_col = "hex_id"
+        if source_resolution is not None and distance_resolution is not None and source_resolution != distance_resolution:
+            join_col = "distance_hex_id"
+            if source_resolution > distance_resolution:
+                work[join_col] = work["hex_id"].map(lambda value: h3.cell_to_parent(str(value), distance_resolution))
+            else:
+                work[join_col] = work["hex_id"]
+                layer_frame[join_col] = layer_frame["hex_id"].map(lambda value: h3.cell_to_parent(str(value), source_resolution))
+                layer_frame = (
+                    layer_frame.groupby(join_col, as_index=False)
+                    .agg(distance_m=("distance_m", "min"), intersects=("intersects", "max"))
+                )
+            if join_col not in layer_frame.columns:
+                layer_frame[join_col] = layer_frame["hex_id"]
+
         distance_col = f"{layer_id}__distance_m"
         overlap_col = f"{layer_id}__intersects"
         renamed = layer_frame.rename(columns={"distance_m": distance_col, "intersects": overlap_col})
-        work = work.merge(renamed[["hex_id", distance_col, overlap_col]], on="hex_id", how="left")
+        work = work.merge(renamed[[join_col, distance_col, overlap_col]], on=join_col, how="left")
         distance_cols.append(distance_col)
         overlap_cols.append(overlap_col)
 
@@ -289,14 +319,14 @@ def wind_acceptance_potential_frame(
 ) -> pd.DataFrame:
     import json
 
-    factor_scores_path = landscape_manifest.get("factor_scores")
-    if not factor_scores_path:
-        raise ValueError("Landscape manifest is missing factor_scores.")
+    source_value = landscape_manifest.get("factor_scores") or landscape_manifest.get("landscape_geojson") or landscape_manifest.get("factor_scores_geojson")
+    if not source_value:
+        raise ValueError("Landscape manifest is missing factor_scores or landscape_geojson.")
     from .manifests import resolve_repo_path
 
-    path = resolve_repo_path(str(factor_scores_path))
+    path = resolve_repo_path(str(source_value))
     if path is None:
-        raise ValueError("Landscape factor_scores path could not be resolved.")
+        raise ValueError("Landscape source path could not be resolved.")
     return _build_wind_acceptance_frame_cached(
         str(path),
         json.dumps(landscape_manifest, sort_keys=True, ensure_ascii=False),
@@ -311,7 +341,8 @@ def wind_acceptance_rollup_frame(
     target_resolution: int,
     breaks: list[dict[str, Any]],
 ) -> pd.DataFrame:
-    return rollup_potential_frame(source_frame, target_resolution, breaks, "wind", SOURCE_RESOLUTION)
+    source_resolution = _h3_resolution_for_series(source_frame["hex_id"]) or SOURCE_RESOLUTION
+    return rollup_potential_frame(source_frame, target_resolution, breaks, "wind", source_resolution)
 
 
 @st.cache_data(show_spinner=False)

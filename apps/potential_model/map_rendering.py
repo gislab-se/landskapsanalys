@@ -85,6 +85,7 @@ def build_landscape_map_html(
     const overlays = {{}};
     overlays[mapTitle] = landscape;
     L.control.layers({{ 'OSM': osm, 'Satellite': satellite }}, overlays, {{ collapsed: true }}).addTo(map);
+    L.control.scale({{ metric: true, imperial: false, maxWidth: 160 }}).addTo(map);
 
     const note = L.control({{ position: 'topright' }});
     note.onAdd = function() {{
@@ -293,6 +294,7 @@ def build_layered_hex_map_html(
     }});
 
     L.control.layers({{ 'OSM': osm, 'Satellite': satellite }}, overlays, {{ collapsed: true }}).addTo(map);
+    L.control.scale({{ metric: true, imperial: false, maxWidth: 160 }}).addTo(map);
 
     const note = L.control({{ position: 'topright' }});
     note.onAdd = function() {{
@@ -437,6 +439,7 @@ def build_potential_map_html(
     const overlays = {{}};
     overlays[mapTitle] = potential;
     L.control.layers({{ 'OSM': osm, 'Satellite': satellite }}, overlays, {{ collapsed: true }}).addTo(map);
+    L.control.scale({{ metric: true, imperial: false, maxWidth: 160 }}).addTo(map);
 
     const note = L.control({{ position: 'topright' }});
     note.onAdd = function() {{

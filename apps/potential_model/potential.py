@@ -48,6 +48,23 @@ def _cluster_term(frame: pd.DataFrame, cluster_ref: str, weight: float) -> pd.Se
     return (frame["class_km"].astype(str) == cluster_value).astype(float) * float(weight)
 
 
+def _cluster_role_term(
+    frame: pd.DataFrame,
+    landscape_manifest: dict[str, Any],
+    role: str,
+    weight: float,
+    fallback_ref: str,
+) -> pd.Series:
+    semantic_roles = landscape_manifest.get("semantic_roles") or {}
+    refs = [str(ref) for ref in semantic_roles.get(role, []) if str(ref).startswith("class_km:")]
+    if not refs:
+        refs = [fallback_ref]
+    terms = [_cluster_term(frame, ref, 1.0) for ref in refs]
+    if not terms:
+        return pd.Series(0.0, index=frame.index)
+    return pd.concat(terms, axis=1).max(axis=1).fillna(0.0) * float(weight)
+
+
 def _class_for_score(score: float, breaks: list[dict[str, Any]]) -> dict[str, Any]:
     for item in breaks:
         lower = float(item.get("min", 0))
@@ -143,14 +160,14 @@ def rollup_potential_frame(
 
 @st.cache_data(show_spinner=False)
 def build_solar_capacity_frame(
-    factor_scores_path: str,
+    landscape_source_path: str,
     landscape_manifest_json: str,
     solar_rules_json: str,
 ) -> pd.DataFrame:
     landscape_manifest = json.loads(landscape_manifest_json)
     solar_rules = json.loads(solar_rules_json)
     score_model = solar_rules.get("score_model") or {}
-    frame = pd.read_csv(factor_scores_path).copy()
+    frame = load_factor_scores(landscape_manifest).copy()
 
     frame["solar_score_raw"] = float(score_model.get("base_score", 50))
     for term in score_model.get("cluster_terms") or []:
@@ -177,16 +194,22 @@ def build_solar_capacity_frame(
     frame["solar_class"] = [str(item.get("id", "unknown")) for item in class_rows]
     frame["solar_class_label"] = [str(item.get("label", item.get("id", "unknown"))) for item in class_rows]
     frame["solar_color"] = [str(item.get("color", "#999999")) for item in class_rows]
-    frame["landscape_type"] = frame["class_km"].apply(lambda value: cluster_label(landscape_manifest, value))
+    if "v10_type_name" in frame.columns:
+        frame["landscape_type"] = frame["v10_type_name"].fillna("").astype(str)
+    else:
+        frame["landscape_type"] = frame["class_km"].apply(lambda value: cluster_label(landscape_manifest, value))
     return frame
 
 
 def solar_capacity_frame(landscape_manifest: dict[str, Any], solar_rules: dict[str, Any]) -> pd.DataFrame:
-    factor_scores_path = resolve_repo_path(str(landscape_manifest["factor_scores"]))
-    if factor_scores_path is None:
-        raise ValueError("Landscape manifest is missing factor_scores.")
+    source_value = landscape_manifest.get("factor_scores") or landscape_manifest.get("landscape_geojson") or landscape_manifest.get("factor_scores_geojson")
+    if not source_value:
+        raise ValueError("Landscape manifest is missing factor_scores or landscape_geojson.")
+    source_path = resolve_repo_path(str(source_value))
+    if source_path is None:
+        raise ValueError("Landscape source path could not be resolved.")
     return build_solar_capacity_frame(
-        str(factor_scores_path),
+        str(source_path),
         json.dumps(landscape_manifest, sort_keys=True, ensure_ascii=False),
         json.dumps(solar_rules, sort_keys=True, ensure_ascii=False),
     )
@@ -265,7 +288,13 @@ def wind_potential_frame(
     f_protected = _positive_mean(frame, _factor_refs_for_role(landscape_manifest, "protected_forest_habitat"), cap)
 
     frame["wind_score_raw"] = float(params.get("base_score", 54.0))
-    frame["wind_score_raw"] += _cluster_term(frame, "class_km:2", float(params.get("everyday_matrix_bonus", 12.0)))
+    frame["wind_score_raw"] += _cluster_role_term(
+        frame,
+        landscape_manifest,
+        "mixed_everyday_matrix",
+        float(params.get("everyday_matrix_bonus", 12.0)),
+        "class_km:2",
+    )
     frame["wind_score_raw"] += f_settlement * float(params.get("infrastructure_bonus", 6.0))
     frame["wind_score_raw"] -= f_settlement * float(params.get("settlement_penalty", 22.0))
     frame["wind_score_raw"] -= f_settlement * float(params.get("road_penalty", 6.0))
@@ -273,7 +302,10 @@ def wind_potential_frame(
     frame["wind_score_raw"] -= f_terrain * float(params.get("terrain_penalty", 10.0)) * sensitivity
     frame["wind_score_raw"] -= f_protected * float(params.get("protected_penalty", 18.0)) * sensitivity
     frame["wind_score"] = frame["wind_score_raw"]
-    frame["landscape_type"] = frame["class_km"].apply(lambda value: cluster_label(landscape_manifest, value))
+    if "v10_type_name" in frame.columns:
+        frame["landscape_type"] = frame["v10_type_name"].fillna("").astype(str)
+    else:
+        frame["landscape_type"] = frame["class_km"].apply(lambda value: cluster_label(landscape_manifest, value))
     return apply_potential_classes(frame, "wind", breaks)
 
 
