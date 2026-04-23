@@ -262,28 +262,81 @@ def build_layered_hex_map_html(
       attribution: 'Tiles &copy; Esri'
     }});
 
-    function styleFor(fillProperty) {{
-      return function(feature) {{
-        const props = feature.properties || {{}};
-        const fill = props[fillProperty] || props.fill || props.cluster_fill || props.factor_fill || '#999999';
-        return {{
-          color: '#555555',
-          weight: 0.25,
-          opacity: Math.min(0.85, hexFillOpacity + 0.1),
-          fillColor: fill,
-          fillOpacity: hexFillOpacity
-        }};
-      }};
+    function clamp01(value, fallbackValue) {{
+      const parsed = Number(value);
+      if (!Number.isFinite(parsed)) {{
+        return fallbackValue;
+      }}
+      return Math.max(0.0, Math.min(1.0, parsed));
+    }}
+
+    function layerFillOpacity(spec, feature) {{
+      const props = (feature && feature.properties) || {{}};
+      if (spec.fill_opacity_property && props[spec.fill_opacity_property] != null) {{
+        return clamp01(props[spec.fill_opacity_property], hexFillOpacity);
+      }}
+      const localOpacity = spec.fill_opacity != null ? clamp01(spec.fill_opacity, hexFillOpacity) : hexFillOpacity;
+      if (spec.use_global_opacity === false) {{
+        return localOpacity;
+      }}
+      return clamp01(localOpacity, hexFillOpacity);
+    }}
+
+    function layerFillColor(spec, feature) {{
+      const props = (feature && feature.properties) || {{}};
+      if (spec.fill_property && props[spec.fill_property]) {{
+        return props[spec.fill_property];
+      }}
+      return spec.fill_color || props.fill || props.cluster_fill || props.factor_fill || '#999999';
+    }}
+
+    function layerStrokeColor(spec, feature) {{
+      const props = (feature && feature.properties) || {{}};
+      if (spec.stroke_property && props[spec.stroke_property]) {{
+        return props[spec.stroke_property];
+      }}
+      return spec.stroke_color || '#555555';
+    }}
+
+    function popupHtml(spec, feature) {{
+      const props = (feature && feature.properties) || {{}};
+      if (props.popup) {{
+        return props.popup;
+      }}
+      const title = props.tooltip_title || props.layer_label || spec.name;
+      const body = props.tooltip_body || '';
+      return body ? ('<strong>' + title + '</strong><br>' + body) : (props.hex_id || title);
     }}
 
     const overlays = {{}};
     const renderedLayers = [];
     layerSpecs.forEach(function(spec) {{
       const layer = L.geoJSON(spec.feature_collection, {{
-        style: styleFor(spec.fill_property || 'fill'),
+        style: function(feature) {{
+          const fillOpacity = layerFillOpacity(spec, feature);
+          const strokeOpacity = spec.stroke_opacity != null ? clamp01(spec.stroke_opacity, Math.min(0.85, fillOpacity + 0.1)) : Math.min(0.85, fillOpacity + 0.1);
+          return {{
+            color: layerStrokeColor(spec, feature),
+            weight: Number.isFinite(Number(spec.weight)) ? Number(spec.weight) : 0.25,
+            opacity: strokeOpacity,
+            fillColor: layerFillColor(spec, feature),
+            fillOpacity: fillOpacity
+          }};
+        }},
+        pointToLayer: function(feature, latlng) {{
+          const fillOpacity = layerFillOpacity(spec, feature);
+          const strokeOpacity = spec.stroke_opacity != null ? clamp01(spec.stroke_opacity, Math.min(0.85, fillOpacity + 0.1)) : Math.min(0.85, fillOpacity + 0.1);
+          return L.circleMarker(latlng, {{
+            radius: Number.isFinite(Number(spec.point_radius)) ? Number(spec.point_radius) : 4.0,
+            color: layerStrokeColor(spec, feature),
+            weight: Number.isFinite(Number(spec.weight)) ? Math.max(Number(spec.weight), 1.0) : 1.0,
+            opacity: strokeOpacity,
+            fillColor: layerFillColor(spec, feature),
+            fillOpacity: Math.max(fillOpacity, 0.22)
+          }});
+        }},
         onEachFeature: function(feature, itemLayer) {{
-          const props = feature.properties || {{}};
-          itemLayer.bindPopup(props.popup || props.hex_id || spec.name);
+          itemLayer.bindPopup(popupHtml(spec, feature));
         }}
       }});
       overlays[spec.name] = layer;

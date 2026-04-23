@@ -47,12 +47,21 @@ from potential_model.potential import (  # noqa: E402
     solar_capacity_summary,
 )
 from potential_model.wind_acceptance import (  # noqa: E402
+    ALWAYS_ACTIVE_GROUPS,
+    GROUP_LABELS,
+    GROUP_PARAM_MAP,
     SOURCE_RESOLUTION as WIND_SOURCE_RESOLUTION,
+    WIND_GROUP_LAYER_DEFAULTS,
     wind_acceptance_group_summary,
     wind_acceptance_potential_frame,
     wind_acceptance_rollup_frame,
     wind_candidate_summary,
     wind_vector_feature_collection,
+)
+from acceptance_model.layers import (  # noqa: E402
+    layer_status_table as acceptance_layer_status_table,
+    load_registry as load_acceptance_registry,
+    source_geojson_for_layer,
 )
 
 
@@ -998,6 +1007,103 @@ def _wind_vector_layer(
     }
 
 
+def _rgb_to_hex(rgb: tuple[int, int, int]) -> str:
+    return "#%02x%02x%02x" % tuple(int(value) for value in rgb)
+
+
+def _wind_active_group_ids(ui_params: dict[str, float]) -> list[str]:
+    active: list[str] = []
+    for group_id in WIND_GROUP_LAYER_DEFAULTS:
+        threshold_key = GROUP_PARAM_MAP.get(group_id)
+        threshold_value = float(ui_params.get(threshold_key, 0.0)) if threshold_key else 0.0
+        if group_id in ALWAYS_ACTIVE_GROUPS or threshold_value > 0:
+            active.append(group_id)
+    return active
+
+
+def _wind_source_vector_layers(ui_params: dict[str, float]) -> list[dict[str, Any]]:
+    groups, layers, registry_meta = load_acceptance_registry()
+    map_layers: list[dict[str, Any]] = []
+    for group_id in _wind_active_group_ids(ui_params):
+        group_label = GROUP_LABELS.get(group_id, groups[group_id].label if group_id in groups else group_id)
+        for layer_id in WIND_GROUP_LAYER_DEFAULTS.get(group_id, []):
+            layer_spec = layers.get(layer_id)
+            if layer_spec is None:
+                continue
+            geojson = source_geojson_for_layer(registry_meta, layer_id)
+            if not geojson:
+                continue
+            source_color = _rgb_to_hex(layer_spec.source_color)
+            map_layers.append(
+                {
+                    "name": f"{group_label}: {layer_spec.label}",
+                    "feature_collection": geojson,
+                    "fill_property": "fill",
+                    "legend_items": [],
+                    "legend_id": f"wind_source_{layer_id}",
+                    "legend_title": "",
+                    "default_visible": True,
+                    "stroke_color": source_color,
+                    "fill_color": source_color,
+                    "stroke_opacity": 0.88,
+                    "fill_opacity": 0.18,
+                    "weight": 1.8,
+                    "point_radius": int(max(3, min(18, round(float(layer_spec.point_radius) / 6.0)))),
+                    "use_global_opacity": False,
+                }
+            )
+    return map_layers
+
+
+def _wind_group_summary_frame(ui_params: dict[str, float]) -> pd.DataFrame:
+    groups, _, _ = load_acceptance_registry()
+    rows: list[dict[str, Any]] = []
+    for group_id, layer_ids in WIND_GROUP_LAYER_DEFAULTS.items():
+        threshold_key = GROUP_PARAM_MAP.get(group_id)
+        threshold_value = float(ui_params.get(threshold_key, 0.0)) if threshold_key else 0.0
+        always_active = group_id in ALWAYS_ACTIVE_GROUPS
+        active = always_active or threshold_value > 0
+        rows.append(
+            {
+                "regelgrupp": GROUP_LABELS.get(group_id, groups[group_id].label if group_id in groups else group_id),
+                "analystyp": str(groups[group_id].analysis_kind) if group_id in groups else "-",
+                "aktiv": bool(active),
+                "tröskel_m": "-" if threshold_key is None else int(round(threshold_value)),
+                "källager": int(len(layer_ids)),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def _wind_source_status_frame() -> pd.DataFrame:
+    groups, _, registry_meta = load_acceptance_registry()
+    status_df = acceptance_layer_status_table(registry_meta).copy()
+    if status_df.empty:
+        return status_df
+
+    status_df["group_id"] = status_df["group"].map(
+        lambda label: next((group_id for group_id, spec in groups.items() if spec.label == label), label)
+    )
+    status_df["regelgrupp"] = status_df["group_id"].map(lambda value: GROUP_LABELS.get(str(value), str(value)))
+    status_df["klar"] = (
+        status_df["geojson_ready"].astype(bool)
+        & status_df["source_exists"].astype(bool)
+        & status_df["status"].astype(str).eq("ok")
+    )
+    output = status_df[
+        ["regelgrupp", "label", "geometry_family", "feature_count", "status", "klar", "message"]
+    ].rename(
+        columns={
+            "label": "källager",
+            "geometry_family": "geometri",
+            "feature_count": "objekt",
+            "status": "status",
+            "message": "notering",
+        }
+    )
+    return output.sort_values(["regelgrupp", "källager"], ascending=[True, True]).reset_index(drop=True)
+
+
 def _landscape_layer(
     name: str,
     frame: pd.DataFrame,
@@ -1349,13 +1455,6 @@ def _solar_builder_tab(
             if st.button("Spara solpotential", type="primary", use_container_width=True):
                 _save_solar_potential(params, h3_resolution)
                 st.success("Solpotential sparad. Den kan nu togglas på i Samlad potential.")
-            st.button(
-                "Gå tillbaka till huvudkartan",
-                use_container_width=True,
-                on_click=_set_active_view,
-                args=("Samlad potential",),
-                key="solar_builder_back_from_panel",
-            )
         return
 
     st.subheader("Bygg solpotential")
@@ -1401,16 +1500,9 @@ def _solar_builder_tab(
                 st.json(params)
 
     st.divider()
-    action_left, action_right = st.columns(2)
-    if action_left.button("Spara solpotential", type="primary", use_container_width=True):
+    if st.button("Spara solpotential", type="primary", use_container_width=True, key="save_solar_main_under_map"):
         _save_solar_potential(params, h3_resolution)
         st.success("Solpotential sparad. Den kan nu togglas på i Samlad potential.")
-    action_right.button(
-        "Gå tillbaka till huvudkartan",
-        use_container_width=True,
-        on_click=_set_active_view,
-        args=("Samlad potential",),
-    )
 
 
 def _wind_builder_tab(
@@ -1443,6 +1535,7 @@ def _wind_builder_tab(
         )
         layers = []
         if _mode_wants_vector(display_mode):
+            layers.extend(_wind_source_vector_layers(ui_params))
             layers.append(_wind_vector_layer("Osparad vindpotential vektor", source_frame, _h3_display_geometry_path(region, WIND_SOURCE_RESOLUTION), _solar_legend_items(solar_rules)))
         if _mode_wants_hex(display_mode):
             layers.append(_potential_layer(f"Osparad vindförhandsvisning R{h3_resolution}", frame, "wind", display_geometry_path, _solar_legend_items(solar_rules)))
@@ -1454,26 +1547,25 @@ def _wind_builder_tab(
             map_reset_token=map_reset_token,
             opacity_key_prefix="wind_builder_preview",
         )
+        save_col, _ = st.columns([0.34, 0.66], gap="small")
+        with save_col:
+            if st.button("Spara vindpotential", type="primary", use_container_width=True, key="wind_builder_save_under_map_panel"):
+                _save_wind_potential(ui_params, h3_resolution)
+                st.success("Vindpotential sparad. Den kan nu togglas på i Samlad potential.")
         summary_target = right_panel or st.container()
         with summary_target:
             _potential_detail_panel("Osparad vindförhandsvisning", frame, "wind", h3_resolution)
             vector_stats = wind_candidate_summary(source_frame)
             st.metric(f"Kandidatytor R{WIND_SOURCE_RESOLUTION}", vector_stats["candidate_cells"])
             st.metric("Kandidatandel", f"{vector_stats['candidate_share']:.1f}%")
+            with st.expander("Aktiva regelgrupper", expanded=False):
+                st.dataframe(_wind_group_summary_frame(ui_params), use_container_width=True, hide_index=True, height=240)
             with st.expander("Aktiva vindparametrar"):
                 st.json(ui_params)
             with st.expander("Migrerad regelgruppslogik"):
                 st.dataframe(wind_acceptance_group_summary(), use_container_width=True, hide_index=True)
-            if st.button("Spara vindpotential", type="primary", use_container_width=True):
-                _save_wind_potential(ui_params, h3_resolution)
-                st.success("Vindpotential sparad. Den kan nu togglas på i Samlad potential.")
-            st.button(
-                "Gå tillbaka till huvudkartan",
-                use_container_width=True,
-                on_click=_set_active_view,
-                args=("Samlad potential",),
-                key="wind_builder_back_from_panel",
-            )
+            with st.expander("Datastatus vindlager", expanded=False):
+                st.dataframe(_wind_source_status_frame(), use_container_width=True, hide_index=True, height=280)
         return
 
     st.subheader("Bygg vindpotential")
@@ -1500,6 +1592,7 @@ def _wind_builder_tab(
         )
         layers = []
         if _mode_wants_vector(display_mode):
+            layers.extend(_wind_source_vector_layers(ui_params))
             layers.append(_wind_vector_layer("Osparad vindpotential vektor", source_frame, _h3_display_geometry_path(region, WIND_SOURCE_RESOLUTION), _solar_legend_items(solar_rules)))
         if _mode_wants_hex(display_mode):
             layers.append(_potential_layer(f"Osparad vindförhandsvisning R{h3_resolution}", frame, "wind", display_geometry_path, _solar_legend_items(solar_rules)))
@@ -1511,28 +1604,25 @@ def _wind_builder_tab(
             map_reset_token=map_reset_token,
             opacity_key_prefix="wind_builder_preview",
         )
+        save_col, _ = st.columns([0.34, 0.66], gap="small")
+        with save_col:
+            if st.button("Spara vindpotential", type="primary", use_container_width=True, key="wind_builder_save_under_map_main"):
+                _save_wind_potential(ui_params, h3_resolution)
+                st.success("Vindpotential sparad. Den kan nu togglas på i Samlad potential.")
     with info_col:
         with st.container(border=True):
             _potential_detail_panel("Osparad vindförhandsvisning", frame, "wind", h3_resolution)
             vector_stats = wind_candidate_summary(source_frame)
             st.metric(f"Kandidatytor R{WIND_SOURCE_RESOLUTION}", vector_stats["candidate_cells"])
             st.metric("Kandidatandel", f"{vector_stats['candidate_share']:.1f}%")
+            with st.expander("Aktiva regelgrupper", expanded=False):
+                st.dataframe(_wind_group_summary_frame(ui_params), use_container_width=True, hide_index=True, height=240)
             with st.expander("Aktiva vindparametrar"):
                 st.json(ui_params)
             with st.expander("Migrerad regelgruppslogik"):
                 st.dataframe(wind_acceptance_group_summary(), use_container_width=True, hide_index=True)
-
-    st.divider()
-    action_left, action_right = st.columns(2)
-    if action_left.button("Spara vindpotential", type="primary", use_container_width=True):
-        _save_wind_potential(ui_params, h3_resolution)
-        st.success("Vindpotential sparad. Den kan nu togglas på i Samlad potential.")
-    action_right.button(
-        "Gå tillbaka till huvudkartan",
-        use_container_width=True,
-        on_click=_set_active_view,
-        args=("Samlad potential",),
-    )
+            with st.expander("Datastatus vindlager", expanded=False):
+                st.dataframe(_wind_source_status_frame(), use_container_width=True, hide_index=True, height=280)
 
 
 def _view_selector(panel: Any | None = None) -> str:
