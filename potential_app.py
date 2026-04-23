@@ -64,6 +64,8 @@ from acceptance_model.layers import (  # noqa: E402
     load_registry as load_acceptance_registry,
     source_geojson_for_layer,
 )
+from acceptance_model.runtime_geometry import run_geometry_runtime  # noqa: E402
+from acceptance_model.i18n import critical_review_items, hexagon_note_items  # noqa: E402
 
 
 PAGE_TITLE = "Sol- och vindpotential"
@@ -77,6 +79,7 @@ LEFT_PANEL_OPEN_KEY = "potential_left_panel_open"
 RIGHT_PANEL_OPEN_KEY = "potential_right_panel_open"
 REGION_SELECT_KEY = "potential_selected_region_id"
 WIND_LAYER_SELECTION_KEY = "wind_builder_selected_layers"
+WIND_RUNTIME_OVERLAY_KEY = "wind_builder_runtime_overlay_enabled"
 
 
 def _map_view_reset_token() -> int:
@@ -1046,6 +1049,20 @@ def _selected_wind_layers() -> dict[str, list[str]]:
     return selected
 
 
+def _wind_runtime_overlays_enabled() -> bool:
+    return bool(st.session_state.get(WIND_RUNTIME_OVERLAY_KEY, False))
+
+
+def _wind_runtime_overlay_control() -> bool:
+    st.session_state.setdefault(WIND_RUNTIME_OVERLAY_KEY, False)
+    st.checkbox(
+        "Visa geometri-runtimeoverlay",
+        key=WIND_RUNTIME_OVERLAY_KEY,
+        help="Kör geometri-runtime och lägg till grupplager plus kombinerad acceptansyta i vektorvyn.",
+    )
+    return _wind_runtime_overlays_enabled()
+
+
 def _wind_layer_selector_controls(widget_prefix: str) -> None:
     groups, layers, _ = load_acceptance_registry()
     selected_layers = _selected_wind_layers()
@@ -1178,6 +1195,138 @@ def _wind_source_status_frame() -> pd.DataFrame:
         }
     )
     return output.sort_values(["regelgrupp", "källager"], ascending=[True, True]).reset_index(drop=True)
+
+
+def _wind_runtime_config_json(
+    ui_params: dict[str, float],
+    layer_selection: dict[str, list[str]] | None = None,
+) -> str:
+    selected = normalize_group_layer_map(layer_selection or _selected_wind_layers())
+    groups_payload: dict[str, dict[str, Any]] = {}
+    for group_id, layer_ids in selected.items():
+        if not layer_ids:
+            continue
+        threshold_key = GROUP_PARAM_MAP.get(group_id)
+        threshold_value = float(ui_params.get(threshold_key, 0.0)) if threshold_key else 0.0
+        if group_id not in ALWAYS_ACTIVE_GROUPS and threshold_value <= 0:
+            continue
+        groups_payload[group_id] = {
+            "active_layer_ids": list(layer_ids),
+            "analysis_value_m": int(round(threshold_value)),
+        }
+    return json.dumps({"groups": groups_payload}, sort_keys=True, ensure_ascii=False)
+
+
+def _wind_runtime_layers(
+    ui_params: dict[str, float],
+    layer_selection: dict[str, list[str]] | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    groups, _, _ = load_acceptance_registry()
+    runtime_cfg = _wind_runtime_config_json(ui_params, layer_selection=layer_selection)
+    runtime = run_geometry_runtime(runtime_cfg)
+    layers: list[dict[str, Any]] = []
+
+    for group_id, group_meta in (runtime.get("groups") or {}).items():
+        geojson = group_meta.get("geojson")
+        if not geojson:
+            continue
+        group_label = GROUP_LABELS.get(group_id, groups[group_id].label if group_id in groups else group_id)
+        group_color = _rgb_to_hex(groups[group_id].group_color) if group_id in groups else "#4d4d4d"
+        layers.append(
+            {
+                "name": f"Gruppoverlay: {group_label}",
+                "feature_collection": geojson,
+                "fill_property": "fill",
+                "legend_items": [],
+                "legend_id": f"wind_runtime_group_{group_id}",
+                "legend_title": "",
+                "default_visible": False,
+                "stroke_color": group_color,
+                "fill_color": group_color,
+                "stroke_opacity": 0.86,
+                "fill_opacity": 0.16,
+                "weight": 1.8,
+                "point_radius": 5,
+                "use_global_opacity": False,
+            }
+        )
+
+    combined = runtime.get("combined") if isinstance(runtime.get("combined"), dict) else None
+    if combined and combined.get("geojson"):
+        layers.append(
+            {
+                "name": "Kombinerad geometriacceptans",
+                "feature_collection": combined["geojson"],
+                "fill_property": "fill",
+                "legend_items": [],
+                "legend_id": "wind_runtime_combined",
+                "legend_title": "",
+                "default_visible": True,
+                "stroke_color": "#c4322b",
+                "fill_color": "#c4322b",
+                "stroke_opacity": 0.82,
+                "fill_opacity": 0.11,
+                "weight": 1.5,
+                "point_radius": 5,
+                "use_global_opacity": False,
+            }
+        )
+
+    meta = {
+        "cache_key": runtime.get("cache_key"),
+        "group_count": len(runtime.get("groups") or {}),
+        "combined_land_share_pct": (combined or {}).get("land_share_pct"),
+    }
+    return layers, meta
+
+
+def _wind_builder_summary_panel(
+    frame: pd.DataFrame,
+    source_frame: pd.DataFrame,
+    ui_params: dict[str, float],
+    selected_layers: dict[str, list[str]],
+    h3_resolution: int,
+    runtime_meta: dict[str, Any] | None = None,
+    runtime_enabled: bool = False,
+    runtime_error: str | None = None,
+) -> None:
+    proto_tab, review_tab, data_tab = st.tabs(["Prototyp", "Modellgranskning", "Datastatus"])
+    with proto_tab:
+        _potential_detail_panel("Osparad vindförhandsvisning", frame, "wind", h3_resolution)
+        vector_stats = wind_candidate_summary(source_frame)
+        st.metric(f"Kandidatytor R{WIND_SOURCE_RESOLUTION}", vector_stats["candidate_cells"])
+        st.metric("Kandidatandel", f"{vector_stats['candidate_share']:.1f}%")
+        if runtime_enabled:
+            if runtime_error:
+                st.warning(f"Geometri-runtime kunde inte köras: {runtime_error}")
+            elif runtime_meta:
+                left, right = st.columns(2)
+                left.metric("Runtime-grupper", int(runtime_meta.get("group_count") or 0))
+                land_share = runtime_meta.get("combined_land_share_pct")
+                right.metric("Kombinerad landandel", "-" if land_share is None else f"{float(land_share):.1f}%")
+                if runtime_meta.get("cache_key"):
+                    st.caption(f"Runtime-cache: {runtime_meta['cache_key']}")
+            else:
+                st.caption("Geometri-runtime är påslagen men returnerade inga lager för nuvarande urval.")
+        else:
+            st.caption("Geometri-runtimeoverlay är avstängd.")
+        with st.expander("Aktiva regelgrupper", expanded=False):
+            st.dataframe(_wind_group_summary_frame(ui_params, layer_selection=selected_layers), use_container_width=True, hide_index=True, height=240)
+        with st.expander("Aktiva vindparametrar"):
+            st.json(ui_params)
+        with st.expander("Migrerad regelgruppslogik"):
+            st.dataframe(wind_acceptance_group_summary(), use_container_width=True, hide_index=True)
+
+    with review_tab:
+        st.subheader("Kritisk genomgång")
+        for item in critical_review_items("sv"):
+            st.write(f"- {item}")
+        st.subheader("Hexagonsnot")
+        for item in hexagon_note_items("sv"):
+            st.write(f"- {item}")
+
+    with data_tab:
+        st.dataframe(_wind_source_status_frame(), use_container_width=True, hide_index=True, height=300)
 
 
 def _landscape_layer(
@@ -1614,9 +1763,11 @@ def _wind_builder_tab(
                     _reset_builder("wind_builder", defaults)
                 _wind_builder_controls(defaults)
                 _wind_layer_selector_controls("wind_builder_panel")
+                _wind_runtime_overlay_control()
                 st.caption("Vindacceptansappens avståndstabeller används nu direkt som regelgrupper.")
         ui_params = _state_params("wind_builder", defaults)
         selected_layers = _selected_wind_layers()
+        runtime_overlay_enabled = _wind_runtime_overlays_enabled()
         st.session_state["wind_builder_params"] = ui_params
         h3_resolution, opacity, preserve_map_view, map_reset_token = _map_panel_controls(region, "wind_builder_preview", left_panel)
         display_mode = _display_mode_panel("wind_builder_preview", left_panel)
@@ -1626,10 +1777,19 @@ def _wind_builder_tab(
             wind_acceptance_rollup_frame(source_frame, h3_resolution, _class_breaks(solar_rules)),
             display_geometry_path,
         )
+        runtime_meta: dict[str, Any] | None = None
+        runtime_error: str | None = None
         layers = []
         if _mode_wants_vector(display_mode):
             layers.extend(_wind_source_vector_layers(ui_params, layer_selection=selected_layers))
             layers.append(_wind_vector_layer("Osparad vindpotential vektor", source_frame, _h3_display_geometry_path(region, WIND_SOURCE_RESOLUTION), _solar_legend_items(solar_rules)))
+            if runtime_overlay_enabled:
+                with st.spinner("Kör geometri-runtime för vindlager..."):
+                    try:
+                        runtime_layers, runtime_meta = _wind_runtime_layers(ui_params, layer_selection=selected_layers)
+                        layers.extend(runtime_layers)
+                    except Exception as exc:
+                        runtime_error = str(exc)
         if _mode_wants_hex(display_mode):
             layers.append(_potential_layer(f"Osparad vindförhandsvisning R{h3_resolution}", frame, "wind", display_geometry_path, _solar_legend_items(solar_rules)))
         _render_layers(
@@ -1651,12 +1811,33 @@ def _wind_builder_tab(
             vector_stats = wind_candidate_summary(source_frame)
             st.metric(f"Kandidatytor R{WIND_SOURCE_RESOLUTION}", vector_stats["candidate_cells"])
             st.metric("Kandidatandel", f"{vector_stats['candidate_share']:.1f}%")
+            if runtime_overlay_enabled:
+                if runtime_error:
+                    st.warning(f"Geometri-runtime kunde inte köras: {runtime_error}")
+                elif runtime_meta:
+                    left_metric, right_metric = st.columns(2)
+                    left_metric.metric("Runtime-grupper", int(runtime_meta.get("group_count") or 0))
+                    land_share = runtime_meta.get("combined_land_share_pct")
+                    right_metric.metric("Kombinerad landandel", "-" if land_share is None else f"{float(land_share):.1f}%")
+                    if runtime_meta.get("cache_key"):
+                        st.caption(f"Runtime-cache: {runtime_meta['cache_key']}")
+                else:
+                    st.caption("Geometri-runtime är påslagen men returnerade inga lager för nuvarande urval.")
+            else:
+                st.caption("Geometri-runtimeoverlay är avstängd.")
             with st.expander("Aktiva regelgrupper", expanded=False):
                 st.dataframe(_wind_group_summary_frame(ui_params, layer_selection=selected_layers), use_container_width=True, hide_index=True, height=240)
             with st.expander("Aktiva vindparametrar"):
                 st.json(ui_params)
             with st.expander("Migrerad regelgruppslogik"):
                 st.dataframe(wind_acceptance_group_summary(), use_container_width=True, hide_index=True)
+            with st.expander("Modellgranskning", expanded=False):
+                st.markdown("**Kritisk genomgång**")
+                for item in critical_review_items("sv"):
+                    st.write(f"- {item}")
+                st.markdown("**Hexagonsnot**")
+                for item in hexagon_note_items("sv"):
+                    st.write(f"- {item}")
             with st.expander("Datastatus vindlager", expanded=False):
                 st.dataframe(_wind_source_status_frame(), use_container_width=True, hide_index=True, height=280)
         return
@@ -1671,10 +1852,12 @@ def _wind_builder_tab(
     with control_col:
         _wind_builder_controls(defaults)
         _wind_layer_selector_controls("wind_builder_main")
+        _wind_runtime_overlay_control()
         st.caption("Reglerna bygger på vindacceptansappens färdiga H3-avståndstabeller och landskapsanalysens roller.")
 
     ui_params = _state_params("wind_builder", defaults)
     selected_layers = _selected_wind_layers()
+    runtime_overlay_enabled = _wind_runtime_overlays_enabled()
     st.session_state["wind_builder_params"] = ui_params
     with map_col:
         h3_resolution, opacity, preserve_map_view, map_reset_token = _map_controls(region, "wind_builder_preview")
@@ -1685,10 +1868,19 @@ def _wind_builder_tab(
             wind_acceptance_rollup_frame(source_frame, h3_resolution, _class_breaks(solar_rules)),
             display_geometry_path,
         )
+        runtime_meta: dict[str, Any] | None = None
+        runtime_error: str | None = None
         layers = []
         if _mode_wants_vector(display_mode):
             layers.extend(_wind_source_vector_layers(ui_params, layer_selection=selected_layers))
             layers.append(_wind_vector_layer("Osparad vindpotential vektor", source_frame, _h3_display_geometry_path(region, WIND_SOURCE_RESOLUTION), _solar_legend_items(solar_rules)))
+            if runtime_overlay_enabled:
+                with st.spinner("Kör geometri-runtime för vindlager..."):
+                    try:
+                        runtime_layers, runtime_meta = _wind_runtime_layers(ui_params, layer_selection=selected_layers)
+                        layers.extend(runtime_layers)
+                    except Exception as exc:
+                        runtime_error = str(exc)
         if _mode_wants_hex(display_mode):
             layers.append(_potential_layer(f"Osparad vindförhandsvisning R{h3_resolution}", frame, "wind", display_geometry_path, _solar_legend_items(solar_rules)))
         _render_layers(
@@ -1710,12 +1902,33 @@ def _wind_builder_tab(
             vector_stats = wind_candidate_summary(source_frame)
             st.metric(f"Kandidatytor R{WIND_SOURCE_RESOLUTION}", vector_stats["candidate_cells"])
             st.metric("Kandidatandel", f"{vector_stats['candidate_share']:.1f}%")
+            if runtime_overlay_enabled:
+                if runtime_error:
+                    st.warning(f"Geometri-runtime kunde inte köras: {runtime_error}")
+                elif runtime_meta:
+                    left_metric, right_metric = st.columns(2)
+                    left_metric.metric("Runtime-grupper", int(runtime_meta.get("group_count") or 0))
+                    land_share = runtime_meta.get("combined_land_share_pct")
+                    right_metric.metric("Kombinerad landandel", "-" if land_share is None else f"{float(land_share):.1f}%")
+                    if runtime_meta.get("cache_key"):
+                        st.caption(f"Runtime-cache: {runtime_meta['cache_key']}")
+                else:
+                    st.caption("Geometri-runtime är påslagen men returnerade inga lager för nuvarande urval.")
+            else:
+                st.caption("Geometri-runtimeoverlay är avstängd.")
             with st.expander("Aktiva regelgrupper", expanded=False):
                 st.dataframe(_wind_group_summary_frame(ui_params, layer_selection=selected_layers), use_container_width=True, hide_index=True, height=240)
             with st.expander("Aktiva vindparametrar"):
                 st.json(ui_params)
             with st.expander("Migrerad regelgruppslogik"):
                 st.dataframe(wind_acceptance_group_summary(), use_container_width=True, hide_index=True)
+            with st.expander("Modellgranskning", expanded=False):
+                st.markdown("**Kritisk genomgång**")
+                for item in critical_review_items("sv"):
+                    st.write(f"- {item}")
+                st.markdown("**Hexagonsnot**")
+                for item in hexagon_note_items("sv"):
+                    st.write(f"- {item}")
             with st.expander("Datastatus vindlager", expanded=False):
                 st.dataframe(_wind_source_status_frame(), use_container_width=True, hide_index=True, height=280)
 
