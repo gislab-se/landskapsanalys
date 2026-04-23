@@ -136,6 +136,8 @@ def build_layered_hex_map_html(
     fill_opacity: float = 0.78,
     map_state_key: str | None = None,
     map_reset_token: int | str = 0,
+    note_title: str = "Samlad potential",
+    note_body: str = "Aktiva lager styrs i appen och kan även slås av/på i kartkontrollen.",
 ) -> str:
     layers_payload = json.dumps(layers, ensure_ascii=False)
     center_payload = json.dumps(center)
@@ -143,6 +145,8 @@ def build_layered_hex_map_html(
     opacity_payload = json.dumps(max(0.0, min(1.0, float(fill_opacity))))
     map_state_key_payload = json.dumps(map_state_key or "")
     map_reset_token_payload = json.dumps(str(map_reset_token))
+    note_title_payload = json.dumps(str(note_title), ensure_ascii=False)
+    note_body_payload = json.dumps(str(note_body), ensure_ascii=False)
     return f"""
 <!DOCTYPE html>
 <html>
@@ -172,6 +176,8 @@ def build_layered_hex_map_html(
     const hexFillOpacity = {opacity_payload};
     const mapStateKey = {map_state_key_payload};
     const mapResetToken = {map_reset_token_payload};
+    const noteTitle = {note_title_payload};
+    const noteBody = {note_body_payload};
 
     function browserStorage() {{
       try {{
@@ -319,6 +325,7 @@ def build_layered_hex_map_html(
             color: layerStrokeColor(spec, feature),
             weight: Number.isFinite(Number(spec.weight)) ? Number(spec.weight) : 0.25,
             opacity: strokeOpacity,
+            dashArray: spec.dash_array || null,
             fillColor: layerFillColor(spec, feature),
             fillOpacity: fillOpacity
           }};
@@ -331,6 +338,7 @@ def build_layered_hex_map_html(
             color: layerStrokeColor(spec, feature),
             weight: Number.isFinite(Number(spec.weight)) ? Math.max(Number(spec.weight), 1.0) : 1.0,
             opacity: strokeOpacity,
+            dashArray: spec.dash_array || null,
             fillColor: layerFillColor(spec, feature),
             fillOpacity: Math.max(fillOpacity, 0.22)
           }});
@@ -352,7 +360,7 @@ def build_layered_hex_map_html(
     const note = L.control({{ position: 'topright' }});
     note.onAdd = function() {{
       const div = L.DomUtil.create('div', 'map-note');
-      div.innerHTML = '<strong>Samlad potential</strong><br>Aktiva lager styrs i appen och kan även slås av/på i kartkontrollen.';
+      div.innerHTML = '<strong>' + noteTitle + '</strong><br>' + noteBody;
       L.DomEvent.disableClickPropagation(div);
       return div;
     }};

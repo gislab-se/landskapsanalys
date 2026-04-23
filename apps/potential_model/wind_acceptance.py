@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from io import StringIO
 from typing import Any
 
@@ -75,6 +76,30 @@ GROUP_LABELS = {
 
 HARD_EXCLUSION_GROUPS = {"protected", "coastal", "culture", "aviation_approach", "military"}
 ALWAYS_ACTIVE_GROUPS = {"settlement", "transport", "electrical"}
+
+
+def _iter_geojson_geometries(geojson: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not isinstance(geojson, dict):
+        return []
+
+    geojson_type = str(geojson.get("type") or "")
+    if geojson_type == "FeatureCollection":
+        geometries: list[dict[str, Any]] = []
+        for feature in geojson.get("features") or []:
+            geometry = feature.get("geometry") if isinstance(feature, dict) else None
+            if isinstance(geometry, dict) and geometry.get("coordinates"):
+                geometries.append(geometry)
+        return geometries
+
+    if geojson_type == "Feature":
+        geometry = geojson.get("geometry")
+        if isinstance(geometry, dict) and geometry.get("coordinates"):
+            return [geometry]
+        return []
+
+    if geojson.get("coordinates"):
+        return [geojson]
+    return []
 
 
 def normalize_group_layer_map(
@@ -432,6 +457,82 @@ def wind_vector_feature_collection(
         source_frame[available].to_json(orient="records", force_ascii=False),
         display_geometry_path,
         only_potential_area,
+    )
+
+
+@st.cache_data(show_spinner=False)
+def _build_runtime_combined_hex_frame(
+    combined_geojson_json: str,
+    target_resolution: int,
+    breaks_json: str,
+) -> pd.DataFrame:
+    combined_geojson = json.loads(combined_geojson_json)
+    breaks = json.loads(breaks_json)
+    sample_resolution = max(int(target_resolution), min(int(target_resolution) + 2, SOURCE_RESOLUTION + 1))
+    covered_children_by_parent: dict[str, set[str]] = {}
+
+    for geometry in _iter_geojson_geometries(combined_geojson):
+        try:
+            child_hexes = h3.geo_to_cells(geometry, sample_resolution)
+        except Exception:
+            continue
+        for child_hex in child_hexes:
+            child_hex_id = str(child_hex)
+            parent_hex = child_hex_id if sample_resolution == int(target_resolution) else str(h3.cell_to_parent(child_hex_id, int(target_resolution)))
+            covered_children_by_parent.setdefault(parent_hex, set()).add(child_hex_id)
+
+    rows: list[dict[str, Any]] = []
+    for hex_id, child_hexes in sorted(covered_children_by_parent.items()):
+        total_children = max(1, int(h3.cell_to_children_size(hex_id, sample_resolution)))
+        share = min(1.0, len(child_hexes) / float(total_children))
+        rows.append(
+            {
+                "hex_id": hex_id,
+                "wind_score": round(share * 100.0, 1),
+                "wind_acceptance": round(share, 3),
+                "wind_potential_area": bool(share > 0.0),
+                "wind_rule_blocked": False,
+                "wind_hard_blocked": False,
+                "wind_blocking_groups": "",
+                "wind_active_rule_groups": "runtime_combined",
+                "source_child_count": len(child_hexes),
+                "source_resolution": int(sample_resolution),
+                "h3_resolution": int(target_resolution),
+            }
+        )
+
+    frame = pd.DataFrame(
+        rows,
+        columns=[
+            "hex_id",
+            "wind_score",
+            "wind_acceptance",
+            "wind_potential_area",
+            "wind_rule_blocked",
+            "wind_hard_blocked",
+            "wind_blocking_groups",
+            "wind_active_rule_groups",
+            "source_child_count",
+            "source_resolution",
+            "h3_resolution",
+        ],
+    )
+    if frame.empty:
+        return apply_potential_classes(frame, "wind", breaks)
+
+    frame["high_potential_share"] = frame["wind_score"].div(100.0).round(3)
+    return apply_potential_classes(frame.sort_values("hex_id").reset_index(drop=True), "wind", breaks)
+
+
+def runtime_combined_hex_frame(
+    combined_geojson: dict[str, Any],
+    target_resolution: int,
+    breaks: list[dict[str, Any]],
+) -> pd.DataFrame:
+    return _build_runtime_combined_hex_frame(
+        json.dumps(combined_geojson, sort_keys=True, ensure_ascii=False),
+        int(target_resolution),
+        json.dumps(breaks, sort_keys=True, ensure_ascii=False),
     )
 
 
