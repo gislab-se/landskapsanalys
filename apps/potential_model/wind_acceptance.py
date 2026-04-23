@@ -262,9 +262,6 @@ def _build_wind_acceptance_frame_cached(
             continue
 
         threshold_m = float(ui_params.get(param_key, group.analysis_default_m))
-        if group_id not in ALWAYS_ACTIVE_GROUPS and threshold_m <= 0:
-            continue
-
         distance_frame = _group_distance_frame(base["hex_id"], registry_meta, layer_ids)
         if distance_frame.empty:
             continue

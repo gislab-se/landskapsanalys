@@ -47,7 +47,6 @@ from potential_model.potential import (  # noqa: E402
     solar_capacity_summary,
 )
 from potential_model.wind_acceptance import (  # noqa: E402
-    ALWAYS_ACTIVE_GROUPS,
     GROUP_LABELS,
     GROUP_PARAM_MAP,
     SOURCE_RESOLUTION as WIND_SOURCE_RESOLUTION,
@@ -62,10 +61,21 @@ from potential_model.wind_acceptance import (  # noqa: E402
 from acceptance_model.layers import (  # noqa: E402
     layer_status_table as acceptance_layer_status_table,
     load_registry as load_acceptance_registry,
+    ordered_groups,
+    ordered_layers,
     source_geojson_for_layer,
 )
 from acceptance_model.runtime_geometry import run_geometry_runtime  # noqa: E402
-from acceptance_model.i18n import critical_review_items, hexagon_note_items  # noqa: E402
+from acceptance_model.i18n import (  # noqa: E402
+    critical_review_items,
+    group_analysis_label,
+    group_interpretation,
+    group_label,
+    hexagon_note_items,
+    layer_label,
+    layer_note,
+    ui_text,
+)
 
 
 PAGE_TITLE = "Sol- och vindpotential"
@@ -80,6 +90,7 @@ RIGHT_PANEL_OPEN_KEY = "potential_right_panel_open"
 REGION_SELECT_KEY = "potential_selected_region_id"
 WIND_LAYER_SELECTION_KEY = "wind_builder_selected_layers"
 WIND_RUNTIME_OVERLAY_KEY = "wind_builder_runtime_overlay_enabled"
+WIND_CONTROL_LANGUAGE = "sv"
 
 
 def _map_view_reset_token() -> int:
@@ -1050,7 +1061,110 @@ def _selected_wind_layers() -> dict[str, list[str]]:
 
 
 def _wind_runtime_overlays_enabled() -> bool:
-    return bool(st.session_state.get(WIND_RUNTIME_OVERLAY_KEY, True))
+    st.session_state[WIND_RUNTIME_OVERLAY_KEY] = True
+    return True
+
+
+def _wind_control_key(prefix: str, item_id: str) -> str:
+    return f"wind_control__{prefix}__{item_id}"
+
+
+def _init_wind_control_state() -> None:
+    groups, layers, _ = load_acceptance_registry()
+    st.session_state[WIND_RUNTIME_OVERLAY_KEY] = True
+    for group in groups.values():
+        st.session_state.setdefault(_wind_control_key("analysis", group.id), int(group.analysis_default_m))
+        st.session_state.setdefault(_wind_control_key("blend", group.id), int(group.blend_default))
+    for layer in layers.values():
+        st.session_state.setdefault(_wind_control_key("layer", layer.id), False)
+
+
+def _wind_layer_status_lookup(registry_meta: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    status_df = acceptance_layer_status_table(registry_meta)
+    if status_df.empty:
+        return {}
+    return {str(row["layer_id"]): row.to_dict() for _, row in status_df.iterrows()}
+
+
+def _wind_blend_value(group_id: str) -> int:
+    try:
+        value = int(st.session_state.get(_wind_control_key("blend", group_id), 50))
+    except Exception:
+        value = 50
+    return max(0, min(100, value))
+
+
+def _wind_source_opacity(group_id: str) -> float:
+    return max(0.0, 1.0 - (_wind_blend_value(group_id) / 100.0))
+
+
+def _wind_group_opacity(group_id: str) -> float:
+    return max(0.0, min(1.0, _wind_blend_value(group_id) / 100.0))
+
+
+def _wind_group_controls(
+    widget_prefix: str,
+    language: str = WIND_CONTROL_LANGUAGE,
+) -> tuple[dict[str, list[str]], dict[str, float], bool]:
+    _init_wind_control_state()
+    groups, layers, registry_meta = load_acceptance_registry()
+    availability = _wind_layer_status_lookup(registry_meta)
+    selected: dict[str, list[str]] = {group.id: [] for group in ordered_groups()}
+
+    st.header(ui_text("groups_header", language))
+    st.caption(ui_text("groups_caption", language))
+    with st.form(f"{widget_prefix}_group_controls", clear_on_submit=False):
+        st.caption(ui_text("apply_hint", language))
+        for group in ordered_groups():
+            with st.expander(group_label(group, language, group.label), expanded=group.id in {"settlement", "transport", "electrical"}):
+                st.caption(group_interpretation(group, language, group.interpretation))
+                st.slider(
+                    group_analysis_label(group, language, group.analysis_label),
+                    min_value=int(group.analysis_min_m),
+                    max_value=int(group.analysis_max_m),
+                    step=int(group.analysis_step_m),
+                    key=_wind_control_key("analysis", group.id),
+                    help=ui_text("analysis_slider_help", language),
+                )
+                st.slider(
+                    ui_text("display_blend", language),
+                    min_value=0,
+                    max_value=100,
+                    step=5,
+                    key=_wind_control_key("blend", group.id),
+                    help=ui_text("display_blend_help", language),
+                )
+                for layer in [item for item in ordered_layers() if item.group_id == group.id]:
+                    status = availability.get(layer.id, {})
+                    ready = (
+                        bool(status.get("geojson_ready"))
+                        and bool(status.get("source_exists"))
+                        and int(status.get("feature_count", 0) or 0) > 0
+                        and str(status.get("status", "")) == "ok"
+                    )
+                    message = str(status.get("message", "") or layer_note(layer, language, layer.note) or "")
+                    checked = st.checkbox(
+                        layer_label(layer, language, layer.label),
+                        key=_wind_control_key("layer", layer.id),
+                        disabled=not ready,
+                        help=message,
+                    )
+                    if checked and ready:
+                        selected[group.id].append(layer.id)
+                if not selected[group.id]:
+                    st.caption(ui_text("group_inactive", language))
+        applied = st.form_submit_button(ui_text("apply_changes", language), type="primary", use_container_width=True)
+
+    normalized = normalize_group_layer_map(selected)
+    st.session_state[WIND_LAYER_SELECTION_KEY] = normalized
+
+    ui_params = _default_wind_params()
+    for group in ordered_groups():
+        param_key = GROUP_PARAM_MAP.get(group.id)
+        if not param_key:
+            continue
+        ui_params[param_key] = float(st.session_state.get(_wind_control_key("analysis", group.id), group.analysis_default_m))
+    return normalized, ui_params, bool(applied)
 
 
 def _wind_runtime_overlay_control() -> bool:
@@ -1092,15 +1206,13 @@ def _wind_active_group_ids(
     ui_params: dict[str, float],
     layer_selection: dict[str, list[str]] | None = None,
 ) -> list[str]:
+    _ = ui_params
     selected = normalize_group_layer_map(layer_selection or _selected_wind_layers())
     active: list[str] = []
     for group_id, layer_ids in selected.items():
         if not layer_ids:
             continue
-        threshold_key = GROUP_PARAM_MAP.get(group_id)
-        threshold_value = float(ui_params.get(threshold_key, 0.0)) if threshold_key else 0.0
-        if group_id in ALWAYS_ACTIVE_GROUPS or threshold_value > 0:
-            active.append(group_id)
+        active.append(group_id)
     return active
 
 
@@ -1108,6 +1220,7 @@ def _wind_source_vector_layers(
     ui_params: dict[str, float],
     layer_selection: dict[str, list[str]] | None = None,
 ) -> list[dict[str, Any]]:
+    _ = ui_params
     groups, layers, registry_meta = load_acceptance_registry()
     selected = normalize_group_layer_map(layer_selection or _selected_wind_layers())
     map_layers: list[dict[str, Any]] = []
@@ -1121,21 +1234,22 @@ def _wind_source_vector_layers(
             if not geojson:
                 continue
             source_color = _rgb_to_hex(layer_spec.source_color)
+            source_opacity = _wind_source_opacity(group_id)
             map_layers.append(
                 {
-                    "name": f"{group_label}: {layer_spec.label}",
+                    "name": f"Källa: {layer_label(layer_spec, WIND_CONTROL_LANGUAGE, layer_spec.label)} ({group_label})",
                     "feature_collection": geojson,
                     "fill_property": "fill",
                     "legend_items": [],
                     "legend_id": f"wind_source_{layer_id}",
                     "legend_title": "",
-                    "default_visible": True,
+                    "default_visible": False,
                     "stroke_color": source_color,
                     "fill_color": source_color,
-                    "stroke_opacity": 0.88,
-                    "fill_opacity": 0.18,
-                    "weight": 1.8,
-                    "point_radius": int(max(3, min(18, round(float(layer_spec.point_radius) / 6.0)))),
+                    "stroke_opacity": max(min(source_opacity, 1.0), 0.0),
+                    "fill_opacity": max(min(source_opacity * 0.28, 1.0), 0.0),
+                    "weight": 2.0,
+                    "point_radius": int(layer_spec.point_radius),
                     "use_global_opacity": False,
                 }
             )
@@ -1152,9 +1266,8 @@ def _wind_group_summary_frame(
     for group_id, layer_ids in WIND_GROUP_LAYER_DEFAULTS.items():
         threshold_key = GROUP_PARAM_MAP.get(group_id)
         threshold_value = float(ui_params.get(threshold_key, 0.0)) if threshold_key else 0.0
-        always_active = group_id in ALWAYS_ACTIVE_GROUPS
         selected_layer_count = len(selected.get(group_id, []))
-        active = selected_layer_count > 0 and (always_active or threshold_value > 0)
+        active = selected_layer_count > 0
         rows.append(
             {
                 "regelgrupp": GROUP_LABELS.get(group_id, groups[group_id].label if group_id in groups else group_id),
@@ -1208,8 +1321,6 @@ def _wind_runtime_config_json(
             continue
         threshold_key = GROUP_PARAM_MAP.get(group_id)
         threshold_value = float(ui_params.get(threshold_key, 0.0)) if threshold_key else 0.0
-        if group_id not in ALWAYS_ACTIVE_GROUPS and threshold_value <= 0:
-            continue
         groups_payload[group_id] = {
             "active_layer_ids": list(layer_ids),
             "analysis_value_m": int(round(threshold_value)),
@@ -1230,11 +1341,14 @@ def _wind_runtime_layers(
         geojson = group_meta.get("geojson")
         if not geojson:
             continue
-        group_label = GROUP_LABELS.get(group_id, groups[group_id].label if group_id in groups else group_id)
+        group_label_text = GROUP_LABELS.get(group_id, groups[group_id].label if group_id in groups else group_id)
+        if group_id in groups:
+            group_label_text = group_label(groups[group_id], WIND_CONTROL_LANGUAGE, groups[group_id].label)
         group_color = _rgb_to_hex(groups[group_id].group_color) if group_id in groups else "#4d4d4d"
+        opacity = _wind_group_opacity(group_id)
         layers.append(
             {
-                "name": f"Gruppoverlay: {group_label}",
+                "name": f"Grupp: {group_label_text}",
                 "feature_collection": geojson,
                 "fill_property": "fill",
                 "legend_items": [],
@@ -1243,10 +1357,10 @@ def _wind_runtime_layers(
                 "default_visible": False,
                 "stroke_color": group_color,
                 "fill_color": group_color,
-                "stroke_opacity": 0.86,
-                "fill_opacity": 0.16,
-                "weight": 1.8,
-                "point_radius": 5,
+                "stroke_opacity": max(min(opacity * 0.95, 1.0), 0.0),
+                "fill_opacity": max(min(opacity * 0.32, 1.0), 0.0),
+                "weight": 2.2,
+                "point_radius": 6,
                 "use_global_opacity": False,
             }
         )
@@ -1255,19 +1369,19 @@ def _wind_runtime_layers(
     if combined and combined.get("geojson"):
         layers.append(
             {
-                "name": "Potentiell etableringsyta (geometri)",
+                "name": ui_text("combined_overlay_name", WIND_CONTROL_LANGUAGE),
                 "feature_collection": combined["geojson"],
                 "fill_property": "fill",
                 "legend_items": [],
                 "legend_id": "wind_runtime_combined",
                 "legend_title": "",
                 "default_visible": True,
-                "stroke_color": "#1e7f3b",
-                "fill_color": "#2aa74f",
-                "stroke_opacity": 0.9,
-                "fill_opacity": 0.2,
+                "stroke_color": "#c4322b",
+                "fill_color": "#c4322b",
+                "stroke_opacity": 0.72,
+                "fill_opacity": 0.08,
                 "weight": 1.5,
-                "point_radius": 5,
+                "point_radius": 6,
                 "use_global_opacity": False,
             }
         )
@@ -1753,24 +1867,18 @@ def _wind_builder_tab(
 ) -> None:
     landscape_manifest = context["landscape_manifest"]
     solar_rules = context["solar_rules"]
-    defaults = _default_wind_params()
+    selected_layers: dict[str, list[str]] = _selected_wind_layers()
+    ui_params: dict[str, float] = _default_wind_params()
+    controls_applied = False
     if left_panel is not None or right_panel is not None:
         if left_panel is not None:
             with left_panel:
-                st.header("Bygg vindpotential")
-                st.caption("Justera reglagen och spara när kartbilden är användbar.")
-                if st.button("Återställ vind-default", key="reset_wind_builder"):
-                    _reset_builder("wind_builder", defaults)
-                _wind_builder_controls(defaults)
-                _wind_layer_selector_controls("wind_builder_panel")
-                _wind_runtime_overlay_control()
-                st.caption("Vindacceptansappens avståndstabeller används nu direkt som regelgrupper.")
-        ui_params = _state_params("wind_builder", defaults)
-        selected_layers = _selected_wind_layers()
-        runtime_overlay_enabled = _wind_runtime_overlays_enabled()
+                selected_layers, ui_params, controls_applied = _wind_group_controls("wind_builder_panel", language=WIND_CONTROL_LANGUAGE)
+        runtime_overlay_enabled = True
         st.session_state["wind_builder_params"] = ui_params
         h3_resolution, opacity, preserve_map_view, map_reset_token = _map_panel_controls(region, "wind_builder_preview", left_panel)
         display_mode = _display_mode_panel("wind_builder_preview", left_panel)
+        runtime_overlay_enabled = _mode_wants_vector(display_mode)
         display_geometry_path = _h3_display_geometry_path(region, h3_resolution)
         source_frame = _wind_source_frame(landscape_manifest, solar_rules, ui_params, group_layer_selection=selected_layers)
         frame = _filter_frame_to_display_geometries(
@@ -1819,6 +1927,8 @@ def _wind_builder_tab(
             vector_stats = wind_candidate_summary(source_frame)
             st.metric(f"Kandidatytor R{WIND_SOURCE_RESOLUTION}", vector_stats["candidate_cells"])
             st.metric("Kandidatandel", f"{vector_stats['candidate_share']:.1f}%")
+            if controls_applied:
+                st.caption(ui_text("controls_applied", WIND_CONTROL_LANGUAGE))
             if runtime_overlay_enabled:
                 if runtime_error:
                     st.warning(f"Geometri-runtime kunde inte köras: {runtime_error}")
@@ -1853,25 +1963,17 @@ def _wind_builder_tab(
         return
 
     st.subheader("Bygg vindpotential")
-    st.caption("Vindbyggaren följer vindacceptansappens reglagelogik, men översätter den till en H3-baserad potentialscore i denna första version.")
-
-    if st.button("Återställ vind-default", key="reset_wind_builder"):
-        _reset_builder("wind_builder", defaults)
 
     control_col, map_col, info_col = st.columns([0.24, 0.50, 0.26], gap="large")
     with control_col:
-        _wind_builder_controls(defaults)
-        _wind_layer_selector_controls("wind_builder_main")
-        _wind_runtime_overlay_control()
-        st.caption("Reglerna bygger på vindacceptansappens färdiga H3-avståndstabeller och landskapsanalysens roller.")
+        selected_layers, ui_params, controls_applied = _wind_group_controls("wind_builder_main", language=WIND_CONTROL_LANGUAGE)
 
-    ui_params = _state_params("wind_builder", defaults)
-    selected_layers = _selected_wind_layers()
-    runtime_overlay_enabled = _wind_runtime_overlays_enabled()
+    runtime_overlay_enabled = True
     st.session_state["wind_builder_params"] = ui_params
     with map_col:
         h3_resolution, opacity, preserve_map_view, map_reset_token = _map_controls(region, "wind_builder_preview")
         display_mode = _display_mode_control("wind_builder_preview")
+        runtime_overlay_enabled = _mode_wants_vector(display_mode)
         display_geometry_path = _h3_display_geometry_path(region, h3_resolution)
         source_frame = _wind_source_frame(landscape_manifest, solar_rules, ui_params, group_layer_selection=selected_layers)
         frame = _filter_frame_to_display_geometries(
@@ -1920,6 +2022,8 @@ def _wind_builder_tab(
             vector_stats = wind_candidate_summary(source_frame)
             st.metric(f"Kandidatytor R{WIND_SOURCE_RESOLUTION}", vector_stats["candidate_cells"])
             st.metric("Kandidatandel", f"{vector_stats['candidate_share']:.1f}%")
+            if controls_applied:
+                st.caption(ui_text("controls_applied", WIND_CONTROL_LANGUAGE))
             if runtime_overlay_enabled:
                 if runtime_error:
                     st.warning(f"Geometri-runtime kunde inte köras: {runtime_error}")
