@@ -1050,13 +1050,13 @@ def _selected_wind_layers() -> dict[str, list[str]]:
 
 
 def _wind_runtime_overlays_enabled() -> bool:
-    return bool(st.session_state.get(WIND_RUNTIME_OVERLAY_KEY, False))
+    return bool(st.session_state.get(WIND_RUNTIME_OVERLAY_KEY, True))
 
 
 def _wind_runtime_overlay_control() -> bool:
-    st.session_state.setdefault(WIND_RUNTIME_OVERLAY_KEY, False)
+    st.session_state.setdefault(WIND_RUNTIME_OVERLAY_KEY, True)
     st.checkbox(
-        "Visa geometri-runtimeoverlay",
+        "Visa potentiell etableringsyta (geometri)",
         key=WIND_RUNTIME_OVERLAY_KEY,
         help="Kör geometri-runtime och lägg till grupplager plus kombinerad acceptansyta i vektorvyn.",
     )
@@ -1255,17 +1255,17 @@ def _wind_runtime_layers(
     if combined and combined.get("geojson"):
         layers.append(
             {
-                "name": "Kombinerad geometriacceptans",
+                "name": "Potentiell etableringsyta (geometri)",
                 "feature_collection": combined["geojson"],
                 "fill_property": "fill",
                 "legend_items": [],
                 "legend_id": "wind_runtime_combined",
                 "legend_title": "",
                 "default_visible": True,
-                "stroke_color": "#c4322b",
-                "fill_color": "#c4322b",
-                "stroke_opacity": 0.82,
-                "fill_opacity": 0.11,
+                "stroke_color": "#1e7f3b",
+                "fill_color": "#2aa74f",
+                "stroke_opacity": 0.9,
+                "fill_opacity": 0.2,
                 "weight": 1.5,
                 "point_radius": 5,
                 "use_global_opacity": False,
@@ -1782,7 +1782,15 @@ def _wind_builder_tab(
         layers = []
         if _mode_wants_vector(display_mode):
             layers.extend(_wind_source_vector_layers(ui_params, layer_selection=selected_layers))
-            layers.append(_wind_vector_layer("Osparad vindpotential vektor", source_frame, _h3_display_geometry_path(region, WIND_SOURCE_RESOLUTION), _solar_legend_items(solar_rules)))
+            h3_vector_layer = _wind_vector_layer(
+                "H3-kandidatytor (scoremodell)",
+                source_frame,
+                _h3_display_geometry_path(region, WIND_SOURCE_RESOLUTION),
+                _solar_legend_items(solar_rules),
+            )
+            if runtime_overlay_enabled:
+                h3_vector_layer["default_visible"] = False
+            layers.append(h3_vector_layer)
             if runtime_overlay_enabled:
                 with st.spinner("Kör geometri-runtime för vindlager..."):
                     try:
@@ -1825,6 +1833,8 @@ def _wind_builder_tab(
                     st.caption("Geometri-runtime är påslagen men returnerade inga lager för nuvarande urval.")
             else:
                 st.caption("Geometri-runtimeoverlay är avstängd.")
+            if runtime_overlay_enabled:
+                st.caption("Potentiell etableringsyta = landmassa minus valda buffertregler.")
             with st.expander("Aktiva regelgrupper", expanded=False):
                 st.dataframe(_wind_group_summary_frame(ui_params, layer_selection=selected_layers), use_container_width=True, hide_index=True, height=240)
             with st.expander("Aktiva vindparametrar"):
@@ -1873,7 +1883,15 @@ def _wind_builder_tab(
         layers = []
         if _mode_wants_vector(display_mode):
             layers.extend(_wind_source_vector_layers(ui_params, layer_selection=selected_layers))
-            layers.append(_wind_vector_layer("Osparad vindpotential vektor", source_frame, _h3_display_geometry_path(region, WIND_SOURCE_RESOLUTION), _solar_legend_items(solar_rules)))
+            h3_vector_layer = _wind_vector_layer(
+                "H3-kandidatytor (scoremodell)",
+                source_frame,
+                _h3_display_geometry_path(region, WIND_SOURCE_RESOLUTION),
+                _solar_legend_items(solar_rules),
+            )
+            if runtime_overlay_enabled:
+                h3_vector_layer["default_visible"] = False
+            layers.append(h3_vector_layer)
             if runtime_overlay_enabled:
                 with st.spinner("Kör geometri-runtime för vindlager..."):
                     try:
@@ -1916,6 +1934,8 @@ def _wind_builder_tab(
                     st.caption("Geometri-runtime är påslagen men returnerade inga lager för nuvarande urval.")
             else:
                 st.caption("Geometri-runtimeoverlay är avstängd.")
+            if runtime_overlay_enabled:
+                st.caption("Potentiell etableringsyta = landmassa minus valda buffertregler.")
             with st.expander("Aktiva regelgrupper", expanded=False):
                 st.dataframe(_wind_group_summary_frame(ui_params, layer_selection=selected_layers), use_container_width=True, hide_index=True, height=240)
             with st.expander("Aktiva vindparametrar"):
