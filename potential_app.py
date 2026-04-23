@@ -52,6 +52,7 @@ from potential_model.wind_acceptance import (  # noqa: E402
     GROUP_PARAM_MAP,
     SOURCE_RESOLUTION as WIND_SOURCE_RESOLUTION,
     WIND_GROUP_LAYER_DEFAULTS,
+    normalize_group_layer_map,
     wind_acceptance_group_summary,
     wind_acceptance_potential_frame,
     wind_acceptance_rollup_frame,
@@ -75,6 +76,7 @@ MAP_VIEW_RESET_TOKEN_KEY = "potential_map_view_reset_token"
 LEFT_PANEL_OPEN_KEY = "potential_left_panel_open"
 RIGHT_PANEL_OPEN_KEY = "potential_right_panel_open"
 REGION_SELECT_KEY = "potential_selected_region_id"
+WIND_LAYER_SELECTION_KEY = "wind_builder_selected_layers"
 
 
 def _map_view_reset_token() -> int:
@@ -734,12 +736,14 @@ def _wind_source_frame(
     landscape_manifest: dict[str, Any],
     solar_rules: dict[str, Any],
     ui_params: dict[str, float],
+    group_layer_selection: dict[str, list[str]] | None = None,
 ) -> pd.DataFrame:
     return wind_acceptance_potential_frame(
         landscape_manifest,
         _class_breaks(solar_rules),
         _wind_score_params_from_ui(ui_params),
         ui_params,
+        group_layer_map=group_layer_selection,
     )
 
 
@@ -749,8 +753,9 @@ def _wind_frame(
     solar_rules: dict[str, Any],
     resolution: int,
     ui_params: dict[str, float],
+    group_layer_selection: dict[str, list[str]] | None = None,
 ) -> pd.DataFrame:
-    base = _wind_source_frame(landscape_manifest, solar_rules, ui_params)
+    base = _wind_source_frame(landscape_manifest, solar_rules, ui_params, group_layer_selection=group_layer_selection)
     frame = wind_acceptance_rollup_frame(base, resolution, _class_breaks(solar_rules))
     return _filter_frame_to_display_geometries(frame, _h3_display_geometry_path(region, resolution))
 
@@ -915,10 +920,15 @@ def _save_solar_potential(params: dict[str, float], resolution: int) -> None:
     st.session_state["show_user_solar"] = True
 
 
-def _save_wind_potential(ui_params: dict[str, float], resolution: int) -> None:
+def _save_wind_potential(
+    ui_params: dict[str, float],
+    resolution: int,
+    layer_selection: dict[str, list[str]] | None = None,
+) -> None:
     st.session_state["saved_wind_potential"] = {
         "ui_params": dict(ui_params),
         "preview_resolution": int(resolution),
+        "layer_selection": normalize_group_layer_map(layer_selection or _selected_wind_layers()),
     }
     st.session_state["show_user_wind"] = True
 
@@ -937,6 +947,16 @@ def _saved_wind_params() -> dict[str, float] | None:
         return None
     params = saved.get("ui_params")
     return dict(params) if isinstance(params, dict) else None
+
+
+def _saved_wind_layer_selection() -> dict[str, list[str]] | None:
+    saved = st.session_state.get("saved_wind_potential")
+    if not isinstance(saved, dict):
+        return None
+    selection = saved.get("layer_selection")
+    if not isinstance(selection, dict):
+        return None
+    return normalize_group_layer_map(selection)
 
 
 def _set_active_view(view: str) -> None:
@@ -1011,9 +1031,55 @@ def _rgb_to_hex(rgb: tuple[int, int, int]) -> str:
     return "#%02x%02x%02x" % tuple(int(value) for value in rgb)
 
 
-def _wind_active_group_ids(ui_params: dict[str, float]) -> list[str]:
+def _default_wind_layer_selection() -> dict[str, list[str]]:
+    return {group_id: list(layer_ids) for group_id, layer_ids in WIND_GROUP_LAYER_DEFAULTS.items()}
+
+
+def _selected_wind_layers() -> dict[str, list[str]]:
+    raw = st.session_state.get(WIND_LAYER_SELECTION_KEY)
+    if not isinstance(raw, dict):
+        selected = normalize_group_layer_map(_default_wind_layer_selection())
+        st.session_state[WIND_LAYER_SELECTION_KEY] = selected
+        return selected
+    selected = normalize_group_layer_map(raw)
+    st.session_state[WIND_LAYER_SELECTION_KEY] = selected
+    return selected
+
+
+def _wind_layer_selector_controls(widget_prefix: str) -> None:
+    groups, layers, _ = load_acceptance_registry()
+    selected_layers = _selected_wind_layers()
+    with st.expander("Kallager per regelgrupp", expanded=False):
+        st.caption("Valj vilka vindlager som ska anvandas och klicka Anvand andringar.")
+        with st.form(f"{widget_prefix}_wind_layer_selector", clear_on_submit=False):
+            draft_layers: dict[str, list[str]] = {}
+            for group_id, default_layer_ids in WIND_GROUP_LAYER_DEFAULTS.items():
+                label = GROUP_LABELS.get(group_id, groups[group_id].label if group_id in groups else group_id)
+                st.markdown(f"**{label}**")
+                options = [layer_id for layer_id in default_layer_ids if layer_id in layers]
+                selected_default = [layer_id for layer_id in selected_layers.get(group_id, []) if layer_id in options]
+                draft_layers[group_id] = st.multiselect(
+                    f"Lager ({len(selected_default)} valda)",
+                    options=options,
+                    default=selected_default,
+                    format_func=lambda layer_id: layers[layer_id].label,
+                    key=f"{widget_prefix}_wind_layers_{group_id}",
+                )
+            applied = st.form_submit_button("Anvand andringar", type="primary", use_container_width=True)
+        if applied:
+            st.session_state[WIND_LAYER_SELECTION_KEY] = normalize_group_layer_map(draft_layers)
+            st.success("Vindlager uppdaterade.")
+
+
+def _wind_active_group_ids(
+    ui_params: dict[str, float],
+    layer_selection: dict[str, list[str]] | None = None,
+) -> list[str]:
+    selected = normalize_group_layer_map(layer_selection or _selected_wind_layers())
     active: list[str] = []
-    for group_id in WIND_GROUP_LAYER_DEFAULTS:
+    for group_id, layer_ids in selected.items():
+        if not layer_ids:
+            continue
         threshold_key = GROUP_PARAM_MAP.get(group_id)
         threshold_value = float(ui_params.get(threshold_key, 0.0)) if threshold_key else 0.0
         if group_id in ALWAYS_ACTIVE_GROUPS or threshold_value > 0:
@@ -1021,12 +1087,16 @@ def _wind_active_group_ids(ui_params: dict[str, float]) -> list[str]:
     return active
 
 
-def _wind_source_vector_layers(ui_params: dict[str, float]) -> list[dict[str, Any]]:
+def _wind_source_vector_layers(
+    ui_params: dict[str, float],
+    layer_selection: dict[str, list[str]] | None = None,
+) -> list[dict[str, Any]]:
     groups, layers, registry_meta = load_acceptance_registry()
+    selected = normalize_group_layer_map(layer_selection or _selected_wind_layers())
     map_layers: list[dict[str, Any]] = []
-    for group_id in _wind_active_group_ids(ui_params):
+    for group_id in _wind_active_group_ids(ui_params, layer_selection=selected):
         group_label = GROUP_LABELS.get(group_id, groups[group_id].label if group_id in groups else group_id)
-        for layer_id in WIND_GROUP_LAYER_DEFAULTS.get(group_id, []):
+        for layer_id in selected.get(group_id, []):
             layer_spec = layers.get(layer_id)
             if layer_spec is None:
                 continue
@@ -1055,21 +1125,27 @@ def _wind_source_vector_layers(ui_params: dict[str, float]) -> list[dict[str, An
     return map_layers
 
 
-def _wind_group_summary_frame(ui_params: dict[str, float]) -> pd.DataFrame:
+def _wind_group_summary_frame(
+    ui_params: dict[str, float],
+    layer_selection: dict[str, list[str]] | None = None,
+) -> pd.DataFrame:
     groups, _, _ = load_acceptance_registry()
+    selected = normalize_group_layer_map(layer_selection or _selected_wind_layers())
     rows: list[dict[str, Any]] = []
     for group_id, layer_ids in WIND_GROUP_LAYER_DEFAULTS.items():
         threshold_key = GROUP_PARAM_MAP.get(group_id)
         threshold_value = float(ui_params.get(threshold_key, 0.0)) if threshold_key else 0.0
         always_active = group_id in ALWAYS_ACTIVE_GROUPS
-        active = always_active or threshold_value > 0
+        selected_layer_count = len(selected.get(group_id, []))
+        active = selected_layer_count > 0 and (always_active or threshold_value > 0)
         rows.append(
             {
                 "regelgrupp": GROUP_LABELS.get(group_id, groups[group_id].label if group_id in groups else group_id),
                 "analystyp": str(groups[group_id].analysis_kind) if group_id in groups else "-",
                 "aktiv": bool(active),
-                "tröskel_m": "-" if threshold_key is None else int(round(threshold_value)),
-                "källager": int(len(layer_ids)),
+                "troskel_m": "-" if threshold_key is None else int(round(threshold_value)),
+                "valda_kallager": int(selected_layer_count),
+                "kallager_total": int(len(layer_ids)),
             }
         )
     return pd.DataFrame(rows)
@@ -1286,6 +1362,7 @@ def _combined_tab(
     display_geometry_path = _h3_display_geometry_path(region, h3_resolution)
     saved_solar_params = _saved_solar_params()
     saved_wind_ui_params = _saved_wind_params()
+    saved_wind_layer_selection = _saved_wind_layer_selection()
 
     if left_panel is not None:
         with left_panel.expander("Potential", expanded=True):
@@ -1350,7 +1427,13 @@ def _combined_tab(
 
     if show_default_wind:
         ui_params = _default_wind_params()
-        source_frame = _wind_source_frame(landscape_manifest, solar_rules, ui_params)
+        default_layer_selection = normalize_group_layer_map(_default_wind_layer_selection())
+        source_frame = _wind_source_frame(
+            landscape_manifest,
+            solar_rules,
+            ui_params,
+            group_layer_selection=default_layer_selection,
+        )
         frame = _filter_frame_to_display_geometries(
             wind_acceptance_rollup_frame(source_frame, h3_resolution, _class_breaks(solar_rules)),
             display_geometry_path,
@@ -1358,11 +1441,18 @@ def _combined_tab(
         if _mode_wants_hex(display_mode):
             layers.append(_potential_layer(f"Default vindpotential R{h3_resolution}", frame, "wind", display_geometry_path, _solar_legend_items(solar_rules)))
         if _mode_wants_vector(display_mode):
+            layers.extend(_wind_source_vector_layers(ui_params, layer_selection=default_layer_selection))
             layers.append(_wind_vector_layer("Default vindpotential vektor", source_frame, _h3_display_geometry_path(region, WIND_SOURCE_RESOLUTION), _solar_legend_items(solar_rules)))
         potential_frames.append({"label": "Default vindpotential", "technology": "wind", "frame": frame})
 
     if show_user_wind and saved_wind_ui_params is not None:
-        source_frame = _wind_source_frame(landscape_manifest, solar_rules, saved_wind_ui_params)
+        user_layer_selection = normalize_group_layer_map(saved_wind_layer_selection or _selected_wind_layers())
+        source_frame = _wind_source_frame(
+            landscape_manifest,
+            solar_rules,
+            saved_wind_ui_params,
+            group_layer_selection=user_layer_selection,
+        )
         frame = _filter_frame_to_display_geometries(
             wind_acceptance_rollup_frame(source_frame, h3_resolution, _class_breaks(solar_rules)),
             display_geometry_path,
@@ -1370,6 +1460,7 @@ def _combined_tab(
         if _mode_wants_hex(display_mode):
             layers.append(_potential_layer(f"Egen vindpotential R{h3_resolution}", frame, "wind", display_geometry_path, _solar_legend_items(solar_rules)))
         if _mode_wants_vector(display_mode):
+            layers.extend(_wind_source_vector_layers(saved_wind_ui_params, layer_selection=user_layer_selection))
             layers.append(_wind_vector_layer("Egen vindpotential vektor", source_frame, _h3_display_geometry_path(region, WIND_SOURCE_RESOLUTION), _solar_legend_items(solar_rules)))
         potential_frames.append({"label": "Egen vindpotential", "technology": "wind", "frame": frame})
 
@@ -1522,20 +1613,22 @@ def _wind_builder_tab(
                 if st.button("Återställ vind-default", key="reset_wind_builder"):
                     _reset_builder("wind_builder", defaults)
                 _wind_builder_controls(defaults)
+                _wind_layer_selector_controls("wind_builder_panel")
                 st.caption("Vindacceptansappens avståndstabeller används nu direkt som regelgrupper.")
         ui_params = _state_params("wind_builder", defaults)
+        selected_layers = _selected_wind_layers()
         st.session_state["wind_builder_params"] = ui_params
         h3_resolution, opacity, preserve_map_view, map_reset_token = _map_panel_controls(region, "wind_builder_preview", left_panel)
         display_mode = _display_mode_panel("wind_builder_preview", left_panel)
         display_geometry_path = _h3_display_geometry_path(region, h3_resolution)
-        source_frame = _wind_source_frame(landscape_manifest, solar_rules, ui_params)
+        source_frame = _wind_source_frame(landscape_manifest, solar_rules, ui_params, group_layer_selection=selected_layers)
         frame = _filter_frame_to_display_geometries(
             wind_acceptance_rollup_frame(source_frame, h3_resolution, _class_breaks(solar_rules)),
             display_geometry_path,
         )
         layers = []
         if _mode_wants_vector(display_mode):
-            layers.extend(_wind_source_vector_layers(ui_params))
+            layers.extend(_wind_source_vector_layers(ui_params, layer_selection=selected_layers))
             layers.append(_wind_vector_layer("Osparad vindpotential vektor", source_frame, _h3_display_geometry_path(region, WIND_SOURCE_RESOLUTION), _solar_legend_items(solar_rules)))
         if _mode_wants_hex(display_mode):
             layers.append(_potential_layer(f"Osparad vindförhandsvisning R{h3_resolution}", frame, "wind", display_geometry_path, _solar_legend_items(solar_rules)))
@@ -1550,7 +1643,7 @@ def _wind_builder_tab(
         save_col, _ = st.columns([0.34, 0.66], gap="small")
         with save_col:
             if st.button("Spara vindpotential", type="primary", use_container_width=True, key="wind_builder_save_under_map_panel"):
-                _save_wind_potential(ui_params, h3_resolution)
+                _save_wind_potential(ui_params, h3_resolution, layer_selection=selected_layers)
                 st.success("Vindpotential sparad. Den kan nu togglas på i Samlad potential.")
         summary_target = right_panel or st.container()
         with summary_target:
@@ -1559,7 +1652,7 @@ def _wind_builder_tab(
             st.metric(f"Kandidatytor R{WIND_SOURCE_RESOLUTION}", vector_stats["candidate_cells"])
             st.metric("Kandidatandel", f"{vector_stats['candidate_share']:.1f}%")
             with st.expander("Aktiva regelgrupper", expanded=False):
-                st.dataframe(_wind_group_summary_frame(ui_params), use_container_width=True, hide_index=True, height=240)
+                st.dataframe(_wind_group_summary_frame(ui_params, layer_selection=selected_layers), use_container_width=True, hide_index=True, height=240)
             with st.expander("Aktiva vindparametrar"):
                 st.json(ui_params)
             with st.expander("Migrerad regelgruppslogik"):
@@ -1577,22 +1670,24 @@ def _wind_builder_tab(
     control_col, map_col, info_col = st.columns([0.24, 0.50, 0.26], gap="large")
     with control_col:
         _wind_builder_controls(defaults)
+        _wind_layer_selector_controls("wind_builder_main")
         st.caption("Reglerna bygger på vindacceptansappens färdiga H3-avståndstabeller och landskapsanalysens roller.")
 
     ui_params = _state_params("wind_builder", defaults)
+    selected_layers = _selected_wind_layers()
     st.session_state["wind_builder_params"] = ui_params
     with map_col:
         h3_resolution, opacity, preserve_map_view, map_reset_token = _map_controls(region, "wind_builder_preview")
         display_mode = _display_mode_control("wind_builder_preview")
         display_geometry_path = _h3_display_geometry_path(region, h3_resolution)
-        source_frame = _wind_source_frame(landscape_manifest, solar_rules, ui_params)
+        source_frame = _wind_source_frame(landscape_manifest, solar_rules, ui_params, group_layer_selection=selected_layers)
         frame = _filter_frame_to_display_geometries(
             wind_acceptance_rollup_frame(source_frame, h3_resolution, _class_breaks(solar_rules)),
             display_geometry_path,
         )
         layers = []
         if _mode_wants_vector(display_mode):
-            layers.extend(_wind_source_vector_layers(ui_params))
+            layers.extend(_wind_source_vector_layers(ui_params, layer_selection=selected_layers))
             layers.append(_wind_vector_layer("Osparad vindpotential vektor", source_frame, _h3_display_geometry_path(region, WIND_SOURCE_RESOLUTION), _solar_legend_items(solar_rules)))
         if _mode_wants_hex(display_mode):
             layers.append(_potential_layer(f"Osparad vindförhandsvisning R{h3_resolution}", frame, "wind", display_geometry_path, _solar_legend_items(solar_rules)))
@@ -1607,7 +1702,7 @@ def _wind_builder_tab(
         save_col, _ = st.columns([0.34, 0.66], gap="small")
         with save_col:
             if st.button("Spara vindpotential", type="primary", use_container_width=True, key="wind_builder_save_under_map_main"):
-                _save_wind_potential(ui_params, h3_resolution)
+                _save_wind_potential(ui_params, h3_resolution, layer_selection=selected_layers)
                 st.success("Vindpotential sparad. Den kan nu togglas på i Samlad potential.")
     with info_col:
         with st.container(border=True):
@@ -1616,7 +1711,7 @@ def _wind_builder_tab(
             st.metric(f"Kandidatytor R{WIND_SOURCE_RESOLUTION}", vector_stats["candidate_cells"])
             st.metric("Kandidatandel", f"{vector_stats['candidate_share']:.1f}%")
             with st.expander("Aktiva regelgrupper", expanded=False):
-                st.dataframe(_wind_group_summary_frame(ui_params), use_container_width=True, hide_index=True, height=240)
+                st.dataframe(_wind_group_summary_frame(ui_params, layer_selection=selected_layers), use_container_width=True, hide_index=True, height=240)
             with st.expander("Aktiva vindparametrar"):
                 st.json(ui_params)
             with st.expander("Migrerad regelgruppslogik"):

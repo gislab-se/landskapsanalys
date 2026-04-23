@@ -77,6 +77,17 @@ HARD_EXCLUSION_GROUPS = {"protected", "coastal", "culture", "aviation_approach",
 ALWAYS_ACTIVE_GROUPS = {"settlement", "transport", "electrical"}
 
 
+def normalize_group_layer_map(
+    group_layer_map: dict[str, list[str]] | None,
+) -> dict[str, list[str]]:
+    normalized: dict[str, list[str]] = {}
+    for group_id, default_layer_ids in WIND_GROUP_LAYER_DEFAULTS.items():
+        requested = (group_layer_map or {}).get(group_id, default_layer_ids)
+        requested_ids = [str(layer_id) for layer_id in (requested or [])]
+        normalized[group_id] = [layer_id for layer_id in requested_ids if layer_id in default_layer_ids]
+    return normalized
+
+
 def _closed_ring(hex_id: str) -> list[list[float]] | None:
     try:
         boundary = h3.cell_to_boundary(str(hex_id))
@@ -225,6 +236,7 @@ def _build_wind_acceptance_frame_cached(
     score_params_json: str,
     ui_params_json: str,
     breaks_json: str,
+    group_layer_map_json: str,
 ) -> pd.DataFrame:
     import json
 
@@ -232,6 +244,7 @@ def _build_wind_acceptance_frame_cached(
     score_params = json.loads(score_params_json)
     ui_params = json.loads(ui_params_json)
     breaks = json.loads(breaks_json)
+    group_layer_map = normalize_group_layer_map(json.loads(group_layer_map_json))
 
     base = wind_potential_frame(landscape_manifest, breaks, score_params).copy()
     groups, _, registry_meta = load_registry()
@@ -240,10 +253,12 @@ def _build_wind_acceptance_frame_cached(
     hard_blocked_cols: list[str] = []
     active_labels: list[str] = []
 
-    for group_id, layer_ids in WIND_GROUP_LAYER_DEFAULTS.items():
+    for group_id, layer_ids in group_layer_map.items():
         group = groups.get(group_id)
         param_key = GROUP_PARAM_MAP.get(group_id)
         if group is None or param_key is None:
+            continue
+        if not layer_ids:
             continue
 
         threshold_m = float(ui_params.get(param_key, group.analysis_default_m))
@@ -316,6 +331,7 @@ def wind_acceptance_potential_frame(
     breaks: list[dict[str, Any]],
     score_params: dict[str, float],
     ui_params: dict[str, float],
+    group_layer_map: dict[str, list[str]] | None = None,
 ) -> pd.DataFrame:
     import json
 
@@ -333,6 +349,7 @@ def wind_acceptance_potential_frame(
         json.dumps(score_params, sort_keys=True, ensure_ascii=False),
         json.dumps(ui_params, sort_keys=True, ensure_ascii=False),
         json.dumps(breaks, sort_keys=True, ensure_ascii=False),
+        json.dumps(normalize_group_layer_map(group_layer_map), sort_keys=True, ensure_ascii=False),
     )
 
 
