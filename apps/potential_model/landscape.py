@@ -15,10 +15,10 @@ from .manifests import resolve_repo_path
 
 CLUSTER_COLORS = {
     "1": "#6E7C91",
-    "2": "#9A7A3F",
-    "3": "#D8C97A",
-    "4": "#E2C98E",
-    "5": "#6F4E37",
+    "2": "#C58B43",
+    "3": "#B7C97A",
+    "4": "#E8C49A",
+    "5": "#7A5D72",
     "6": "#8FA7A5",
     "7": "#4E7A45",
     "8": "#C89A5A",
@@ -26,11 +26,11 @@ CLUSTER_COLORS = {
 
 
 V10_TYPE_COLORS = {
-    "LT01": "#5F625C",
-    "LT02": "#E2DB9B",
-    "LT03": "#5B4938",
-    "LT04": "#183D24",
-    "LT05": "#EFE36F",
+    "LT01": "#627A93",
+    "LT02": "#D7B882",
+    "LT03": "#A35A3C",
+    "LT04": "#2E6B3E",
+    "LT05": "#C7D84C",
 }
 
 
@@ -132,6 +132,7 @@ def _mode_or_first(values: pd.Series) -> Any:
     return non_null.iloc[0] if not non_null.empty else None
 
 
+@st.cache_data(show_spinner=False)
 def landscape_frame_for_resolution(manifest: dict[str, Any], resolution: int) -> pd.DataFrame:
     source_resolution = landscape_source_resolution(manifest)
     frame = load_factor_scores(manifest).copy()
@@ -175,6 +176,19 @@ def cluster_label(manifest: dict[str, Any], class_value: object) -> str:
 def factor_label(manifest: dict[str, Any], factor: str) -> str:
     labels = manifest.get("factor_labels") or {}
     return labels.get(factor, factor)
+
+
+def landscape_type_display_colors(manifest: dict[str, Any] | None = None) -> dict[str, str]:
+    colors = dict(V10_TYPE_COLORS)
+    if not manifest:
+        return colors
+    manifest_colors = manifest.get("landscape_type_colors") or {}
+    manifest_labels = manifest.get("landscape_type_labels") or {}
+    for key, value in manifest_colors.items():
+        colors.setdefault(str(key), str(value))
+    for key in manifest_labels:
+        colors.setdefault(str(key), "#999999")
+    return colors
 
 
 def cluster_summary(manifest: dict[str, Any]) -> pd.DataFrame:
@@ -395,8 +409,8 @@ def build_landscape_type_feature_collection_from_frame(
         rule = str(getattr(row, "v10_rule", "") or "")
         popup = (
             f"<strong>{hex_id}</strong><br>"
-            f"v10: {type_id} - {type_name}<br>"
-            f"v9 kluster: {cluster_key}<br>"
+            f"Landskapstyp: {type_name}<br>"
+            f"Landskapsstruktur: {cluster_key}<br>"
             f"Säkerhet: {confidence}"
         )
         if rule:
@@ -428,6 +442,6 @@ def landscape_type_feature_collection_for_frame(
     return build_landscape_type_feature_collection_from_frame(
         frame.to_json(orient="records", force_ascii=False),
         json.dumps(manifest.get("landscape_type_labels") or {}, sort_keys=True, ensure_ascii=False),
-        json.dumps(manifest.get("landscape_type_colors") or V10_TYPE_COLORS, sort_keys=True, ensure_ascii=False),
+        json.dumps(landscape_type_display_colors(manifest), sort_keys=True, ensure_ascii=False),
         display_geometry_path,
     )

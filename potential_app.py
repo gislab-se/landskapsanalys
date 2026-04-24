@@ -21,12 +21,12 @@ from potential_model.geometry import geometry_for_hex, load_h3_display_geometrie
 from potential_model.landscape import (  # noqa: E402
     CLUSTER_COLORS,
     FACTOR_STOPS,
-    V10_TYPE_COLORS,
     cluster_summary,
     factor_columns,
     factor_label,
     feature_collection_for_frame,
     landscape_source_resolution,
+    landscape_type_display_colors,
     landscape_type_feature_collection_for_frame,
     landscape_frame_for_resolution,
     load_cluster_profile,
@@ -88,8 +88,10 @@ REGION_SELECT_KEY = "potential_selected_region_id"
 WIND_LAYER_SELECTION_KEY = "wind_builder_selected_layers"
 WIND_RUNTIME_OVERLAY_KEY = "wind_builder_runtime_overlay_enabled"
 WIND_CONTROL_LANGUAGE = "sv"
-WIND_POLYGON_HEX_RESOLUTION = 10
-
+WIND_RUNTIME_BASE_RESOLUTION = 10
+WIND_AUTO_RESOLUTION_MIN_ZOOM: dict[int, int] = {10: 11, 9: 9, 8: 7, 7: 5, 6: 0}
+EML_PROVIDER_URL = "https://energymodellinglab.com/"
+IVL_PROVIDER_URL = "https://www.ivl.se/"
 WIND_SHARE_CLASS_SPECS: list[dict[str, Any]] = [
     {"id": "share_0", "label": "0%", "max_pct": 0.0, "legend_label": "0%", "base_color": "#d7301f", "core_color": "#7f0000"},
     {"id": "share_1", "label": ">0-5%", "max_pct": 5.0, "legend_label": "<=5%", "base_color": "#ef6548", "core_color": "#b30000"},
@@ -541,7 +543,7 @@ def _available_h3_resolutions(region: dict[str, Any]) -> list[int]:
     return sorted(values, reverse=True) or [int(region.get("default_h3_resolution", 9))]
 
 
-def _preferred_h3_resolution(region: dict[str, Any], preferred: int = 9) -> int:
+def _preferred_h3_resolution(region: dict[str, Any], preferred: int = 10) -> int:
     available = _available_h3_resolutions(region)
     return int(preferred) if int(preferred) in available else int(available[0])
 
@@ -563,7 +565,7 @@ def _h3_option_label(region: dict[str, Any], resolution: int) -> str:
 
 
 def _opacity_key(key_prefix: str) -> str:
-    return f"{key_prefix}_hex_opacity"
+    return f"{key_prefix}_vector_opacity"
 
 
 def _current_opacity(key_prefix: str) -> float:
@@ -574,24 +576,82 @@ def _current_opacity(key_prefix: str) -> float:
     return max(0.15, min(1.0, opacity))
 
 
+def _hex_opacity_key(key_prefix: str, opacity_key: str) -> str:
+    safe_key = "".join(ch if ch.isalnum() else "_" for ch in str(opacity_key))
+    return f"{key_prefix}_hex_opacity_{safe_key}"
+
+
+def _hex_opacity_value(key_prefix: str, opacity_key: str, default: float = 0.78) -> float:
+    try:
+        opacity = float(st.session_state.get(_hex_opacity_key(key_prefix, opacity_key), default))
+    except Exception:
+        opacity = default
+    return max(0.15, min(1.0, opacity))
+
+
 def _render_opacity_control(key_prefix: str) -> None:
     control_left, control_center, control_right = st.columns([0.22, 0.56, 0.22], gap="small")
     with control_center:
         st.slider(
-            "Opacitet hexlager",
+            "Opacitet polygoner och linjer",
             min_value=0.15,
             max_value=1.0,
             value=0.78,
             step=0.05,
             key=_opacity_key(key_prefix),
-            help="Styr genomskinligheten för aktiva hexagonlager i kartan.",
+            help="Styr genomskinligheten för aktiva polygon- och linjelager i kartan.",
         )
 
 
-def _map_panel_controls(region: dict[str, Any], key_prefix: str, panel: Any | None = None) -> tuple[int, float, bool, int]:
+def _hex_opacity_controls(layers: list[dict[str, Any]], key_prefix: str) -> list[dict[str, Any]]:
+    families: dict[str, dict[str, Any]] = {}
+    for layer in layers:
+        if str(layer.get("layer_kind", "")) != "hex":
+            continue
+        if layer.get("default_visible") is False:
+            continue
+        family_key = str(layer.get("opacity_family") or layer.get("control_name") or layer.get("name"))
+        if family_key in families:
+            continue
+        families[family_key] = {
+            "key": family_key,
+            "label": str(layer.get("opacity_label") or layer.get("control_name") or layer.get("name")),
+            "default": float(layer.get("fill_opacity", 0.78) or 0.78),
+        }
+
+    if not families:
+        return []
+
+    st.caption("Opacitet hexlager")
+    for family in families.values():
+        st.slider(
+            family["label"],
+            min_value=0.15,
+            max_value=1.0,
+            value=max(0.15, min(1.0, family["default"])),
+            step=0.05,
+            key=_hex_opacity_key(key_prefix, family["key"]),
+            help=f"Styr opaciteten för hexlagret {family['label']}.",
+        )
+    return list(families.values())
+
+
+def _apply_layer_opacity_state(layers: list[dict[str, Any]], key_prefix: str) -> list[dict[str, Any]]:
+    adjusted_layers: list[dict[str, Any]] = []
+    for layer in layers:
+        spec = dict(layer)
+        if str(spec.get("layer_kind", "")) == "hex":
+            family_key = str(spec.get("opacity_family") or spec.get("control_name") or spec.get("name"))
+            spec["fill_opacity"] = _hex_opacity_value(key_prefix, family_key, float(spec.get("fill_opacity", 0.78) or 0.78))
+        adjusted_layers.append(spec)
+    return adjusted_layers
+
+
+def _map_panel_controls(region: dict[str, Any], key_prefix: str, panel: Any | None = None) -> tuple[int, bool, float, bool, int]:
     available = _available_h3_resolutions(region)
     state_key = f"{key_prefix}_h3_resolution"
-    preferred = _preferred_h3_resolution(region, 9)
+    lock_state_key = f"{key_prefix}_lock_h3_resolution"
+    preferred = _preferred_h3_resolution(region, 10)
     try:
         current_value = int(st.session_state.get(state_key, preferred))
     except Exception:
@@ -599,9 +659,10 @@ def _map_panel_controls(region: dict[str, Any], key_prefix: str, panel: Any | No
     if current_value not in available:
         current_value = preferred
     st.session_state[state_key] = current_value
+    st.session_state.setdefault(lock_state_key, False)
 
     if panel is not None:
-        with panel.expander("H3 resolution", expanded=True):
+        with panel.expander("H3 resolution", expanded=False):
             h3_resolution = st.radio(
                 "H3-rollup",
                 options=available,
@@ -610,11 +671,18 @@ def _map_panel_controls(region: dict[str, Any], key_prefix: str, panel: Any | No
                 horizontal=False,
                 key=state_key,
             )
+            lock_resolution = st.checkbox(
+                "Lås vald upplösning",
+                value=bool(st.session_state.get(lock_state_key, False)),
+                key=lock_state_key,
+                help="När avstängd får kartan visa grövre aggregat vid utzoomning. När påslagen visas alltid exakt vald upplösning.",
+            )
             st.markdown("[Learn more about H3 resolutions](https://h3geo.org/).")
     else:
         h3_resolution = current_value
+        lock_resolution = bool(st.session_state.get(lock_state_key, False))
 
-    return int(h3_resolution), _current_opacity(key_prefix), True, _map_view_reset_token()
+    return int(h3_resolution), bool(lock_resolution), _current_opacity(key_prefix), True, _map_view_reset_token()
 
 
 def _filter_frame_to_display_geometries(frame: pd.DataFrame, display_geometry_path: str | None) -> pd.DataFrame:
@@ -622,6 +690,66 @@ def _filter_frame_to_display_geometries(frame: pd.DataFrame, display_geometry_pa
         return frame
     visible_hex_ids = set(load_h3_display_geometries(display_geometry_path))
     return frame[frame["hex_id"].astype(str).isin(visible_hex_ids)].copy()
+
+
+def _display_family_resolutions(region: dict[str, Any], preferred_resolution: int) -> list[int]:
+    preferred = int(preferred_resolution)
+    available = [value for value in _available_h3_resolutions(region) if int(value) <= preferred]
+    return available or [preferred]
+
+
+def _hex_display_rule(region: dict[str, Any], selected_resolution: int, lock_resolution: bool) -> dict[str, str]:
+    selected = int(selected_resolution)
+    family_resolutions = _display_family_resolutions(region, selected)
+    min_resolution = min(int(value) for value in family_resolutions) if family_resolutions else selected
+    if bool(lock_resolution):
+        return {
+            "selected_label": f"R{selected}",
+            "display_label": f"R{selected}",
+            "mode_label": "Låst",
+            "caption": f"Alla aktiva hexlager visas låsta i R{selected}.",
+            "item_note": f"Hexvisning låst till R{selected}.",
+        }
+    if min_resolution == selected:
+        return {
+            "selected_label": f"R{selected}",
+            "display_label": f"R{selected}",
+            "mode_label": "Fast",
+            "caption": f"Aktiva hexlager visas i R{selected}.",
+            "item_note": f"Hexvisning i R{selected}.",
+        }
+    return {
+        "selected_label": f"R{selected}",
+        "display_label": f"R{selected} till R{min_resolution}",
+        "mode_label": "Zoomanpassad",
+        "caption": (
+            f"Aktiva hexlager visas i R{selected} nära kartan, och aggregeras stegvis till R{min_resolution} när du zoomar ut."
+        ),
+        "item_note": f"Hexvisning zoomanpassas från R{selected} till R{min_resolution}.",
+    }
+
+
+def _hex_family_layers(
+    region: dict[str, Any],
+    selected_resolution: int,
+    lock_resolution: bool,
+    family_key: str,
+    control_name: str,
+    build_layer: Any,
+) -> list[dict[str, Any]]:
+    layers: list[dict[str, Any]] = []
+    for resolution in _display_family_resolutions(region, int(selected_resolution)):
+        layer = build_layer(int(resolution))
+        if layer is None:
+            continue
+        layer["name"] = f"{control_name} R{int(resolution)}"
+        layer["control_name"] = control_name
+        layer["auto_resolution_group"] = str(family_key)
+        layer["auto_resolution"] = int(resolution)
+        layer["selected_resolution"] = int(selected_resolution)
+        layer["lock_selected_resolution"] = bool(lock_resolution)
+        layers.append(layer)
+    return layers
 
 
 def _class_breaks(solar_rules: dict[str, Any]) -> list[dict[str, Any]]:
@@ -698,6 +826,7 @@ def _wind_frame(
     return _filter_frame_to_display_geometries(frame, _h3_display_geometry_path(region, resolution))
 
 
+@st.cache_data(show_spinner=False)
 def _landscape_frame(
     region: dict[str, Any],
     landscape_manifest: dict[str, Any],
@@ -728,13 +857,21 @@ def _cluster_legend_items(landscape_manifest: dict[str, Any]) -> list[dict[str, 
 
 def _landscape_type_legend_items(landscape_manifest: dict[str, Any]) -> list[dict[str, str]]:
     labels = landscape_manifest.get("landscape_type_labels") or {}
-    colors = landscape_manifest.get("landscape_type_colors") or V10_TYPE_COLORS
-    return [{"label": f"{key} - {labels.get(key, key)}", "color": colors.get(key, "#999999")} for key in sorted(colors)]
+    colors = landscape_type_display_colors(landscape_manifest)
+    return [{"label": str(labels.get(key, key)), "color": colors.get(key, "#999999")} for key in sorted(colors)]
 
 
 def _factor_legend_items() -> list[dict[str, str]]:
-    labels = ["≤ -2", "-1", "0", "1", "≥ 2"]
-    return [{"label": label, "color": color} for label, (_, color) in zip(labels, FACTOR_STOPS)]
+    items: list[dict[str, str]] = []
+    for idx, (_, color) in enumerate(FACTOR_STOPS):
+        if idx == 0:
+            label = "Blå = låg laddning"
+        elif idx == len(FACTOR_STOPS) - 1:
+            label = "Röd = hög laddning"
+        else:
+            label = " "
+        items.append({"label": label, "color": color})
+    return items
 
 
 def _default_solar_params(solar_rules: dict[str, Any]) -> dict[str, float]:
@@ -886,8 +1023,9 @@ def _render_layers(
     if not layers:
         st.info("Välj minst ett kartlager.")
         return
+    adjusted_layers = _apply_layer_opacity_state(layers, opacity_key_prefix or "combined")
     map_html = build_layered_hex_map_html(
-        layers,
+        adjusted_layers,
         center=list(region.get("default_map_center", [55.14, 14.92])),
         zoom=int(region.get("default_zoom", 9)),
         bounds=region.get("default_map_bounds"),
@@ -901,6 +1039,7 @@ def _render_layers(
     with map_center:
         components.html(map_html, height=820)
         if opacity_key_prefix:
+            _hex_opacity_controls(adjusted_layers, opacity_key_prefix)
             _render_opacity_control(opacity_key_prefix)
 
 
@@ -922,6 +1061,9 @@ def _potential_layer(
         "default_visible": True,
         "stroke": False,
         "weight": 0.0,
+        "layer_kind": "hex",
+        "opacity_family": name,
+        "opacity_label": name,
     }
 
 
@@ -996,6 +1138,7 @@ def _solar_polygon_layer(
         "dash_array": "6 4",
         "use_global_opacity": False,
         "z_index": 430,
+        "layer_kind": "vector",
     }
 
 
@@ -1014,6 +1157,7 @@ def _wind_vector_layer(
         "legend_id": "potential_classes",
         "legend_title": "Potentialklasser",
         "default_visible": True,
+        "layer_kind": "vector",
     }
 
 
@@ -1262,6 +1406,7 @@ def _wind_source_vector_layers(
                     "weight": 2.0,
                     "point_radius": int(layer_spec.point_radius),
                     "use_global_opacity": False,
+                    "layer_kind": "vector",
                 }
             )
     return map_layers
@@ -1320,6 +1465,7 @@ def _wind_polygon_source_layers(
                     "weight": 2.0,
                     "point_radius": int(layer_spec.point_radius),
                     "use_global_opacity": False,
+                    "layer_kind": "vector",
                 }
             )
     return map_layers
@@ -1349,6 +1495,7 @@ def _wind_polygon_group_layers(runtime_result: dict[str, Any]) -> list[dict[str,
                 "weight": 2.2,
                 "point_radius": 6,
                 "use_global_opacity": False,
+                "layer_kind": "vector",
             }
         )
     return map_layers
@@ -1375,6 +1522,7 @@ def _wind_polygon_combined_layer(runtime_result: dict[str, Any]) -> dict[str, An
         "dash_array": "7 5",
         "use_global_opacity": False,
         "z_index": 440,
+        "layer_kind": "vector",
     }
 
 
@@ -1410,7 +1558,7 @@ def _wind_polygon_group_summary_frame(
 
 
 @st.cache_data(show_spinner=False)
-def _wind_r10_neighbor_map(display_geometry_path: str) -> dict[str, list[str]]:
+def _wind_runtime_hex_neighbor_map(display_geometry_path: str) -> dict[str, list[str]]:
     land_hexes = set(load_h3_display_geometries(display_geometry_path))
     neighbor_map: dict[str, list[str]] = {}
     for hex_id in land_hexes:
@@ -1500,14 +1648,25 @@ def _wind_runtime_hex_core_scores(frame: pd.DataFrame, neighbor_map: dict[str, l
     return work
 
 
-def _wind_runtime_hex_color(area_share_pct: float, core_score: float) -> str:
+def _wind_runtime_hex_color(area_share_pct: float, core_score: float, zone_size: int) -> str:
     class_spec = _wind_share_class_spec(area_share_pct)
-    if float(area_share_pct) <= 0.0:
-        intensity = max(0.0, min(1.0, float(core_score))) ** 0.85
-    elif float(area_share_pct) >= 80.0:
-        intensity = max(0.0, min(1.0, float(core_score))) ** 0.85
-    else:
-        intensity = (max(0.0, min(1.0, float(core_score))) ** 0.85) * 0.55
+    share_value = float(area_share_pct)
+    core_value = max(0.0, min(1.0, float(core_score)))
+    zone_size_value = max(0, int(zone_size))
+    if zone_size_value <= 1:
+        return str(class_spec["base_color"])
+
+    if share_value <= 0.0:
+        core_target = _mix_hex_colors(str(class_spec["core_color"]), "#180000", min(1.0, float(zone_size_value) / 150.0))
+        intensity = (core_value ** 0.82) * min(1.0, 0.48 + (float(zone_size_value) / 120.0))
+        return _mix_hex_colors(str(class_spec["base_color"]), core_target, intensity)
+
+    if share_value >= 80.0:
+        core_target = _mix_hex_colors(str(class_spec["core_color"]), "#003b16", min(1.0, max(0.0, float(zone_size_value - 4)) / 40.0))
+        intensity = (core_value ** 0.86) * min(0.82, 0.36 + (float(zone_size_value) / 70.0))
+        return _mix_hex_colors(str(class_spec["base_color"]), core_target, intensity)
+
+    intensity = (core_value ** 0.9) * min(0.56, 0.16 + (float(zone_size_value) / 52.0))
     return _mix_hex_colors(str(class_spec["base_color"]), str(class_spec["core_color"]), intensity)
 
 
@@ -1515,14 +1674,26 @@ def _wind_runtime_hex_color(area_share_pct: float, core_score: float) -> str:
 def _build_wind_runtime_hex_layer_data(
     combined_geojson_json: str,
     display_geometry_path: str,
+    target_resolution: int,
 ) -> pd.DataFrame:
     combined_geojson = json.loads(combined_geojson_json)
-    raw_share = runtime_combined_hex_frame(combined_geojson, WIND_POLYGON_HEX_RESOLUTION, [])
+    base_share = runtime_combined_hex_frame(combined_geojson, WIND_RUNTIME_BASE_RESOLUTION, [])
+    raw_share = pd.DataFrame(columns=["hex_id", "potential_area_share_pct"])
+    if not base_share.empty and "hex_id" in base_share.columns:
+        raw_share = base_share[["hex_id", "wind_score"]].rename(columns={"wind_score": "potential_area_share_pct"}).copy()
+        raw_share["hex_id"] = raw_share["hex_id"].astype(str)
+        raw_share["potential_area_share_pct"] = raw_share["potential_area_share_pct"].fillna(0.0).astype(float).clip(lower=0.0, upper=100.0)
+        if int(target_resolution) < WIND_RUNTIME_BASE_RESOLUTION:
+            raw_share["hex_id"] = raw_share["hex_id"].map(lambda value: str(h3.cell_to_parent(str(value), int(target_resolution))))
+            raw_share = (
+                raw_share.groupby("hex_id", as_index=False)["potential_area_share_pct"]
+                .mean()
+            )
     display_geometries = load_h3_display_geometries(display_geometry_path)
     frame = pd.DataFrame({"hex_id": list(display_geometries.keys())})
     if not raw_share.empty and "hex_id" in raw_share.columns:
         frame = frame.merge(
-            raw_share[["hex_id", "wind_score"]].rename(columns={"wind_score": "potential_area_share_pct"}),
+            raw_share[["hex_id", "potential_area_share_pct"]],
             on="hex_id",
             how="left",
         )
@@ -1537,29 +1708,42 @@ def _build_wind_runtime_hex_layer_data(
     frame["share_class_label"] = [item[1] for item in class_specs]
     frame["share_class_index"] = [item[2] for item in class_specs]
 
-    frame = _wind_runtime_hex_core_scores(frame, _wind_r10_neighbor_map(display_geometry_path))
+    frame = _wind_runtime_hex_core_scores(frame, _wind_runtime_hex_neighbor_map(display_geometry_path))
     frame["fill"] = [
-        _wind_runtime_hex_color(share_value, core_value)
-        for share_value, core_value in zip(frame["potential_area_share_pct"], frame["core_score"])
+        _wind_runtime_hex_color(share_value, core_value, zone_size)
+        for share_value, core_value, zone_size in zip(
+            frame["potential_area_share_pct"],
+            frame["core_score"],
+            frame["zone_size"],
+        )
     ]
     frame["stroke"] = frame["fill"].map(lambda value: _mix_hex_colors(str(value), "#3a3a3a", 0.28))
     return frame.sort_values("hex_id").reset_index(drop=True)
 
 
-def _wind_runtime_hex_layer_frame(region: dict[str, Any], runtime_result: dict[str, Any]) -> pd.DataFrame:
+def _wind_runtime_hex_layer_frame(
+    region: dict[str, Any],
+    runtime_result: dict[str, Any],
+    target_resolution: int,
+) -> pd.DataFrame:
     combined = runtime_result.get("combined")
     if not isinstance(combined, dict) or combined.get("geojson") is None:
         return pd.DataFrame()
-    display_geometry_path = _h3_display_geometry_path(region, WIND_POLYGON_HEX_RESOLUTION)
+    display_geometry_path = _h3_display_geometry_path(region, int(target_resolution))
     if not display_geometry_path:
         return pd.DataFrame()
     return _build_wind_runtime_hex_layer_data(
         json.dumps(combined["geojson"], sort_keys=True, ensure_ascii=False),
         display_geometry_path,
+        int(target_resolution),
     )
 
 
-def _wind_runtime_hex_feature_collection(frame: pd.DataFrame, display_geometry_path: str) -> dict[str, Any]:
+def _wind_runtime_hex_feature_collection(
+    frame: pd.DataFrame,
+    display_geometry_path: str,
+    target_resolution: int,
+) -> dict[str, Any]:
     display_geometries = load_h3_display_geometries(display_geometry_path)
     features: list[dict[str, Any]] = []
     for row in frame.itertuples(index=False):
@@ -1567,7 +1751,7 @@ def _wind_runtime_hex_feature_collection(frame: pd.DataFrame, display_geometry_p
         if geometry is None:
             continue
         popup = (
-            f"<strong>R10 potentialandel</strong><br>"
+            f"<strong>R{int(target_resolution)} potentialandel</strong><br>"
             f"Hex: {row.hex_id}<br>"
             f"Potentialandel: {float(row.potential_area_share_pct):.1f}%<br>"
             f"Klass: {row.share_class_label}<br>"
@@ -1589,33 +1773,60 @@ def _wind_runtime_hex_feature_collection(frame: pd.DataFrame, display_geometry_p
     return {"type": "FeatureCollection", "features": features}
 
 
-def _wind_runtime_hex_layer(region: dict[str, Any], runtime_result: dict[str, Any]) -> dict[str, Any] | None:
-    display_geometry_path = _h3_display_geometry_path(region, WIND_POLYGON_HEX_RESOLUTION)
+def _wind_runtime_hex_layer(
+    region: dict[str, Any],
+    runtime_result: dict[str, Any],
+    target_resolution: int,
+    control_name: str | None = None,
+) -> dict[str, Any] | None:
+    display_geometry_path = _h3_display_geometry_path(region, int(target_resolution))
     if not display_geometry_path:
         return None
-    frame = _wind_runtime_hex_layer_frame(region, runtime_result)
+    frame = _wind_runtime_hex_layer_frame(region, runtime_result, int(target_resolution))
     if frame.empty:
         return None
     return {
-        "name": f"R{WIND_POLYGON_HEX_RESOLUTION} potentialandel",
-        "feature_collection": _wind_runtime_hex_feature_collection(frame, display_geometry_path),
+        "name": str(control_name or f"R{int(target_resolution)} potentialandel"),
+        "feature_collection": _wind_runtime_hex_feature_collection(frame, display_geometry_path, int(target_resolution)),
         "fill_property": "fill",
         "stroke_property": "stroke",
         "legend_items": _wind_share_legend_items(),
         "legend_id": "wind_polygon_hex_share",
-        "legend_title": f"R{WIND_POLYGON_HEX_RESOLUTION} potentialandel",
+        "legend_title": f"R{int(target_resolution)} potentialandel",
         "default_visible": True,
         "stroke": False,
         "weight": 0.0,
         "point_radius": 4,
         "z_index": 410,
+        "layer_kind": "hex",
+        "opacity_family": str(control_name or "Vindpotentialandel"),
+        "opacity_label": str(control_name or "Vindpotentialandel"),
     }
+
+
+def _wind_runtime_hex_layers(
+    region: dict[str, Any],
+    runtime_result: dict[str, Any],
+    preferred_resolution: int,
+    lock_resolution: bool,
+) -> list[dict[str, Any]]:
+    preferred = min(int(preferred_resolution), WIND_RUNTIME_BASE_RESOLUTION)
+    return _hex_family_layers(
+        region,
+        preferred,
+        bool(lock_resolution),
+        "wind_runtime_share",
+        "Vindpotentialandel",
+        lambda resolution: _wind_runtime_hex_layer(region, runtime_result, int(resolution)),
+    )
 
 
 def _wind_polygon_preview_state(
     region: dict[str, Any],
     ui_params: dict[str, float],
     layer_selection: dict[str, list[str]],
+    target_resolution: int,
+    lock_resolution: bool,
 ) -> dict[str, Any]:
     runtime_error: str | None = None
     runtime_result: dict[str, Any] = {"groups": {}, "combined": None, "cache_key": None}
@@ -1625,10 +1836,10 @@ def _wind_polygon_preview_state(
         runtime_error = str(exc)
 
     layers: list[dict[str, Any]] = []
-    hex_layer = None if runtime_error else _wind_runtime_hex_layer(region, runtime_result)
+    hex_layers = [] if runtime_error else _wind_runtime_hex_layers(region, runtime_result, int(target_resolution), bool(lock_resolution))
     combined_layer = None if runtime_error else _wind_polygon_combined_layer(runtime_result)
-    if hex_layer is not None:
-        layers.append(hex_layer)
+    if hex_layers:
+        layers.extend(hex_layers)
     if combined_layer is not None:
         layers.append(combined_layer)
     layers.extend(_wind_polygon_source_layers(ui_params, layer_selection=layer_selection))
@@ -1642,7 +1853,7 @@ def _wind_polygon_preview_state(
         "active_source_count": sum(len(layer_ids) for layer_ids in normalize_group_layer_map(layer_selection).values()),
         "active_group_count": len(runtime_result.get("groups") or {}),
         "combined_land_share_pct": (runtime_result.get("combined") or {}).get("land_share_pct"),
-        "hex_layer_available": bool(hex_layer is not None),
+        "hex_layer_available": bool(hex_layers),
     }
 
 
@@ -1650,8 +1861,9 @@ def _wind_polygon_summary_frame(
     region: dict[str, Any],
     landscape_manifest: dict[str, Any],
     runtime_result: dict[str, Any],
+    target_resolution: int,
 ) -> pd.DataFrame:
-    frame = _wind_runtime_hex_layer_frame(region, runtime_result).copy()
+    frame = _wind_runtime_hex_layer_frame(region, runtime_result, int(target_resolution)).copy()
     if frame.empty:
         return pd.DataFrame(
             columns=[
@@ -1674,7 +1886,7 @@ def _wind_polygon_summary_frame(
     frame["wind_class_label"] = frame["share_class_label"].astype(str)
     frame["wind_color"] = frame["fill"].astype(str)
 
-    landscape = _landscape_frame(region, landscape_manifest, WIND_POLYGON_HEX_RESOLUTION)
+    landscape = _landscape_frame(region, landscape_manifest, int(target_resolution))
     context_cols = [column for column in ["hex_id", "class_km", "landscape_type"] if column in landscape.columns]
     if context_cols:
         context = landscape[context_cols].drop_duplicates(subset=["hex_id"])
@@ -1791,6 +2003,9 @@ def _landscape_layer(
         "default_visible": True,
         "stroke": False,
         "weight": 0.0,
+        "layer_kind": "hex",
+        "opacity_family": name,
+        "opacity_label": name,
     }
 
 
@@ -1811,6 +2026,9 @@ def _landscape_type_layer(
         "default_visible": True,
         "stroke": False,
         "weight": 0.0,
+        "layer_kind": "hex",
+        "opacity_family": name,
+        "opacity_label": name,
     }
 
 
@@ -1849,8 +2067,14 @@ def _combined_summary(map_state: dict[str, Any], scenario_state: dict[str, Any])
 
     st.subheader("Tolkning")
     st.caption(f"Scenario: {scenario_state.get('scenario') or '-'}")
-    st.metric("Aktiva lager", len(map_state.get("layers") or []))
-    st.metric("H3-rollup", f"R{map_state.get('resolution')}")
+    resolution_info = map_state.get("resolution_info") or {}
+    metric_left, metric_center, metric_right, metric_mode = st.columns(4)
+    metric_left.metric("Aktiva lager", len(map_state.get("layers") or []))
+    metric_center.metric("Vald H3", str(resolution_info.get("selected_label", f"R{map_state.get('resolution')}")))
+    metric_right.metric("Hexvisning", str(resolution_info.get("display_label", f"R{map_state.get('resolution')}")))
+    metric_mode.metric("Läge", str(resolution_info.get("mode_label", "Fast")))
+    if resolution_info.get("caption"):
+        st.caption(str(resolution_info.get("caption")))
 
     for item in map_state.get("potential_frames") or []:
         frame = item["frame"]
@@ -1865,8 +2089,11 @@ def _combined_summary(map_state: dict[str, Any], scenario_state: dict[str, Any])
             left, right = st.columns(2)
             left.metric(mean_label, _metric_value_text(frame, score_col, mean_format))
             right.metric(high_label, f"{high_share:.1f}%")
+            item_note = item.get("resolution_note")
             item_resolution = item.get("resolution")
-            if item_resolution is not None:
+            if item_note:
+                st.caption(str(item_note))
+            elif item_resolution is not None:
                 st.caption(f"H3-rollup: R{int(item_resolution)}")
             if item.get("summary_mode") == "wind_share":
                 summary_frame = _wind_share_summary(frame)
@@ -1915,7 +2142,8 @@ def _unified_workspace_tab(
     solar_defaults = _default_solar_params(solar_rules)
     _prime_solar_builder_state(solar_defaults, saved_solar_params)
     _prime_wind_builder_state(_default_wind_params(), _selected_wind_layers())
-    h3_resolution = int(st.session_state.get("combined_h3_resolution", _preferred_h3_resolution(region, 9)))
+    h3_resolution = int(st.session_state.get("combined_h3_resolution", _preferred_h3_resolution(region, 10)))
+    lock_h3_resolution = bool(st.session_state.get("combined_lock_h3_resolution", False))
     opacity = _current_opacity("combined")
     preserve_map_view = True
     map_reset_token = _map_view_reset_token()
@@ -1944,49 +2172,69 @@ def _unified_workspace_tab(
     wind_controls_applied = False
 
     if left_panel is not None:
-        with left_panel.expander("Landskap", expanded=True):
-            show_v10 = st.checkbox("v10 landskapstyper", value=show_v10, key="show_landscape_v10")
-            show_cluster = st.checkbox("v9 kluster K=8", value=show_cluster, key="show_landscape_cluster")
-            show_factor = st.checkbox("v9 faktorlager", value=show_factor, key="show_landscape_factor")
-            selected_factor = st.selectbox(
-                "Faktor",
-                options=factors,
-                index=factors.index(selected_factor) if selected_factor in factors else 0,
-                format_func=lambda factor: f"{factor} - {factor_label(landscape_manifest, factor)}",
-                disabled=not show_factor,
-                key="combined_landscape_factor",
-            )
+        with left_panel.expander("Geografier", expanded=False):
+            with st.expander("Region", expanded=False):
+                region = _select_region(st)
 
-        h3_resolution, opacity, preserve_map_view, map_reset_token = _map_panel_controls(region, "combined", left_panel)
+            with st.expander("Landskap", expanded=True):
+                show_v10 = st.checkbox("Landskapstyper", value=show_v10, key="show_landscape_v10")
+                show_cluster = st.checkbox("Landskapstrukturer", value=show_cluster, key="show_landscape_cluster")
+                show_factor = st.checkbox("Landskapsfaktorer", value=show_factor, key="show_landscape_factor")
+                selected_factor = st.selectbox(
+                    "Faktor",
+                    options=factors,
+                    index=factors.index(selected_factor) if selected_factor in factors else 0,
+                    format_func=lambda factor: f"{factor} - {factor_label(landscape_manifest, factor)}",
+                    disabled=not show_factor,
+                    key="combined_landscape_factor",
+                )
 
-        with left_panel.expander("Potential", expanded=True):
-            st.caption("Välj vilka lagerfamiljer som ska visas i kartan.")
-            show_user_wind = st.checkbox("Egen vindpotential", value=show_user_wind, key="show_user_wind")
-            show_default_wind = st.checkbox("Default vindpotential", value=show_default_wind, key="show_default_wind")
-            show_user_solar = st.checkbox("Egen solpotential", value=show_user_solar, key="show_user_solar")
-            show_default_solar = st.checkbox("Default solpotential", value=show_default_solar, key="show_default_solar")
+            h3_resolution, lock_h3_resolution, opacity, preserve_map_view, map_reset_token = _map_panel_controls(region, "combined", st)
 
-        with left_panel.expander("Vindpotential", expanded=True):
-            st.caption("Bygg vindpotential direkt i samma vy. Kartan visar alltid både den kombinerade polygonen och R10-hexlagret.")
-            st.caption("Separat sparning behövs inte längre i den här arbetsvyn.")
-            wind_selected_layers, wind_ui_params, wind_controls_applied = _wind_group_controls("wind_unified", language=WIND_CONTROL_LANGUAGE)
+            with st.expander("Vindpotential", expanded=False):
+                show_user_wind = st.checkbox("Egen vindpotential", value=show_user_wind, key="show_user_wind")
+                show_default_wind = st.checkbox("Default vindpotential", value=show_default_wind, key="show_default_wind")
+                st.caption(
+                    f"Bygg vindpotential direkt i samma vy. Potentialandelen beräknas alltid i R{WIND_RUNTIME_BASE_RESOLUTION} "
+                    f"och visas här som polygon plus hexagoner med R{h3_resolution} som vald detaljnivå."
+                )
+                if lock_h3_resolution:
+                    st.caption("Vald upplösning är låst. Kartan visar exakt den upplösningen även om den blir brusigare vid utzoomning.")
+                else:
+                    st.caption("Zoomanpassning är aktiv. Kartan kan visa grövre aggregat när du zoomar ut långt.")
+                st.caption("Separat sparning behövs inte längre i den här arbetsvyn.")
+                wind_selected_layers, wind_ui_params, wind_controls_applied = _wind_group_controls("wind_unified", language=WIND_CONTROL_LANGUAGE)
 
-        with left_panel.expander("Solpotential", expanded=False):
-            st.caption("Bygg solpotential direkt i samma vy. Kartan visar alltid både hexlager och ett sammanhängande polygonlager.")
-            if st.button("Återställ sol-default", key="reset_solar_builder_unified"):
-                _reset_builder("solar_builder", solar_defaults)
-            _builder_slider("solar_builder", "base_score", "Basnivå", 30.0, 75.0, 1.0, solar_defaults, "Startpoäng innan landskapsvillkor läggs till.")
-            _builder_slider("solar_builder", "grid_access_bonus", "Infrastruktur/åtkomst-bonus", 0.0, 20.0, 1.0, solar_defaults, "Proxy för hur mycket närhet till väg/elanslutning ska höja solpotentialen.")
-            _builder_slider("solar_builder", "everyday_matrix_bonus", "Öppet vardagslandskap", 0.0, 30.0, 1.0, solar_defaults, "Bonus för bredare vardags-/produktionslandskap.")
-            _builder_slider("solar_builder", "coastal_penalty", "Kust- och låglandsstraff", 0.0, 35.0, 1.0, solar_defaults, "Sänker potential i kustnära och låglänta landskap.")
-            _builder_slider("solar_builder", "terrain_penalty", "Terräng- och dalstraff", 0.0, 35.0, 1.0, solar_defaults, "Sänker potential där relief och sprickdalar dominerar.")
-            _builder_slider("solar_builder", "protected_penalty", "Skog/habitat-straff", 0.0, 40.0, 1.0, solar_defaults, "Sänker potential i skyddade skogs- och habitatmiljöer.")
-            _builder_slider("solar_builder", "settlement_penalty", "Bosättningsstraff", 0.0, 35.0, 1.0, solar_defaults, "Sänker potential där bebyggelse och tät struktur dominerar.")
-            if st.button("Spara solpotential", type="primary", use_container_width=True, key="save_solar_unified"):
-                _save_solar_potential(_state_params("solar_builder", solar_defaults), h3_resolution)
-                st.success("Solpotential sparad.")
+            with st.expander("Solpotential", expanded=False):
+                show_user_solar = st.checkbox("Egen solpotential", value=show_user_solar, key="show_user_solar")
+                show_default_solar = st.checkbox("Default solpotential", value=show_default_solar, key="show_default_solar")
+                st.caption("Bygg solpotential direkt i samma vy. Kartan visar alltid både hexlager och ett sammanhängande polygonlager.")
+                if st.button("Återställ sol-default", key="reset_solar_builder_unified"):
+                    _reset_builder("solar_builder", solar_defaults)
+                _builder_slider("solar_builder", "base_score", "Basnivå", 30.0, 75.0, 1.0, solar_defaults, "Startpoäng innan landskapsvillkor läggs till.")
+                _builder_slider("solar_builder", "grid_access_bonus", "Infrastruktur/åtkomst-bonus", 0.0, 20.0, 1.0, solar_defaults, "Proxy för hur mycket närhet till väg/elanslutning ska höja solpotentialen.")
+                _builder_slider("solar_builder", "everyday_matrix_bonus", "Öppet vardagslandskap", 0.0, 30.0, 1.0, solar_defaults, "Bonus för bredare vardags-/produktionslandskap.")
+                _builder_slider("solar_builder", "coastal_penalty", "Kust- och låglandsstraff", 0.0, 35.0, 1.0, solar_defaults, "Sänker potential i kustnära och låglänta landskap.")
+                _builder_slider("solar_builder", "terrain_penalty", "Terräng- och dalstraff", 0.0, 35.0, 1.0, solar_defaults, "Sänker potential där relief och sprickdalar dominerar.")
+                _builder_slider("solar_builder", "protected_penalty", "Skog/habitat-straff", 0.0, 40.0, 1.0, solar_defaults, "Sänker potential i skyddade skogs- och habitatmiljöer.")
+                _builder_slider("solar_builder", "settlement_penalty", "Bosättningsstraff", 0.0, 35.0, 1.0, solar_defaults, "Sänker potential där bebyggelse och tät struktur dominerar.")
+                if st.button("Spara solpotential", type="primary", use_container_width=True, key="save_solar_unified"):
+                    _save_solar_potential(_state_params("solar_builder", solar_defaults), h3_resolution)
+                    st.success("Solpotential sparad.")
+
+        with left_panel.expander("Energimodellering", expanded=False):
+            st.caption("Levereras av EML")
+            st.markdown(f"[Energy Modelling Lab]({EML_PROVIDER_URL})")
+            with st.expander("Scenarier", expanded=False):
+                scenario_state = _scenario_state(region, st)
+
+        with left_panel.expander("Social acceptans", expanded=False):
+            st.caption("Levereras av IVL")
+            st.caption("Kommer i augusti")
+            st.markdown(f"[IVL Svenska Miljöinstitutet]({IVL_PROVIDER_URL})")
 
     display_geometry_path = _h3_display_geometry_path(region, h3_resolution)
+    resolution_info = _hex_display_rule(region, h3_resolution, lock_h3_resolution)
     solar_params = _state_params("solar_builder", solar_defaults)
     st.session_state["solar_builder_params"] = solar_params
     st.session_state["wind_builder_params"] = wind_ui_params
@@ -1997,19 +2245,65 @@ def _unified_workspace_tab(
 
     if show_default_solar:
         default_solar_frame = _default_solar_frame(region, landscape_manifest, potential_manifest, solar_rules, h3_resolution)
-        layers.append(_potential_layer(f"Default solpotential R{h3_resolution}", default_solar_frame, "solar", display_geometry_path, _solar_legend_items(solar_rules)))
+        layers.extend(
+            _hex_family_layers(
+                region,
+                h3_resolution,
+                lock_h3_resolution,
+                "default_solar_hex",
+                "Default solpotential",
+                lambda resolution: _potential_layer(
+                    "Default solpotential",
+                    _default_solar_frame(region, landscape_manifest, potential_manifest, solar_rules, int(resolution)),
+                    "solar",
+                    _h3_display_geometry_path(region, int(resolution)),
+                    _solar_legend_items(solar_rules),
+                ),
+            )
+        )
         default_solar_polygon = _solar_polygon_layer("Default solyta", default_solar_frame, display_geometry_path, stroke_color="#d97706", fill_color="#d97706")
         if default_solar_polygon is not None:
             layers.append(default_solar_polygon)
-        potential_frames.append({"label": "Default solpotential", "technology": "solar", "frame": default_solar_frame, "resolution": h3_resolution})
+        potential_frames.append(
+            {
+                "label": "Default solpotential",
+                "technology": "solar",
+                "frame": default_solar_frame,
+                "resolution": h3_resolution,
+                "resolution_note": resolution_info["item_note"],
+            }
+        )
 
     if show_user_solar:
         user_solar_frame = _custom_solar_frame(region, landscape_manifest, solar_rules, h3_resolution, solar_params)
-        layers.append(_potential_layer(f"Egen solpotential R{h3_resolution}", user_solar_frame, "solar", display_geometry_path, _solar_legend_items(solar_rules)))
+        layers.extend(
+            _hex_family_layers(
+                region,
+                h3_resolution,
+                lock_h3_resolution,
+                "user_solar_hex",
+                "Egen solpotential",
+                lambda resolution: _potential_layer(
+                    "Egen solpotential",
+                    _custom_solar_frame(region, landscape_manifest, solar_rules, int(resolution), solar_params),
+                    "solar",
+                    _h3_display_geometry_path(region, int(resolution)),
+                    _solar_legend_items(solar_rules),
+                ),
+            )
+        )
         user_solar_polygon = _solar_polygon_layer("Egen solyta", user_solar_frame, display_geometry_path, stroke_color="#b45309", fill_color="#b45309")
         if user_solar_polygon is not None:
             layers.append(user_solar_polygon)
-        potential_frames.append({"label": "Egen solpotential", "technology": "solar", "frame": user_solar_frame, "resolution": h3_resolution})
+        potential_frames.append(
+            {
+                "label": "Egen solpotential",
+                "technology": "solar",
+                "frame": user_solar_frame,
+                "resolution": h3_resolution,
+                "resolution_note": resolution_info["item_note"],
+            }
+        )
         unified_notes.append("Solpolygonlagret byggs från de hex som klassas som hög eller mycket hög solpotential i aktuell H3-upplösning.")
 
     if show_default_wind:
@@ -2025,7 +2319,25 @@ def _unified_workspace_tab(
             wind_acceptance_rollup_frame(default_wind_source_frame, h3_resolution, _class_breaks(solar_rules)),
             display_geometry_path,
         )
-        layers.append(_potential_layer(f"Default vindpotential R{h3_resolution}", default_wind_frame, "wind", display_geometry_path, _solar_legend_items(solar_rules)))
+        layers.extend(
+            _hex_family_layers(
+                region,
+                h3_resolution,
+                lock_h3_resolution,
+                "default_wind_hex",
+                "Default vindpotential",
+                lambda resolution: _potential_layer(
+                    "Default vindpotential",
+                    _filter_frame_to_display_geometries(
+                        wind_acceptance_rollup_frame(default_wind_source_frame, int(resolution), _class_breaks(solar_rules)),
+                        _h3_display_geometry_path(region, int(resolution)),
+                    ),
+                    "wind",
+                    _h3_display_geometry_path(region, int(resolution)),
+                    _solar_legend_items(solar_rules),
+                ),
+            )
+        )
         layers.append(
             _wind_vector_layer(
                 "Default vindpotential vektor",
@@ -2034,39 +2346,113 @@ def _unified_workspace_tab(
                 _solar_legend_items(solar_rules),
             )
         )
-        potential_frames.append({"label": "Default vindpotential", "technology": "wind", "frame": default_wind_frame, "resolution": h3_resolution})
+        potential_frames.append(
+            {
+                "label": "Default vindpotential",
+                "technology": "wind",
+                "frame": default_wind_frame,
+                "resolution": h3_resolution,
+                "resolution_note": resolution_info["item_note"],
+            }
+        )
 
     custom_wind_preview_state: dict[str, Any] | None = None
     if show_user_wind:
-        custom_wind_preview_state = _wind_polygon_preview_state(region, wind_ui_params, wind_selected_layers)
+        custom_wind_preview_state = _wind_polygon_preview_state(
+            region,
+            wind_ui_params,
+            wind_selected_layers,
+            h3_resolution,
+            lock_h3_resolution,
+        )
         layers.extend(custom_wind_preview_state["layers"])
         if custom_wind_preview_state["runtime_error"]:
             unified_notes.append(f"Vindruntime kunde inte köras: {custom_wind_preview_state['runtime_error']}")
         else:
-            custom_wind_summary = _wind_polygon_summary_frame(region, landscape_manifest, custom_wind_preview_state["runtime_result"])
+            custom_wind_summary = _wind_polygon_summary_frame(
+                region,
+                landscape_manifest,
+                custom_wind_preview_state["runtime_result"],
+                h3_resolution,
+            )
             potential_frames.append(
                 {
                     "label": "Egen vindpotential",
                     "technology": "wind",
                     "frame": custom_wind_summary,
-                    "resolution": WIND_POLYGON_HEX_RESOLUTION,
+                    "resolution": h3_resolution,
                     "high_classes": ["share_8", "share_9"],
                     "mean_label": "Medelandel",
                     "mean_format": "{value:.1f}%",
                     "high_label": "Andel >65%",
                     "summary_mode": "wind_share",
+                    "resolution_note": resolution_info["item_note"],
                 }
             )
-            unified_notes.append("Vindpotentialen visar både den kombinerade etableringspolygonen och R10-hex med potentialandel från samma geometri.")
+            if lock_h3_resolution:
+                unified_notes.append(
+                    f"Vindpotentialen beräknas i R{WIND_RUNTIME_BASE_RESOLUTION} och visas låst i vald upplösning R{h3_resolution}."
+                )
+            else:
+                unified_notes.append(
+                    f"Vindpotentialen beräknas i R{WIND_RUNTIME_BASE_RESOLUTION} och visar polygonen tillsammans med zoomanpassade hexagonlager "
+                    f"med R{h3_resolution} som prefererad detaljnivå."
+                )
 
     if show_v10 or show_cluster or show_factor:
         landscape_frame = _landscape_frame(region, landscape_manifest, h3_resolution)
         if show_v10:
-            layers.append(_landscape_type_layer(f"v10 landskapstyper R{h3_resolution}", landscape_frame, landscape_manifest, display_geometry_path))
+            layers.extend(
+                _hex_family_layers(
+                    region,
+                    h3_resolution,
+                    lock_h3_resolution,
+                    "landscape_types_hex",
+                    "Landskapstyper",
+                    lambda resolution: _landscape_type_layer(
+                        "Landskapstyper",
+                        _landscape_frame(region, landscape_manifest, int(resolution)),
+                        landscape_manifest,
+                        _h3_display_geometry_path(region, int(resolution)),
+                    ),
+                )
+            )
         if show_cluster:
-            layers.append(_landscape_layer(f"v9 K=8 kluster R{h3_resolution}", landscape_frame, landscape_manifest, factors[0], display_geometry_path, "cluster"))
+            layers.extend(
+                _hex_family_layers(
+                    region,
+                    h3_resolution,
+                    lock_h3_resolution,
+                    "landscape_structures_hex",
+                    "Landskapstrukturer",
+                    lambda resolution: _landscape_layer(
+                        "Landskapstrukturer",
+                        _landscape_frame(region, landscape_manifest, int(resolution)),
+                        landscape_manifest,
+                        factors[0],
+                        _h3_display_geometry_path(region, int(resolution)),
+                        "cluster",
+                    ),
+                )
+            )
         if show_factor:
-            layers.append(_landscape_layer(f"v9 {selected_factor}: {factor_label(landscape_manifest, selected_factor)} R{h3_resolution}", landscape_frame, landscape_manifest, selected_factor, display_geometry_path, "factor"))
+            layers.extend(
+                _hex_family_layers(
+                    region,
+                    h3_resolution,
+                    lock_h3_resolution,
+                    f"landscape_factor_{selected_factor}",
+                    "Landskapsfaktorer",
+                    lambda resolution: _landscape_layer(
+                        "Landskapsfaktorer",
+                        _landscape_frame(region, landscape_manifest, int(resolution)),
+                        landscape_manifest,
+                        selected_factor,
+                        _h3_display_geometry_path(region, int(resolution)),
+                        "factor",
+                    ),
+                )
+            )
 
     _render_layers(
         region,
@@ -2086,6 +2472,7 @@ def _unified_workspace_tab(
                 "layers": layers,
                 "potential_frames": potential_frames,
                 "resolution": h3_resolution,
+                "resolution_info": resolution_info,
                 "landscape_active": bool(show_v10 or show_cluster or show_factor),
             },
             scenario_state,
@@ -2110,11 +2497,12 @@ def _unified_workspace_tab(
 def main() -> None:
     st.set_page_config(page_title=PAGE_TITLE, layout="wide", initial_sidebar_state="expanded")
     left_panel, main_panel, right_panel = _workspace_shell()
-    region, scenario_state = _render_region_scenario_panel(left_panel)
+    region = _select_region(None)
+    scenario_state = _scenario_state(region, None)
     context = _load_context(region)
 
-    st.session_state.setdefault("combined_h3_resolution", _preferred_h3_resolution(region, 9))
-    h3_resolution = int(st.session_state.get("combined_h3_resolution", _preferred_h3_resolution(region, 9)))
+    st.session_state.setdefault("combined_h3_resolution", _preferred_h3_resolution(region, 10))
+    h3_resolution = int(st.session_state.get("combined_h3_resolution", _preferred_h3_resolution(region, 10)))
     with main_panel:
         _workspace_header(region, scenario_state, h3_resolution)
         _unified_workspace_tab(region, scenario_state, context, left_panel, right_panel)

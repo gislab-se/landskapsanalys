@@ -48,7 +48,7 @@ def build_landscape_map_html(
     const defaultBounds = {bounds_payload};
     const mode = {mode_payload};
     const mapTitle = {title_payload};
-    const hexFillOpacity = {opacity_payload};
+    const vectorLayerOpacity = {opacity_payload};
     const legendItems = {legend_payload};
     const map = L.map('map', {{ preferCanvas: true }}).setView(defaultCenter, {int(zoom)});
 
@@ -173,7 +173,7 @@ def build_layered_hex_map_html(
     const layerSpecs = {layers_payload};
     const defaultCenter = {center_payload};
     const defaultBounds = {bounds_payload};
-    const hexFillOpacity = {opacity_payload};
+    const vectorLayerOpacity = {opacity_payload};
     const mapStateKey = {map_state_key_payload};
     const mapResetToken = {map_reset_token_payload};
     const noteTitle = {note_title_payload};
@@ -275,7 +275,6 @@ def build_layered_hex_map_html(
     const mapStartCenter = savedView ? [savedView.lat, savedView.lng] : defaultCenter;
     const mapStartZoom = savedView ? savedView.zoom : {int(zoom)};
     const map = L.map('map', {{ preferCanvas: true }}).setView(mapStartCenter, mapStartZoom);
-    map.on('moveend zoomend', storeMapView);
 
     const osm = L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
       maxZoom: 20,
@@ -297,14 +296,15 @@ def build_layered_hex_map_html(
 
     function layerFillOpacity(spec, feature) {{
       const props = (feature && feature.properties) || {{}};
+      const defaultOpacity = spec.layer_kind === 'vector' ? 1.0 : 0.78;
+      let baseOpacity = spec.fill_opacity != null ? clamp01(spec.fill_opacity, defaultOpacity) : defaultOpacity;
       if (spec.fill_opacity_property && props[spec.fill_opacity_property] != null) {{
-        return clamp01(props[spec.fill_opacity_property], hexFillOpacity);
+        baseOpacity = clamp01(props[spec.fill_opacity_property], defaultOpacity);
       }}
-      const localOpacity = spec.fill_opacity != null ? clamp01(spec.fill_opacity, hexFillOpacity) : hexFillOpacity;
-      if (spec.use_global_opacity === false) {{
-        return localOpacity;
+      if (spec.layer_kind === 'vector') {{
+        return clamp01(baseOpacity * vectorLayerOpacity, vectorLayerOpacity);
       }}
-      return clamp01(localOpacity, hexFillOpacity);
+      return baseOpacity;
     }}
 
     function layerFillColor(spec, feature) {{
@@ -332,10 +332,17 @@ def build_layered_hex_map_html(
     }}
 
     function layerStrokeOpacity(spec, fillOpacity) {{
-      if (spec.stroke_opacity != null) {{
-        return clamp01(spec.stroke_opacity, Math.min(0.85, fillOpacity + 0.1));
+      const defaultOpacity = Math.min(0.85, fillOpacity + 0.1);
+      const baseOpacity = spec.stroke_opacity != null
+        ? clamp01(spec.stroke_opacity, defaultOpacity)
+        : defaultOpacity;
+      if (spec.layer_kind === 'vector') {{
+        return clamp01(baseOpacity * vectorLayerOpacity, baseOpacity);
       }}
-      return Math.min(0.85, fillOpacity + 0.1);
+      if (spec.stroke_opacity != null) {{
+        return clamp01(spec.stroke_opacity, defaultOpacity);
+      }}
+      return defaultOpacity;
     }}
 
     function layerStrokeEnabled(spec, strokeWeight, strokeOpacity) {{
@@ -358,13 +365,15 @@ def build_layered_hex_map_html(
     const overlays = {{}};
     const renderedLayers = [];
     const layerRecords = [];
-    layerSpecs.forEach(function(spec, index) {{
+    const autoFamilies = {{}};
+
+    function buildGeoJsonLayer(spec, index) {{
       const paneName = 'overlay-pane-' + index;
       const pane = map.createPane(paneName);
       const zIndex = Number.isFinite(Number(spec.z_index)) ? Number(spec.z_index) : (400 + index);
       pane.style.zIndex = String(zIndex);
 
-      const layer = L.geoJSON(spec.feature_collection, {{
+      return L.geoJSON(spec.feature_collection, {{
         pane: paneName,
         style: function(feature) {{
           const fillOpacity = layerFillOpacity(spec, feature);
@@ -402,14 +411,145 @@ def build_layered_hex_map_html(
           itemLayer.bindPopup(popupHtml(spec, feature));
         }}
       }});
-      overlays[spec.name] = layer;
+    }}
+
+    layerSpecs.forEach(function(spec, index) {{
+      const layer = buildGeoJsonLayer(spec, index);
       renderedLayers.push(layer);
+
+      const autoGroupId = spec.auto_resolution_group || '';
+      if (autoGroupId) {{
+        if (!autoFamilies[autoGroupId]) {{
+          autoFamilies[autoGroupId] = {{
+            id: autoGroupId,
+            controlName: spec.control_name || spec.name,
+            selectedResolution: Number(spec.selected_resolution),
+            lockSelectedResolution: Boolean(spec.lock_selected_resolution),
+            defaultVisible: spec.default_visible !== false,
+            controller: L.layerGroup(),
+            activeResolution: null,
+            activeLayer: null,
+            layers: []
+          }};
+        }}
+        autoFamilies[autoGroupId].layers.push({{
+          resolution: Number(spec.auto_resolution),
+          minZoom: Number.isFinite(Number(spec.auto_min_zoom)) ? Number(spec.auto_min_zoom) : 0,
+          layer: layer
+        }});
+        return;
+      }}
+
+      overlays[spec.name] = layer;
       layerRecords.push({{ name: spec.name, layer: layer }});
       const shouldShow = savedOverlayVisibility && Object.prototype.hasOwnProperty.call(savedOverlayVisibility, spec.name)
         ? Boolean(savedOverlayVisibility[spec.name])
         : (spec.default_visible !== false);
       if (shouldShow) {{
         layer.addTo(map);
+      }}
+    }});
+
+    const autoFamilyRecords = Object.values(autoFamilies);
+
+    function roundScaleValue(num) {{
+      const digits = Math.pow(10, String(Math.floor(num)).length - 1);
+      const normalized = num / digits;
+      let rounded = digits;
+      if (normalized >= 10) {{
+        rounded = 10 * digits;
+      }} else if (normalized >= 5) {{
+        rounded = 5 * digits;
+      }} else if (normalized >= 3) {{
+        rounded = 3 * digits;
+      }} else if (normalized >= 2) {{
+        rounded = 2 * digits;
+      }}
+      return rounded;
+    }}
+
+    function currentMetricScaleValue() {{
+      const maxWidth = 160;
+      const centerY = map.getSize().y / 2;
+      const leftPoint = map.containerPointToLatLng([0, centerY]);
+      const rightPoint = map.containerPointToLatLng([maxWidth, centerY]);
+      const maxMeters = map.distance(leftPoint, rightPoint);
+      if (!Number.isFinite(maxMeters) || maxMeters <= 0) {{
+        return 0;
+      }}
+      return roundScaleValue(maxMeters);
+    }}
+
+    function autoResolutionFromScale(selectedResolution, scaleMeters) {{
+      let desiredResolution = 10;
+      if (scaleMeters >= 50000) {{
+        desiredResolution = 6;
+      }} else if (scaleMeters >= 20000) {{
+        desiredResolution = 7;
+      }} else if (scaleMeters >= 10000) {{
+        desiredResolution = 8;
+      }} else if (scaleMeters >= 5000) {{
+        desiredResolution = 9;
+      }}
+      return Math.min(Number(selectedResolution), desiredResolution);
+    }}
+
+    function desiredAutoFamilyEntry(family) {{
+      const sortedLayers = family.layers
+        .slice()
+        .sort(function(left, right) {{ return right.resolution - left.resolution; }});
+      if (sortedLayers.length === 0) {{
+        return null;
+      }}
+
+      if (family.lockSelectedResolution) {{
+        const locked = sortedLayers.find(function(entry) {{ return entry.resolution === family.selectedResolution; }});
+        return locked || sortedLayers[0];
+      }}
+
+      const selectedResolution = Number.isFinite(family.selectedResolution)
+        ? family.selectedResolution
+        : sortedLayers[0].resolution;
+      const scaleMeters = currentMetricScaleValue();
+      const desiredResolution = autoResolutionFromScale(selectedResolution, scaleMeters);
+      const eligible = sortedLayers.filter(function(entry) {{ return entry.resolution <= desiredResolution; }});
+      const candidates = eligible.length > 0 ? eligible : sortedLayers;
+      return candidates[0] || sortedLayers[sortedLayers.length - 1];
+    }}
+
+    function syncAutoFamily(family) {{
+      const desired = desiredAutoFamilyEntry(family);
+      if (!desired) {{
+        return;
+      }}
+
+      if (family.activeLayer && family.activeLayer !== desired.layer) {{
+        family.controller.removeLayer(family.activeLayer);
+      }}
+
+      family.activeLayer = desired.layer;
+      family.activeResolution = desired.resolution;
+
+      if (!map.hasLayer(family.controller)) {{
+        family.controller.clearLayers();
+        return;
+      }}
+
+      if (!family.controller.hasLayer(desired.layer)) {{
+        family.controller.clearLayers();
+        family.controller.addLayer(desired.layer);
+      }}
+    }}
+
+    autoFamilyRecords.forEach(function(family) {{
+      overlays[family.controlName] = family.controller;
+      layerRecords.push({{ name: family.controlName, layer: family.controller }});
+      const shouldShow = savedOverlayVisibility && Object.prototype.hasOwnProperty.call(savedOverlayVisibility, family.controlName)
+        ? Boolean(savedOverlayVisibility[family.controlName])
+        : family.defaultVisible;
+      if (shouldShow) {{
+        family.controller.addTo(map);
+        syncAutoFamily(family);
       }}
     }});
 
@@ -426,7 +566,27 @@ def build_layered_hex_map_html(
       }});
       viewStorage.setItem(storageKey('overlays'), JSON.stringify(payload));
     }}
-    map.on('overlayadd overlayremove', storeOverlayVisibility);
+    map.on('overlayadd', function(event) {{
+      autoFamilyRecords.forEach(function(family) {{
+        if (event.layer === family.controller) {{
+          syncAutoFamily(family);
+        }}
+      }});
+      storeOverlayVisibility();
+    }});
+    map.on('overlayremove', function(event) {{
+      autoFamilyRecords.forEach(function(family) {{
+        if (event.layer === family.controller) {{
+          family.controller.clearLayers();
+        }}
+      }});
+      storeOverlayVisibility();
+    }});
+    map.on('moveend', storeMapView);
+    map.on('zoomend', function() {{
+      autoFamilyRecords.forEach(syncAutoFamily);
+      storeMapView();
+    }});
     storeOverlayVisibility();
 
     const note = L.control({{ position: 'topright' }});
