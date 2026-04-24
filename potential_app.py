@@ -279,12 +279,12 @@ def _panel_shell() -> tuple[Any | None, Any | None]:
     left_col, left_toggle_col, right_toggle_col, right_col = st.columns([1, 0.05, 0.05, 1], gap="small")
     with left_toggle_col:
         st.markdown('<span id="left-panel-toggle-anchor"></span>', unsafe_allow_html=True)
-        if st.button("<" if left_open else ">", key="left_panel_edge_toggle", help="Visa/dÃ¶lj kartlager"):
+        if st.button("<" if left_open else ">", key="left_panel_edge_toggle", help="Visa/dölj kartlager"):
             _toggle_panel(LEFT_PANEL_OPEN_KEY)
             st.rerun()
     with right_toggle_col:
         st.markdown('<span id="right-panel-toggle-anchor"></span>', unsafe_allow_html=True)
-        if st.button(">" if right_open else "<", key="right_panel_edge_toggle", help="Visa/dÃ¶lj kontext"):
+        if st.button(">" if right_open else "<", key="right_panel_edge_toggle", help="Visa/dölj kontext"):
             _toggle_panel(RIGHT_PANEL_OPEN_KEY)
             st.rerun()
 
@@ -420,7 +420,7 @@ def _scenario_sidebar(region: dict[str, Any]) -> dict[str, Any]:
     st.sidebar.header("Scenarier")
 
     if scenario_manifest is None:
-        st.sidebar.caption("Scenariomanifest saknas fÃ¶r vald region.")
+        st.sidebar.caption("Scenariomanifest saknas för vald region.")
         return {"scenario": None, "manifest": None}
 
     levels = scenario_manifest.get("scenario_levels") or []
@@ -430,7 +430,7 @@ def _scenario_sidebar(region: dict[str, Any]) -> dict[str, Any]:
             "Scenario",
             options=levels,
             index=levels.index("medium") if "medium" in levels else 0,
-            format_func=lambda value: {"low": "LÃ¥g", "medium": "Mellan", "high": "HÃ¶g"}.get(value, str(value)),
+            format_func=lambda value: {"low": "Låg", "medium": "Mellan", "high": "Hög"}.get(value, str(value)),
         )
     st.sidebar.caption(f"Scenario-set: {scenario_manifest.get('scenario_set_id', '-')}")
     st.sidebar.caption(f"Lager: {len(scenario_manifest.get('layers') or [])}")
@@ -443,7 +443,7 @@ def _scenario_state(region: dict[str, Any], panel: Any | None = None) -> dict[st
     scenario_manifest = load_linked_manifest(region, "scenario_manifest")
     if scenario_manifest is None:
         if panel is not None:
-            panel.caption("Scenariomanifest saknas fÃ¶r vald region.")
+            panel.caption("Scenariomanifest saknas för vald region.")
         return {"scenario": None, "manifest": None}
 
     levels = scenario_manifest.get("scenario_levels") or []
@@ -460,7 +460,7 @@ def _scenario_state(region: dict[str, Any], panel: Any | None = None) -> dict[st
                 "Scenario",
                 options=levels,
                 key=scenario_key,
-                format_func=lambda value: {"low": "LÃ¥g", "medium": "Mellan", "high": "HÃ¶g"}.get(value, str(value)),
+                format_func=lambda value: {"low": "Låg", "medium": "Mellan", "high": "Hög"}.get(value, str(value)),
             )
     if panel is not None:
         panel.caption(f"Scenario-set: {scenario_manifest.get('scenario_set_id', '-')}")
@@ -484,12 +484,12 @@ def _render_region_scenario_panel(panel: Any | None) -> tuple[dict[str, Any], di
 
 def _metric_header(region: dict[str, Any], scenario_state: dict[str, Any], h3_resolution: int | None = None) -> None:
     st.title(PAGE_TITLE)
-    st.caption("Regional v0 fÃ¶r scenarier, solpotential, vindpotential och landskapsanalys.")
+    st.caption("Regional v0 för scenarier, solpotential, vindpotential och landskapsanalys.")
 
     c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("Region", str(region.get("display_name", region.get("region_id"))))
     c2.metric("Scenario", str(scenario_state.get("scenario") or "-"))
-    c3.metric("Skala", str(region.get("nominal_scale", "TBD")))
+    c3.metric("Nominell skala", str(region.get("nominal_scale", "TBD")))
     c4.metric("CRS", str(region.get("native_crs", "TBD")))
     shown_resolution = h3_resolution or region.get("default_h3_resolution")
     c5.metric("H3", "TBD" if shown_resolution in {None, ""} else f"R{shown_resolution}")
@@ -504,10 +504,10 @@ def _workspace_header(region: dict[str, Any], scenario_state: dict[str, Any], h3
         f"""
         <div class="workspace-header">
           <div>
-            <div class="workspace-eyebrow">{region_label} Â· scenario {scenario_label} Â· H3 {h3_label}</div>
+            <div class="workspace-eyebrow">{region_label} · scenario {scenario_label} · H3 {h3_label}</div>
             <h1>{PAGE_TITLE}</h1>
           </div>
-          <div class="workspace-pill">{region.get("nominal_scale", "TBD")} Â· {region.get("native_crs", "TBD")}</div>
+          <div class="workspace-pill">CRS: {region.get("native_crs", "TBD")}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -525,7 +525,7 @@ def _load_context(region: dict[str, Any]) -> dict[str, Any]:
     solar_rules = _read_optional_manifest(rules.get("solar"))
     wind_rules = _read_optional_manifest(rules.get("wind"))
     if solar_rules is None:
-        st.info("Solregler saknas fÃ¶r vald region.")
+        st.info("Solregler saknas för vald region.")
         st.stop()
 
     return {
@@ -584,7 +584,7 @@ def _render_opacity_control(key_prefix: str) -> None:
             value=0.78,
             step=0.05,
             key=_opacity_key(key_prefix),
-            help="Styr genomskinligheten fÃ¶r aktiva hexagonlager i kartan.",
+            help="Styr genomskinligheten för aktiva hexagonlager i kartan.",
         )
 
 
@@ -709,7 +709,7 @@ def _landscape_frame(
 
 def _solar_legend_items(solar_rules: dict[str, Any]) -> list[dict[str, str]]:
     return [
-        {"label": str(item.get("label", item.get("id", "OkÃ¤nd"))), "color": str(item.get("color", "#999999"))}
+        {"label": str(item.get("label", item.get("id", "Okänd"))), "color": str(item.get("color", "#999999"))}
         for item in _class_breaks(solar_rules)
     ]
 
@@ -733,7 +733,7 @@ def _landscape_type_legend_items(landscape_manifest: dict[str, Any]) -> list[dic
 
 
 def _factor_legend_items() -> list[dict[str, str]]:
-    labels = ["â‰¤ -2", "-1", "0", "1", "â‰¥ 2"]
+    labels = ["≤ -2", "-1", "0", "1", "≥ 2"]
     return [{"label": label, "color": color} for label, (_, color) in zip(labels, FACTOR_STOPS)]
 
 
@@ -843,17 +843,17 @@ def _reset_builder(prefix: str, defaults: dict[str, float]) -> None:
 
 
 def _wind_builder_controls(defaults: dict[str, float]) -> None:
-    _builder_slider("wind_builder", "settlement_distance_m", "Minsta avstÃ¥nd till boende", 100.0, 3000.0, 50.0, defaults, "StÃ¶rre avstÃ¥nd ger hÃ¥rdare bebyggelsestraff.")
-    _builder_slider("wind_builder", "road_distance_m", "Minsta avstÃ¥nd till vÃ¤gar", 50.0, 2000.0, 25.0, defaults, "StÃ¶rre avstÃ¥nd ger hÃ¥rdare transport-/bebyggelsestraff.")
-    _builder_slider("wind_builder", "grid_max_distance_m", "Max avstÃ¥nd till elinfrastruktur", 500.0, 15000.0, 250.0, defaults, "StÃ¶rre tillÃ¥tet avstÃ¥nd gÃ¶r fler lÃ¤gen tekniskt mÃ¶jliga.")
-    _builder_slider("wind_builder", "protected_buffer_m", "Buffert skyddade omrÃ¥den", 0.0, 2000.0, 50.0, defaults, "0 stÃ¤nger av gruppen. HÃ¶gre vÃ¤rden hard-excludar skyddade natur- och habitatlager.")
-    _builder_slider("wind_builder", "coastal_buffer_m", "Buffert kust/strand", 0.0, 1000.0, 50.0, defaults, "0 stÃ¤nger av gruppen. HÃ¶gre vÃ¤rden hard-excludar kustzon och strandskydd.")
-    _builder_slider("wind_builder", "landscape_sensitivity_percent", "LandskapskÃ¤nslighet", 0.0, 120.0, 5.0, defaults, "Viktar hur starkt landskapsrollerna ska bromsa vindpotentialen.")
+    _builder_slider("wind_builder", "settlement_distance_m", "Minsta avstånd till boende", 100.0, 3000.0, 50.0, defaults, "Större avstånd ger hårdare bebyggelsestraff.")
+    _builder_slider("wind_builder", "road_distance_m", "Minsta avstånd till vägar", 50.0, 2000.0, 25.0, defaults, "Större avstånd ger hårdare transport-/bebyggelsestraff.")
+    _builder_slider("wind_builder", "grid_max_distance_m", "Max avstånd till elinfrastruktur", 500.0, 15000.0, 250.0, defaults, "Större tillåtet avstånd gör fler lägen tekniskt möjliga.")
+    _builder_slider("wind_builder", "protected_buffer_m", "Buffert skyddade områden", 0.0, 2000.0, 50.0, defaults, "0 stänger av gruppen. Högre värden hard-excludar skyddade natur- och habitatlager.")
+    _builder_slider("wind_builder", "coastal_buffer_m", "Buffert kust/strand", 0.0, 1000.0, 50.0, defaults, "0 stänger av gruppen. Högre värden hard-excludar kustzon och strandskydd.")
+    _builder_slider("wind_builder", "landscape_sensitivity_percent", "Landskapskänslighet", 0.0, 120.0, 5.0, defaults, "Viktar hur starkt landskapsrollerna ska bromsa vindpotentialen.")
     with st.expander("Avancerade restriktioner"):
-        _builder_slider("wind_builder", "culture_buffer_m", "Buffert kulturmiljÃ¶er", 0.0, 1500.0, 50.0, defaults, "0 stÃ¤nger av gruppen. HÃ¶gre vÃ¤rden hard-excludar vÃ¤rdefulla kulturmiljÃ¶er.")
-        _builder_slider("wind_builder", "aviation_approach_buffer_m", "Buffert inflygningszoner", 0.0, 3000.0, 100.0, defaults, "0 stÃ¤nger av gruppen. HÃ¶gre vÃ¤rden hard-excludar flygplatsens inflygningszoner.")
-        _builder_slider("wind_builder", "aviation_bird_distance_m", "Minsta avstÃ¥nd fÃ¥gelkollision", 0.0, 4000.0, 100.0, defaults, "0 stÃ¤nger av gruppen. HÃ¶gre vÃ¤rden ger distance-conflict mot fÃ¥gelkollisionszoner.")
-        _builder_slider("wind_builder", "military_buffer_m", "Buffert militÃ¤ra omrÃ¥den", 0.0, 2000.0, 50.0, defaults, "0 stÃ¤nger av gruppen. HÃ¶gre vÃ¤rden hard-excludar militÃ¤ra omrÃ¥den.")
+        _builder_slider("wind_builder", "culture_buffer_m", "Buffert kulturmiljöer", 0.0, 1500.0, 50.0, defaults, "0 stänger av gruppen. Högre värden hard-excludar värdefulla kulturmiljöer.")
+        _builder_slider("wind_builder", "aviation_approach_buffer_m", "Buffert inflygningszoner", 0.0, 3000.0, 100.0, defaults, "0 stänger av gruppen. Högre värden hard-excludar flygplatsens inflygningszoner.")
+        _builder_slider("wind_builder", "aviation_bird_distance_m", "Minsta avstånd fågelkollision", 0.0, 4000.0, 100.0, defaults, "0 stänger av gruppen. Högre värden ger distance-conflict mot fågelkollisionszoner.")
+        _builder_slider("wind_builder", "military_buffer_m", "Buffert militära områden", 0.0, 2000.0, 50.0, defaults, "0 stänger av gruppen. Högre värden hard-excludar militära områden.")
         st.dataframe(wind_acceptance_group_summary(), use_container_width=True, hide_index=True, height=220)
 
 
@@ -881,10 +881,10 @@ def _render_layers(
     map_reset_token: int = 0,
     opacity_key_prefix: str | None = None,
     note_title: str = "Samlad potential",
-    note_body: str = "Aktiva lager styrs i appen och kan Ã¤ven slÃ¥s av/pÃ¥ i kartkontrollen.",
+    note_body: str = "Aktiva lager styrs i appen och kan även slås av/på i kartkontrollen.",
 ) -> None:
     if not layers:
-        st.info("VÃ¤lj minst ett kartlager.")
+        st.info("Välj minst ett kartlager.")
         return
     map_html = build_layered_hex_map_html(
         layers,
@@ -953,9 +953,9 @@ def _solar_polygon_feature_collection(
     selected_share = (len(selected) / len(frame)) * 100.0
     popup = (
         f"<strong>{label}</strong><br>"
-        f"Hex med hÃ¶g/ mycket hÃ¶g solpotential: {len(selected)}<br>"
+        f"Hex med hög/ mycket hög solpotential: {len(selected)}<br>"
         f"Andel av visad yta: {selected_share:.1f}%<br>"
-        f"MedelpoÃ¤ng i polygonlagret: {float(selected['solar_score'].mean()):.1f}"
+        f"Medelpoäng i polygonlagret: {float(selected['solar_score'].mean()):.1f}"
     )
     return {
         "type": "FeatureCollection",
@@ -1183,7 +1183,7 @@ def _wind_runtime_overlay_control() -> bool:
     st.checkbox(
         "Visa potentiell etableringsyta (geometri)",
         key=WIND_RUNTIME_OVERLAY_KEY,
-        help="KÃ¶r geometri-runtime och lÃ¤gg till grupplager plus kombinerad acceptansyta i vektorvyn.",
+        help="Kör geometri-runtime och lägg till grupplager plus kombinerad acceptansyta i vektorvyn.",
     )
     return _wind_runtime_overlays_enabled()
 
@@ -1248,7 +1248,7 @@ def _wind_source_vector_layers(
             source_opacity = _wind_source_opacity(group_id)
             map_layers.append(
                 {
-                    "name": f"KÃ¤lla: {layer_label(layer_spec, WIND_CONTROL_LANGUAGE, layer_spec.label)} ({group_label})",
+                    "name": f"Källa: {layer_label(layer_spec, WIND_CONTROL_LANGUAGE, layer_spec.label)} ({group_label})",
                     "feature_collection": geojson,
                     "fill_property": "fill",
                     "legend_items": [],
@@ -1306,7 +1306,7 @@ def _wind_polygon_source_layers(
                 continue
             map_layers.append(
                 {
-                    "name": f"KÃ¤lla: {layer_label(layer_spec, WIND_CONTROL_LANGUAGE, layer_spec.label)} ({translated_group_label})",
+                    "name": f"Källa: {layer_label(layer_spec, WIND_CONTROL_LANGUAGE, layer_spec.label)} ({translated_group_label})",
                     "feature_collection": geojson,
                     "fill_property": "fill",
                     "legend_items": [],
@@ -1400,8 +1400,8 @@ def _wind_polygon_group_summary_frame(
         rows.append(
             {
                 "Regelgrupp": group_label(groups[group.id], WIND_CONTROL_LANGUAGE, groups[group.id].label),
-                "KÃ¤llager": ", ".join(selected_labels) if selected_labels else "-",
-                "AvstÃ¥nd m": int(round(threshold_value)),
+                "Källager": ", ".join(selected_labels) if selected_labels else "-",
+                "Avstånd m": int(round(threshold_value)),
                 "Buffert synlig": bool(runtime_group and runtime_group.get("geojson")),
                 "Landandel": "-" if land_share is None else f"{float(land_share):.1f}%",
             }
@@ -1571,8 +1571,8 @@ def _wind_runtime_hex_feature_collection(frame: pd.DataFrame, display_geometry_p
             f"Hex: {row.hex_id}<br>"
             f"Potentialandel: {float(row.potential_area_share_pct):.1f}%<br>"
             f"Klass: {row.share_class_label}<br>"
-            f"KÃ¤rnscore: {float(row.core_score):.2f}<br>"
-            f"KÃ¤rnrank i zon: {int(row.center_mass_rank)} av {int(row.zone_size)}"
+            f"Kärnscore: {float(row.core_score):.2f}<br>"
+            f"Kärnrank i zon: {int(row.center_mass_rank)} av {int(row.zone_size)}"
         )
         features.append(
             {
@@ -1736,14 +1736,14 @@ def _wind_source_status_frame() -> pd.DataFrame:
         ["regelgrupp", "label", "geometry_family", "feature_count", "status", "klar", "message"]
     ].rename(
         columns={
-            "label": "kÃ¤llager",
+            "label": "källager",
             "geometry_family": "geometri",
             "feature_count": "objekt",
             "status": "status",
             "message": "notering",
         }
     )
-    return output.sort_values(["regelgrupp", "kÃ¤llager"], ascending=[True, True]).reset_index(drop=True)
+    return output.sort_values(["regelgrupp", "källager"], ascending=[True, True]).reset_index(drop=True)
 
 
 def _wind_runtime_config_json(
@@ -1858,9 +1858,9 @@ def _combined_summary(map_state: dict[str, Any], scenario_state: dict[str, Any])
         score_col = f"{technology}_score"
         class_col = f"{technology}_class"
         high_share = _high_share_pct(frame, class_col, item.get("high_classes"))
-        mean_label = str(item.get("mean_label", "MedelpoÃ¤ng"))
+        mean_label = str(item.get("mean_label", "Medelpoäng"))
         mean_format = str(item.get("mean_format", "{value:.1f}"))
-        high_label = str(item.get("high_label", "HÃ¶g potential"))
+        high_label = str(item.get("high_label", "Hög potential"))
         with st.expander(item["label"], expanded=True):
             left, right = st.columns(2)
             left.metric(mean_label, _metric_value_text(frame, score_col, mean_format))
@@ -1960,28 +1960,28 @@ def _unified_workspace_tab(
         h3_resolution, opacity, preserve_map_view, map_reset_token = _map_panel_controls(region, "combined", left_panel)
 
         with left_panel.expander("Potential", expanded=True):
-            st.caption("VÃ¤lj vilka lagerfamiljer som ska visas i kartan.")
+            st.caption("Välj vilka lagerfamiljer som ska visas i kartan.")
             show_user_wind = st.checkbox("Egen vindpotential", value=show_user_wind, key="show_user_wind")
             show_default_wind = st.checkbox("Default vindpotential", value=show_default_wind, key="show_default_wind")
             show_user_solar = st.checkbox("Egen solpotential", value=show_user_solar, key="show_user_solar")
             show_default_solar = st.checkbox("Default solpotential", value=show_default_solar, key="show_default_solar")
 
         with left_panel.expander("Vindpotential", expanded=True):
-            st.caption("Bygg vindpotential direkt i samma vy. Kartan visar alltid bÃ¥de den kombinerade polygonen och R10-hexlagret.")
-            st.caption("Separat sparning behÃ¶vs inte lÃ¤ngre i den hÃ¤r arbetsvyn.")
+            st.caption("Bygg vindpotential direkt i samma vy. Kartan visar alltid både den kombinerade polygonen och R10-hexlagret.")
+            st.caption("Separat sparning behövs inte längre i den här arbetsvyn.")
             wind_selected_layers, wind_ui_params, wind_controls_applied = _wind_group_controls("wind_unified", language=WIND_CONTROL_LANGUAGE)
 
         with left_panel.expander("Solpotential", expanded=False):
-            st.caption("Bygg solpotential direkt i samma vy. Kartan visar alltid bÃ¥de hexlager och ett sammanhÃ¤ngande polygonlager.")
-            if st.button("Ã…terstÃ¤ll sol-default", key="reset_solar_builder_unified"):
+            st.caption("Bygg solpotential direkt i samma vy. Kartan visar alltid både hexlager och ett sammanhängande polygonlager.")
+            if st.button("Återställ sol-default", key="reset_solar_builder_unified"):
                 _reset_builder("solar_builder", solar_defaults)
-            _builder_slider("solar_builder", "base_score", "BasnivÃ¥", 30.0, 75.0, 1.0, solar_defaults, "StartpoÃ¤ng innan landskapsvillkor lÃ¤ggs till.")
-            _builder_slider("solar_builder", "grid_access_bonus", "Infrastruktur/Ã¥tkomst-bonus", 0.0, 20.0, 1.0, solar_defaults, "Proxy fÃ¶r hur mycket nÃ¤rhet till vÃ¤g/elanslutning ska hÃ¶ja solpotentialen.")
-            _builder_slider("solar_builder", "everyday_matrix_bonus", "Ã–ppet vardagslandskap", 0.0, 30.0, 1.0, solar_defaults, "Bonus fÃ¶r bredare vardags-/produktionslandskap.")
-            _builder_slider("solar_builder", "coastal_penalty", "Kust- och lÃ¥glandsstraff", 0.0, 35.0, 1.0, solar_defaults, "SÃ¤nker potential i kustnÃ¤ra och lÃ¥glÃ¤nta landskap.")
-            _builder_slider("solar_builder", "terrain_penalty", "TerrÃ¤ng- och dalstraff", 0.0, 35.0, 1.0, solar_defaults, "SÃ¤nker potential dÃ¤r relief och sprickdalar dominerar.")
-            _builder_slider("solar_builder", "protected_penalty", "Skog/habitat-straff", 0.0, 40.0, 1.0, solar_defaults, "SÃ¤nker potential i skyddade skogs- och habitatmiljÃ¶er.")
-            _builder_slider("solar_builder", "settlement_penalty", "BosÃ¤ttningsstraff", 0.0, 35.0, 1.0, solar_defaults, "SÃ¤nker potential dÃ¤r bebyggelse och tÃ¤t struktur dominerar.")
+            _builder_slider("solar_builder", "base_score", "Basnivå", 30.0, 75.0, 1.0, solar_defaults, "Startpoäng innan landskapsvillkor läggs till.")
+            _builder_slider("solar_builder", "grid_access_bonus", "Infrastruktur/åtkomst-bonus", 0.0, 20.0, 1.0, solar_defaults, "Proxy för hur mycket närhet till väg/elanslutning ska höja solpotentialen.")
+            _builder_slider("solar_builder", "everyday_matrix_bonus", "Öppet vardagslandskap", 0.0, 30.0, 1.0, solar_defaults, "Bonus för bredare vardags-/produktionslandskap.")
+            _builder_slider("solar_builder", "coastal_penalty", "Kust- och låglandsstraff", 0.0, 35.0, 1.0, solar_defaults, "Sänker potential i kustnära och låglänta landskap.")
+            _builder_slider("solar_builder", "terrain_penalty", "Terräng- och dalstraff", 0.0, 35.0, 1.0, solar_defaults, "Sänker potential där relief och sprickdalar dominerar.")
+            _builder_slider("solar_builder", "protected_penalty", "Skog/habitat-straff", 0.0, 40.0, 1.0, solar_defaults, "Sänker potential i skyddade skogs- och habitatmiljöer.")
+            _builder_slider("solar_builder", "settlement_penalty", "Bosättningsstraff", 0.0, 35.0, 1.0, solar_defaults, "Sänker potential där bebyggelse och tät struktur dominerar.")
             if st.button("Spara solpotential", type="primary", use_container_width=True, key="save_solar_unified"):
                 _save_solar_potential(_state_params("solar_builder", solar_defaults), h3_resolution)
                 st.success("Solpotential sparad.")
@@ -2010,7 +2010,7 @@ def _unified_workspace_tab(
         if user_solar_polygon is not None:
             layers.append(user_solar_polygon)
         potential_frames.append({"label": "Egen solpotential", "technology": "solar", "frame": user_solar_frame, "resolution": h3_resolution})
-        unified_notes.append("Solpolygonlagret byggs frÃ¥n de hex som klassas som hÃ¶g eller mycket hÃ¶g solpotential i aktuell H3-upplÃ¶sning.")
+        unified_notes.append("Solpolygonlagret byggs från de hex som klassas som hög eller mycket hög solpotential i aktuell H3-upplösning.")
 
     if show_default_wind:
         default_wind_params = _default_wind_params()
@@ -2041,7 +2041,7 @@ def _unified_workspace_tab(
         custom_wind_preview_state = _wind_polygon_preview_state(region, wind_ui_params, wind_selected_layers)
         layers.extend(custom_wind_preview_state["layers"])
         if custom_wind_preview_state["runtime_error"]:
-            unified_notes.append(f"Vindruntime kunde inte kÃ¶ras: {custom_wind_preview_state['runtime_error']}")
+            unified_notes.append(f"Vindruntime kunde inte köras: {custom_wind_preview_state['runtime_error']}")
         else:
             custom_wind_summary = _wind_polygon_summary_frame(region, landscape_manifest, custom_wind_preview_state["runtime_result"])
             potential_frames.append(
@@ -2057,7 +2057,7 @@ def _unified_workspace_tab(
                     "summary_mode": "wind_share",
                 }
             )
-            unified_notes.append("Vindpotentialen visar bÃ¥de den kombinerade etableringspolygonen och R10-hex med potentialandel frÃ¥n samma geometri.")
+            unified_notes.append("Vindpotentialen visar både den kombinerade etableringspolygonen och R10-hex med potentialandel från samma geometri.")
 
     if show_v10 or show_cluster or show_factor:
         landscape_frame = _landscape_frame(region, landscape_manifest, h3_resolution)
@@ -2076,7 +2076,7 @@ def _unified_workspace_tab(
         map_reset_token=map_reset_token,
         opacity_key_prefix="combined",
         note_title="Gemensam potentialvy",
-        note_body="Kartan visar bÃ¥de polygoner och hexagoner frÃ¥n samma potentialbyggen. Lager kan slÃ¥s av/pÃ¥ i kartkontrollen.",
+        note_body="Kartan visar både polygoner och hexagoner från samma potentialbyggen. Lager kan slås av/på i kartkontrollen.",
     )
 
     summary_target = right_panel or st.container()
@@ -2092,11 +2092,11 @@ def _unified_workspace_tab(
         )
         with st.expander("Byggstatus", expanded=False):
             if show_user_solar:
-                st.metric("Aktiv solfÃ¶rhandsvisning", "PÃ¥")
-                st.caption("Solbygget visas som hexlager plus ett polygonlager som summerar hÃ¶g och mycket hÃ¶g solpotential.")
+                st.metric("Aktiv solförhandsvisning", "På")
+                st.caption("Solbygget visas som hexlager plus ett polygonlager som summerar hög och mycket hög solpotential.")
             if show_user_wind and custom_wind_preview_state is not None:
                 left_metric, right_metric = st.columns(2)
-                left_metric.metric("Vind: aktiva kÃ¤llager", int(custom_wind_preview_state["active_source_count"]))
+                left_metric.metric("Vind: aktiva källager", int(custom_wind_preview_state["active_source_count"]))
                 right_metric.metric("Vind: buffertgrupper", int(custom_wind_preview_state["active_group_count"]))
                 combined_share = custom_wind_preview_state["combined_land_share_pct"]
                 st.metric("Vind: potentiell landandel", "-" if combined_share is None else f"{float(combined_share):.1f}%")
@@ -2122,5 +2122,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-
