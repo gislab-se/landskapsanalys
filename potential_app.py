@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from collections import deque
 import h3
@@ -17,7 +17,7 @@ APPS_DIR = ROOT / "apps"
 if str(APPS_DIR) not in sys.path:
     sys.path.insert(0, str(APPS_DIR))
 
-from potential_model.geometry import load_h3_display_geometries  # noqa: E402
+from potential_model.geometry import geometry_for_hex, load_h3_display_geometries  # noqa: E402
 from potential_model.landscape import (  # noqa: E402
     CLUSTER_COLORS,
     FACTOR_STOPS,
@@ -71,11 +71,9 @@ from acceptance_model.layers import (  # noqa: E402
 )
 from acceptance_model.runtime_geometry import run_geometry_runtime  # noqa: E402
 from acceptance_model.i18n import (  # noqa: E402
-    critical_review_items,
     group_analysis_label,
     group_interpretation,
     group_label,
-    hexagon_note_items,
     layer_label,
     layer_note,
     ui_text,
@@ -83,11 +81,6 @@ from acceptance_model.i18n import (  # noqa: E402
 
 
 PAGE_TITLE = "Sol- och vindpotential"
-VIEW_OPTIONS = ["Samlad potential", "Bygg solpotential", "Bygg vindpotential"]
-ACTIVE_VIEW_KEY = "potential_active_view"
-LEGACY_ACTIVE_VIEW_KEY = "active_view"
-LEFT_VIEW_WIDGET_KEY = "potential_active_view_left"
-MAIN_VIEW_WIDGET_KEY = "potential_active_view_main"
 MAP_VIEW_RESET_TOKEN_KEY = "potential_map_view_reset_token"
 LEFT_PANEL_OPEN_KEY = "potential_left_panel_open"
 RIGHT_PANEL_OPEN_KEY = "potential_right_panel_open"
@@ -129,22 +122,6 @@ def _init_panel_state() -> None:
 
 def _toggle_panel(key: str) -> None:
     st.session_state[key] = not bool(st.session_state.get(key, True))
-
-
-def _valid_view(value: object) -> str:
-    text = str(value)
-    return text if text in VIEW_OPTIONS else VIEW_OPTIONS[0]
-
-
-def _active_view() -> str:
-    if ACTIVE_VIEW_KEY not in st.session_state and LEGACY_ACTIVE_VIEW_KEY in st.session_state:
-        st.session_state[ACTIVE_VIEW_KEY] = _valid_view(st.session_state.get(LEGACY_ACTIVE_VIEW_KEY))
-    st.session_state.setdefault(ACTIVE_VIEW_KEY, VIEW_OPTIONS[0])
-    return _valid_view(st.session_state.get(ACTIVE_VIEW_KEY))
-
-
-def _sync_active_view_from_widget(widget_key: str) -> None:
-    st.session_state[ACTIVE_VIEW_KEY] = _valid_view(st.session_state.get(widget_key))
 
 
 def _panel_shell() -> tuple[Any | None, Any | None]:
@@ -302,12 +279,12 @@ def _panel_shell() -> tuple[Any | None, Any | None]:
     left_col, left_toggle_col, right_toggle_col, right_col = st.columns([1, 0.05, 0.05, 1], gap="small")
     with left_toggle_col:
         st.markdown('<span id="left-panel-toggle-anchor"></span>', unsafe_allow_html=True)
-        if st.button("<" if left_open else ">", key="left_panel_edge_toggle", help="Visa/dölj kartlager"):
+        if st.button("<" if left_open else ">", key="left_panel_edge_toggle", help="Visa/dÃ¶lj kartlager"):
             _toggle_panel(LEFT_PANEL_OPEN_KEY)
             st.rerun()
     with right_toggle_col:
         st.markdown('<span id="right-panel-toggle-anchor"></span>', unsafe_allow_html=True)
-        if st.button(">" if right_open else "<", key="right_panel_edge_toggle", help="Visa/dölj kontext"):
+        if st.button(">" if right_open else "<", key="right_panel_edge_toggle", help="Visa/dÃ¶lj kontext"):
             _toggle_panel(RIGHT_PANEL_OPEN_KEY)
             st.rerun()
 
@@ -443,7 +420,7 @@ def _scenario_sidebar(region: dict[str, Any]) -> dict[str, Any]:
     st.sidebar.header("Scenarier")
 
     if scenario_manifest is None:
-        st.sidebar.caption("Scenariomanifest saknas för vald region.")
+        st.sidebar.caption("Scenariomanifest saknas fÃ¶r vald region.")
         return {"scenario": None, "manifest": None}
 
     levels = scenario_manifest.get("scenario_levels") or []
@@ -453,7 +430,7 @@ def _scenario_sidebar(region: dict[str, Any]) -> dict[str, Any]:
             "Scenario",
             options=levels,
             index=levels.index("medium") if "medium" in levels else 0,
-            format_func=lambda value: {"low": "Låg", "medium": "Mellan", "high": "Hög"}.get(value, str(value)),
+            format_func=lambda value: {"low": "LÃ¥g", "medium": "Mellan", "high": "HÃ¶g"}.get(value, str(value)),
         )
     st.sidebar.caption(f"Scenario-set: {scenario_manifest.get('scenario_set_id', '-')}")
     st.sidebar.caption(f"Lager: {len(scenario_manifest.get('layers') or [])}")
@@ -466,7 +443,7 @@ def _scenario_state(region: dict[str, Any], panel: Any | None = None) -> dict[st
     scenario_manifest = load_linked_manifest(region, "scenario_manifest")
     if scenario_manifest is None:
         if panel is not None:
-            panel.caption("Scenariomanifest saknas för vald region.")
+            panel.caption("Scenariomanifest saknas fÃ¶r vald region.")
         return {"scenario": None, "manifest": None}
 
     levels = scenario_manifest.get("scenario_levels") or []
@@ -483,7 +460,7 @@ def _scenario_state(region: dict[str, Any], panel: Any | None = None) -> dict[st
                 "Scenario",
                 options=levels,
                 key=scenario_key,
-                format_func=lambda value: {"low": "Låg", "medium": "Mellan", "high": "Hög"}.get(value, str(value)),
+                format_func=lambda value: {"low": "LÃ¥g", "medium": "Mellan", "high": "HÃ¶g"}.get(value, str(value)),
             )
     if panel is not None:
         panel.caption(f"Scenario-set: {scenario_manifest.get('scenario_set_id', '-')}")
@@ -498,16 +475,16 @@ def _render_region_scenario_panel(panel: Any | None) -> tuple[dict[str, Any], di
         region = _select_region(None)
         return region, _scenario_state(region, None)
 
-    with panel.expander("Region", expanded=True):
+    with panel.expander("Region", expanded=False):
         region = _select_region(st)
-    with panel.expander("Scenarier", expanded=True):
+    with panel.expander("Scenarier", expanded=False):
         scenario_state = _scenario_state(region, st)
     return region, scenario_state
 
 
 def _metric_header(region: dict[str, Any], scenario_state: dict[str, Any], h3_resolution: int | None = None) -> None:
     st.title(PAGE_TITLE)
-    st.caption("Regional v0 för scenarier, solpotential, vindpotential och landskapsanalys.")
+    st.caption("Regional v0 fÃ¶r scenarier, solpotential, vindpotential och landskapsanalys.")
 
     c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("Region", str(region.get("display_name", region.get("region_id"))))
@@ -527,10 +504,10 @@ def _workspace_header(region: dict[str, Any], scenario_state: dict[str, Any], h3
         f"""
         <div class="workspace-header">
           <div>
-            <div class="workspace-eyebrow">{region_label} · scenario {scenario_label} · H3 {h3_label}</div>
+            <div class="workspace-eyebrow">{region_label} Â· scenario {scenario_label} Â· H3 {h3_label}</div>
             <h1>{PAGE_TITLE}</h1>
           </div>
-          <div class="workspace-pill">{region.get("nominal_scale", "TBD")} · {region.get("native_crs", "TBD")}</div>
+          <div class="workspace-pill">{region.get("nominal_scale", "TBD")} Â· {region.get("native_crs", "TBD")}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -548,7 +525,7 @@ def _load_context(region: dict[str, Any]) -> dict[str, Any]:
     solar_rules = _read_optional_manifest(rules.get("solar"))
     wind_rules = _read_optional_manifest(rules.get("wind"))
     if solar_rules is None:
-        st.info("Solregler saknas för vald region.")
+        st.info("Solregler saknas fÃ¶r vald region.")
         st.stop()
 
     return {
@@ -562,6 +539,11 @@ def _load_context(region: dict[str, Any]) -> dict[str, Any]:
 def _available_h3_resolutions(region: dict[str, Any]) -> list[int]:
     values = [int(value) for value in region.get("available_h3_resolutions", [])]
     return sorted(values, reverse=True) or [int(region.get("default_h3_resolution", 9))]
+
+
+def _preferred_h3_resolution(region: dict[str, Any], preferred: int = 9) -> int:
+    available = _available_h3_resolutions(region)
+    return int(preferred) if int(preferred) in available else int(available[0])
 
 
 def _h3_display_geometry_path(region: dict[str, Any], resolution: int) -> str | None:
@@ -602,113 +584,37 @@ def _render_opacity_control(key_prefix: str) -> None:
             value=0.78,
             step=0.05,
             key=_opacity_key(key_prefix),
-            help="Styr genomskinligheten för aktiva hexagonlager i kartan.",
+            help="Styr genomskinligheten fÃ¶r aktiva hexagonlager i kartan.",
         )
 
 
-def _map_controls(region: dict[str, Any], key_prefix: str) -> tuple[int, float, bool, int]:
-    rollup_col, info_col = st.columns([0.62, 0.38], gap="large")
-    with rollup_col:
-        h3_resolution = st.radio(
-            "H3-rollup",
-            options=_available_h3_resolutions(region),
-            index=0,
-            format_func=lambda value: _h3_option_label(region, value),
-            horizontal=True,
-            key=f"{key_prefix}_h3_resolution",
-        )
-    with info_col:
-        st.markdown("[Learn more about H3 resolutions](https://h3geo.org/).")
-    return int(h3_resolution), _current_opacity(key_prefix), True, _map_view_reset_token()
-
-
-def _display_mode_control(key_prefix: str) -> str:
-    return str(
-        st.radio(
-            "Visningsläge potential",
-            options=["Hexagon", "Vektor", "Båda"],
-            index=0,
-            horizontal=True,
-            key=f"{key_prefix}_display_mode",
-            help="Vind kan visas som kandidatvektor från källhex och som H3-rollup. Solvektor kopplas in i senare datasteg.",
-        )
-    )
-
-
-def _wants_hex(display_mode: str) -> bool:
-    return display_mode in {"Hexagon", "Båda"}
-
-
-def _wants_vector(display_mode: str) -> bool:
-    return display_mode in {"Vektor", "Båda"}
-
-
-def _map_control_values(region: dict[str, Any], key_prefix: str) -> tuple[int, float, bool, int]:
-    available_resolutions = _available_h3_resolutions(region)
-    stored_resolution = st.session_state.get(f"{key_prefix}_h3_resolution", available_resolutions[0])
+def _map_panel_controls(region: dict[str, Any], key_prefix: str, panel: Any | None = None) -> tuple[int, float, bool, int]:
+    available = _available_h3_resolutions(region)
+    state_key = f"{key_prefix}_h3_resolution"
+    preferred = _preferred_h3_resolution(region, 9)
     try:
-        h3_resolution = int(stored_resolution)
+        current_value = int(st.session_state.get(state_key, preferred))
     except Exception:
-        h3_resolution = available_resolutions[0]
-    if h3_resolution not in available_resolutions:
-        h3_resolution = available_resolutions[0]
-    return h3_resolution, _current_opacity(key_prefix), True, _map_view_reset_token()
+        current_value = preferred
+    if current_value not in available:
+        current_value = preferred
+    st.session_state[state_key] = current_value
 
-
-def _map_panel_controls(region: dict[str, Any], key_prefix: str, panel: Any | None) -> tuple[int, float, bool, int]:
-    if panel is None:
-        return _map_control_values(region, key_prefix)
-
-    with panel.expander("H3 resolution", expanded=True):
-        h3_resolution = st.radio(
-            "H3-rollup",
-            options=_available_h3_resolutions(region),
-            index=0,
-            format_func=lambda value: _h3_option_label(region, value),
-            horizontal=False,
-            key=f"{key_prefix}_h3_resolution",
-        )
-        st.markdown("[Learn more about H3 resolutions](https://h3geo.org/).")
-    return int(h3_resolution), _current_opacity(key_prefix), True, _map_view_reset_token()
-
-
-def _display_mode_value(key_prefix: str) -> str:
-    value = str(st.session_state.get(f"{key_prefix}_display_mode", "Hexagon"))
-    return value if value in {"Hexagon", "Vektor", "BÃ¥da", "Båda"} else "Hexagon"
-
-
-def _display_mode_panel(key_prefix: str, panel: Any | None) -> str:
-    if panel is None:
-        return _display_mode_value(key_prefix)
-    with panel.expander("Potentialläge", expanded=False):
-        return str(
-            st.radio(
-                "Potentialläge",
-                options=["Hexagon", "Vektor", "Båda"],
-                index=0,
-                horizontal=True,
-                key=f"{key_prefix}_display_mode",
-                help="Vind kan visas som kandidatvektor från källhex och som H3-rollup. Solvektor kopplas in i senare datasteg.",
+    if panel is not None:
+        with panel.expander("H3 resolution", expanded=True):
+            h3_resolution = st.radio(
+                "H3-rollup",
+                options=available,
+                index=available.index(current_value),
+                format_func=lambda value: _h3_option_label(region, value),
+                horizontal=False,
+                key=state_key,
             )
-        )
+            st.markdown("[Learn more about H3 resolutions](https://h3geo.org/).")
+    else:
+        h3_resolution = current_value
 
-
-def _mode_wants_hex(display_mode: str) -> bool:
-    return display_mode in {"Hexagon", "BÃ¥da", "Båda"}
-
-
-def _mode_wants_vector(display_mode: str) -> bool:
-    return display_mode in {"Vektor", "BÃ¥da", "Båda"}
-
-
-def _vector_placeholder(layer_names: list[str]) -> None:
-    if not layer_names:
-        return
-    names = ", ".join(layer_names)
-    st.warning(
-        f"Vektorlager är inte inkopplade ännu för: {names}. "
-        "Den här vyn är reserverad för detaljerad vektorpotential som senare aggregeras till H3."
-    )
+    return int(h3_resolution), _current_opacity(key_prefix), True, _map_view_reset_token()
 
 
 def _filter_frame_to_display_geometries(frame: pd.DataFrame, display_geometry_path: str | None) -> pd.DataFrame:
@@ -803,7 +709,7 @@ def _landscape_frame(
 
 def _solar_legend_items(solar_rules: dict[str, Any]) -> list[dict[str, str]]:
     return [
-        {"label": str(item.get("label", item.get("id", "Okänd"))), "color": str(item.get("color", "#999999"))}
+        {"label": str(item.get("label", item.get("id", "OkÃ¤nd"))), "color": str(item.get("color", "#999999"))}
         for item in _class_breaks(solar_rules)
     ]
 
@@ -827,7 +733,7 @@ def _landscape_type_legend_items(landscape_manifest: dict[str, Any]) -> list[dic
 
 
 def _factor_legend_items() -> list[dict[str, str]]:
-    labels = ["≤ -2", "-1", "0", "1", "≥ 2"]
+    labels = ["â‰¤ -2", "-1", "0", "1", "â‰¥ 2"]
     return [{"label": label, "color": color} for label, (_, color) in zip(labels, FACTOR_STOPS)]
 
 
@@ -911,6 +817,13 @@ def _state_params(prefix: str, defaults: dict[str, float]) -> dict[str, float]:
     return params
 
 
+def _prime_solar_builder_state(defaults: dict[str, float], saved_params: dict[str, float] | None = None) -> None:
+    source = saved_params or {}
+    for key, value in defaults.items():
+        seeded = float(source.get(key, value)) if isinstance(source, dict) else float(value)
+        st.session_state.setdefault(f"solar_builder_{key}", seeded)
+
+
 def _builder_slider(prefix: str, key: str, label: str, min_value: float, max_value: float, step: float, defaults: dict[str, float], help_text: str) -> None:
     st.slider(
         label,
@@ -930,17 +843,17 @@ def _reset_builder(prefix: str, defaults: dict[str, float]) -> None:
 
 
 def _wind_builder_controls(defaults: dict[str, float]) -> None:
-    _builder_slider("wind_builder", "settlement_distance_m", "Minsta avstånd till boende", 100.0, 3000.0, 50.0, defaults, "Större avstånd ger hårdare bebyggelsestraff.")
-    _builder_slider("wind_builder", "road_distance_m", "Minsta avstånd till vägar", 50.0, 2000.0, 25.0, defaults, "Större avstånd ger hårdare transport-/bebyggelsestraff.")
-    _builder_slider("wind_builder", "grid_max_distance_m", "Max avstånd till elinfrastruktur", 500.0, 15000.0, 250.0, defaults, "Större tillåtet avstånd gör fler lägen tekniskt möjliga.")
-    _builder_slider("wind_builder", "protected_buffer_m", "Buffert skyddade områden", 0.0, 2000.0, 50.0, defaults, "0 stänger av gruppen. Högre värden hard-excludar skyddade natur- och habitatlager.")
-    _builder_slider("wind_builder", "coastal_buffer_m", "Buffert kust/strand", 0.0, 1000.0, 50.0, defaults, "0 stänger av gruppen. Högre värden hard-excludar kustzon och strandskydd.")
-    _builder_slider("wind_builder", "landscape_sensitivity_percent", "Landskapskänslighet", 0.0, 120.0, 5.0, defaults, "Viktar hur starkt landskapsrollerna ska bromsa vindpotentialen.")
+    _builder_slider("wind_builder", "settlement_distance_m", "Minsta avstÃ¥nd till boende", 100.0, 3000.0, 50.0, defaults, "StÃ¶rre avstÃ¥nd ger hÃ¥rdare bebyggelsestraff.")
+    _builder_slider("wind_builder", "road_distance_m", "Minsta avstÃ¥nd till vÃ¤gar", 50.0, 2000.0, 25.0, defaults, "StÃ¶rre avstÃ¥nd ger hÃ¥rdare transport-/bebyggelsestraff.")
+    _builder_slider("wind_builder", "grid_max_distance_m", "Max avstÃ¥nd till elinfrastruktur", 500.0, 15000.0, 250.0, defaults, "StÃ¶rre tillÃ¥tet avstÃ¥nd gÃ¶r fler lÃ¤gen tekniskt mÃ¶jliga.")
+    _builder_slider("wind_builder", "protected_buffer_m", "Buffert skyddade omrÃ¥den", 0.0, 2000.0, 50.0, defaults, "0 stÃ¤nger av gruppen. HÃ¶gre vÃ¤rden hard-excludar skyddade natur- och habitatlager.")
+    _builder_slider("wind_builder", "coastal_buffer_m", "Buffert kust/strand", 0.0, 1000.0, 50.0, defaults, "0 stÃ¤nger av gruppen. HÃ¶gre vÃ¤rden hard-excludar kustzon och strandskydd.")
+    _builder_slider("wind_builder", "landscape_sensitivity_percent", "LandskapskÃ¤nslighet", 0.0, 120.0, 5.0, defaults, "Viktar hur starkt landskapsrollerna ska bromsa vindpotentialen.")
     with st.expander("Avancerade restriktioner"):
-        _builder_slider("wind_builder", "culture_buffer_m", "Buffert kulturmiljöer", 0.0, 1500.0, 50.0, defaults, "0 stänger av gruppen. Högre värden hard-excludar värdefulla kulturmiljöer.")
-        _builder_slider("wind_builder", "aviation_approach_buffer_m", "Buffert inflygningszoner", 0.0, 3000.0, 100.0, defaults, "0 stänger av gruppen. Högre värden hard-excludar flygplatsens inflygningszoner.")
-        _builder_slider("wind_builder", "aviation_bird_distance_m", "Minsta avstånd fågelkollision", 0.0, 4000.0, 100.0, defaults, "0 stänger av gruppen. Högre värden ger distance-conflict mot fågelkollisionszoner.")
-        _builder_slider("wind_builder", "military_buffer_m", "Buffert militära områden", 0.0, 2000.0, 50.0, defaults, "0 stänger av gruppen. Högre värden hard-excludar militära områden.")
+        _builder_slider("wind_builder", "culture_buffer_m", "Buffert kulturmiljÃ¶er", 0.0, 1500.0, 50.0, defaults, "0 stÃ¤nger av gruppen. HÃ¶gre vÃ¤rden hard-excludar vÃ¤rdefulla kulturmiljÃ¶er.")
+        _builder_slider("wind_builder", "aviation_approach_buffer_m", "Buffert inflygningszoner", 0.0, 3000.0, 100.0, defaults, "0 stÃ¤nger av gruppen. HÃ¶gre vÃ¤rden hard-excludar flygplatsens inflygningszoner.")
+        _builder_slider("wind_builder", "aviation_bird_distance_m", "Minsta avstÃ¥nd fÃ¥gelkollision", 0.0, 4000.0, 100.0, defaults, "0 stÃ¤nger av gruppen. HÃ¶gre vÃ¤rden ger distance-conflict mot fÃ¥gelkollisionszoner.")
+        _builder_slider("wind_builder", "military_buffer_m", "Buffert militÃ¤ra omrÃ¥den", 0.0, 2000.0, 50.0, defaults, "0 stÃ¤nger av gruppen. HÃ¶gre vÃ¤rden hard-excludar militÃ¤ra omrÃ¥den.")
         st.dataframe(wind_acceptance_group_summary(), use_container_width=True, hide_index=True, height=220)
 
 
@@ -952,47 +865,12 @@ def _save_solar_potential(params: dict[str, float], resolution: int) -> None:
     st.session_state["show_user_solar"] = True
 
 
-def _save_wind_potential(
-    ui_params: dict[str, float],
-    resolution: int,
-    layer_selection: dict[str, list[str]] | None = None,
-) -> None:
-    st.session_state["saved_wind_potential"] = {
-        "ui_params": dict(ui_params),
-        "preview_resolution": int(resolution),
-        "layer_selection": normalize_group_layer_map(layer_selection or _selected_wind_layers()),
-    }
-    st.session_state["show_user_wind"] = True
-
-
 def _saved_solar_params() -> dict[str, float] | None:
     saved = st.session_state.get("saved_solar_potential")
     if not isinstance(saved, dict):
         return None
     params = saved.get("params")
     return dict(params) if isinstance(params, dict) else None
-
-
-def _saved_wind_params() -> dict[str, float] | None:
-    saved = st.session_state.get("saved_wind_potential")
-    if not isinstance(saved, dict):
-        return None
-    params = saved.get("ui_params")
-    return dict(params) if isinstance(params, dict) else None
-
-
-def _saved_wind_layer_selection() -> dict[str, list[str]] | None:
-    saved = st.session_state.get("saved_wind_potential")
-    if not isinstance(saved, dict):
-        return None
-    selection = saved.get("layer_selection")
-    if not isinstance(selection, dict):
-        return None
-    return normalize_group_layer_map(selection)
-
-
-def _set_active_view(view: str) -> None:
-    st.session_state[ACTIVE_VIEW_KEY] = _valid_view(view)
 
 
 def _render_layers(
@@ -1003,10 +881,10 @@ def _render_layers(
     map_reset_token: int = 0,
     opacity_key_prefix: str | None = None,
     note_title: str = "Samlad potential",
-    note_body: str = "Aktiva lager styrs i appen och kan även slås av/på i kartkontrollen.",
+    note_body: str = "Aktiva lager styrs i appen och kan Ã¤ven slÃ¥s av/pÃ¥ i kartkontrollen.",
 ) -> None:
     if not layers:
-        st.info("Välj minst ett kartlager.")
+        st.info("VÃ¤lj minst ett kartlager.")
         return
     map_html = build_layered_hex_map_html(
         layers,
@@ -1042,6 +920,82 @@ def _potential_layer(
         "legend_id": "potential_classes",
         "legend_title": "Potentialklasser",
         "default_visible": True,
+        "stroke": False,
+        "weight": 0.0,
+    }
+
+
+def _solar_polygon_feature_collection(
+    frame: pd.DataFrame,
+    display_geometry_path: str | None,
+    label: str,
+) -> dict[str, Any] | None:
+    if frame.empty:
+        return None
+    selected = frame[frame["solar_class"].astype(str).isin(["high", "very_high"])].copy()
+    if selected.empty:
+        return None
+    display_geometries = load_h3_display_geometries(display_geometry_path) if display_geometry_path else {}
+    multipolygon_parts: list[Any] = []
+    for row in selected.itertuples(index=False):
+        geometry = geometry_for_hex(str(row.hex_id), display_geometries)
+        if geometry is None:
+            continue
+        geometry_type = str(geometry.get("type", ""))
+        coordinates = geometry.get("coordinates") or []
+        if geometry_type == "Polygon" and coordinates:
+            multipolygon_parts.append(coordinates)
+        elif geometry_type == "MultiPolygon" and coordinates:
+            multipolygon_parts.extend(coordinates)
+    if not multipolygon_parts:
+        return None
+
+    selected_share = (len(selected) / len(frame)) * 100.0
+    popup = (
+        f"<strong>{label}</strong><br>"
+        f"Hex med hÃ¶g/ mycket hÃ¶g solpotential: {len(selected)}<br>"
+        f"Andel av visad yta: {selected_share:.1f}%<br>"
+        f"MedelpoÃ¤ng i polygonlagret: {float(selected['solar_score'].mean()):.1f}"
+    )
+    return {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "geometry": {"type": "MultiPolygon", "coordinates": multipolygon_parts},
+                "properties": {"fill": "#d97706", "popup": popup},
+            }
+        ],
+    }
+
+
+def _solar_polygon_layer(
+    name: str,
+    frame: pd.DataFrame,
+    display_geometry_path: str | None,
+    stroke_color: str = "#d97706",
+    fill_color: str = "#d97706",
+) -> dict[str, Any] | None:
+    feature_collection = _solar_polygon_feature_collection(frame, display_geometry_path, name)
+    if feature_collection is None:
+        return None
+    return {
+        "name": name,
+        "feature_collection": feature_collection,
+        "fill_property": "fill",
+        "legend_items": [],
+        "legend_id": f"solar_polygon_{name.lower().replace(' ', '_')}",
+        "legend_title": "",
+        "default_visible": True,
+        "stroke_color": stroke_color,
+        "fill_color": fill_color,
+        "stroke_opacity": 0.74,
+        "fill_opacity": 0.08,
+        "weight": 1.6,
+        "point_radius": 6,
+        "dash_array": "6 4",
+        "use_global_opacity": False,
+        "z_index": 430,
     }
 
 
@@ -1114,6 +1068,26 @@ def _init_wind_control_state() -> None:
         st.session_state.setdefault(_wind_control_key("blend", group.id), int(group.blend_default))
     for layer in layers.values():
         st.session_state.setdefault(_wind_control_key("layer", layer.id), False)
+
+
+def _prime_wind_builder_state(
+    saved_ui_params: dict[str, float] | None = None,
+    saved_layer_selection: dict[str, list[str]] | None = None,
+) -> None:
+    _init_wind_control_state()
+    selected = normalize_group_layer_map(saved_layer_selection or {})
+    for group in ordered_groups():
+        param_key = GROUP_PARAM_MAP.get(group.id)
+        if param_key and isinstance(saved_ui_params, dict) and param_key in saved_ui_params:
+            st.session_state.setdefault(
+                _wind_control_key("analysis", group.id),
+                int(round(float(saved_ui_params[param_key]))),
+            )
+    for layer in ordered_layers():
+        st.session_state.setdefault(
+            _wind_control_key("layer", layer.id),
+            bool(layer.id in selected.get(layer.group_id, [])),
+        )
 
 
 def _wind_layer_status_lookup(registry_meta: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -1209,7 +1183,7 @@ def _wind_runtime_overlay_control() -> bool:
     st.checkbox(
         "Visa potentiell etableringsyta (geometri)",
         key=WIND_RUNTIME_OVERLAY_KEY,
-        help="Kör geometri-runtime och lägg till grupplager plus kombinerad acceptansyta i vektorvyn.",
+        help="KÃ¶r geometri-runtime och lÃ¤gg till grupplager plus kombinerad acceptansyta i vektorvyn.",
     )
     return _wind_runtime_overlays_enabled()
 
@@ -1274,7 +1248,7 @@ def _wind_source_vector_layers(
             source_opacity = _wind_source_opacity(group_id)
             map_layers.append(
                 {
-                    "name": f"Källa: {layer_label(layer_spec, WIND_CONTROL_LANGUAGE, layer_spec.label)} ({group_label})",
+                    "name": f"KÃ¤lla: {layer_label(layer_spec, WIND_CONTROL_LANGUAGE, layer_spec.label)} ({group_label})",
                     "feature_collection": geojson,
                     "fill_property": "fill",
                     "legend_items": [],
@@ -1332,7 +1306,7 @@ def _wind_polygon_source_layers(
                 continue
             map_layers.append(
                 {
-                    "name": f"Källa: {layer_label(layer_spec, WIND_CONTROL_LANGUAGE, layer_spec.label)} ({translated_group_label})",
+                    "name": f"KÃ¤lla: {layer_label(layer_spec, WIND_CONTROL_LANGUAGE, layer_spec.label)} ({translated_group_label})",
                     "feature_collection": geojson,
                     "fill_property": "fill",
                     "legend_items": [],
@@ -1400,6 +1374,7 @@ def _wind_polygon_combined_layer(runtime_result: dict[str, Any]) -> dict[str, An
         "point_radius": 6,
         "dash_array": "7 5",
         "use_global_opacity": False,
+        "z_index": 440,
     }
 
 
@@ -1425,8 +1400,8 @@ def _wind_polygon_group_summary_frame(
         rows.append(
             {
                 "Regelgrupp": group_label(groups[group.id], WIND_CONTROL_LANGUAGE, groups[group.id].label),
-                "Källager": ", ".join(selected_labels) if selected_labels else "-",
-                "Avstånd m": int(round(threshold_value)),
+                "KÃ¤llager": ", ".join(selected_labels) if selected_labels else "-",
+                "AvstÃ¥nd m": int(round(threshold_value)),
                 "Buffert synlig": bool(runtime_group and runtime_group.get("geojson")),
                 "Landandel": "-" if land_share is None else f"{float(land_share):.1f}%",
             }
@@ -1596,8 +1571,8 @@ def _wind_runtime_hex_feature_collection(frame: pd.DataFrame, display_geometry_p
             f"Hex: {row.hex_id}<br>"
             f"Potentialandel: {float(row.potential_area_share_pct):.1f}%<br>"
             f"Klass: {row.share_class_label}<br>"
-            f"Kärnscore: {float(row.core_score):.2f}<br>"
-            f"Kärnrank i zon: {int(row.center_mass_rank)} av {int(row.zone_size)}"
+            f"KÃ¤rnscore: {float(row.core_score):.2f}<br>"
+            f"KÃ¤rnrank i zon: {int(row.center_mass_rank)} av {int(row.zone_size)}"
         )
         features.append(
             {
@@ -1630,10 +1605,10 @@ def _wind_runtime_hex_layer(region: dict[str, Any], runtime_result: dict[str, An
         "legend_id": "wind_polygon_hex_share",
         "legend_title": f"R{WIND_POLYGON_HEX_RESOLUTION} potentialandel",
         "default_visible": True,
-        "stroke_opacity": 0.34,
-        "fill_opacity": 0.74,
-        "weight": 0.35,
+        "stroke": False,
+        "weight": 0.0,
         "point_radius": 4,
+        "z_index": 410,
     }
 
 
@@ -1669,6 +1644,52 @@ def _wind_polygon_preview_state(
         "combined_land_share_pct": (runtime_result.get("combined") or {}).get("land_share_pct"),
         "hex_layer_available": bool(hex_layer is not None),
     }
+
+
+def _wind_polygon_summary_frame(
+    region: dict[str, Any],
+    landscape_manifest: dict[str, Any],
+    runtime_result: dict[str, Any],
+) -> pd.DataFrame:
+    frame = _wind_runtime_hex_layer_frame(region, runtime_result).copy()
+    if frame.empty:
+        return pd.DataFrame(
+            columns=[
+                "hex_id",
+                "potential_area_share_pct",
+                "share_class_id",
+                "share_class_label",
+                "fill",
+                "wind_score",
+                "wind_class",
+                "wind_class_label",
+                "wind_color",
+                "class_km",
+                "landscape_type",
+            ]
+        )
+
+    frame["wind_score"] = frame["potential_area_share_pct"].astype(float)
+    frame["wind_class"] = frame["share_class_id"].astype(str)
+    frame["wind_class_label"] = frame["share_class_label"].astype(str)
+    frame["wind_color"] = frame["fill"].astype(str)
+
+    landscape = _landscape_frame(region, landscape_manifest, WIND_POLYGON_HEX_RESOLUTION)
+    context_cols = [column for column in ["hex_id", "class_km", "landscape_type"] if column in landscape.columns]
+    if context_cols:
+        context = landscape[context_cols].drop_duplicates(subset=["hex_id"])
+        frame = frame.merge(context, on="hex_id", how="left")
+
+    if "class_km" not in frame.columns:
+        frame["class_km"] = ""
+    else:
+        frame["class_km"] = frame["class_km"].fillna("").astype(str)
+    if "landscape_type" not in frame.columns:
+        frame["landscape_type"] = ""
+    else:
+        frame["landscape_type"] = frame["landscape_type"].fillna("").astype(str)
+
+    return frame.sort_values("hex_id").reset_index(drop=True)
 
 
 def _wind_group_summary_frame(
@@ -1715,14 +1736,14 @@ def _wind_source_status_frame() -> pd.DataFrame:
         ["regelgrupp", "label", "geometry_family", "feature_count", "status", "klar", "message"]
     ].rename(
         columns={
-            "label": "källager",
+            "label": "kÃ¤llager",
             "geometry_family": "geometri",
             "feature_count": "objekt",
             "status": "status",
             "message": "notering",
         }
     )
-    return output.sort_values(["regelgrupp", "källager"], ascending=[True, True]).reset_index(drop=True)
+    return output.sort_values(["regelgrupp", "kÃ¤llager"], ascending=[True, True]).reset_index(drop=True)
 
 
 def _wind_runtime_config_json(
@@ -1751,150 +1772,6 @@ def _wind_runtime_result(
     return run_geometry_runtime(runtime_cfg)
 
 
-def _wind_runtime_layers_from_result(runtime: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    groups, _, _ = load_acceptance_registry()
-    layers: list[dict[str, Any]] = []
-
-    for group_id, group_meta in (runtime.get("groups") or {}).items():
-        geojson = group_meta.get("geojson")
-        if not geojson:
-            continue
-        group_label_text = GROUP_LABELS.get(group_id, groups[group_id].label if group_id in groups else group_id)
-        if group_id in groups:
-            group_label_text = group_label(groups[group_id], WIND_CONTROL_LANGUAGE, groups[group_id].label)
-        group_color = _rgb_to_hex(groups[group_id].group_color) if group_id in groups else "#4d4d4d"
-        opacity = _wind_group_opacity(group_id)
-        layers.append(
-            {
-                "name": f"Grupp: {group_label_text}",
-                "feature_collection": geojson,
-                "fill_property": "fill",
-                "legend_items": [],
-                "legend_id": f"wind_runtime_group_{group_id}",
-                "legend_title": "",
-                "default_visible": False,
-                "stroke_color": group_color,
-                "fill_color": group_color,
-                "stroke_opacity": max(min(opacity * 0.95, 1.0), 0.0),
-                "fill_opacity": max(min(opacity * 0.32, 1.0), 0.0),
-                "weight": 2.2,
-                "point_radius": 6,
-                "use_global_opacity": False,
-            }
-        )
-
-    combined = runtime.get("combined") if isinstance(runtime.get("combined"), dict) else None
-    if combined and combined.get("geojson"):
-        layers.append(
-            {
-                "name": ui_text("combined_overlay_name", WIND_CONTROL_LANGUAGE),
-                "feature_collection": combined["geojson"],
-                "fill_property": "fill",
-                "legend_items": [],
-                "legend_id": "wind_runtime_combined",
-                "legend_title": "",
-                "default_visible": True,
-                "stroke_color": "#c4322b",
-                "fill_color": "#c4322b",
-                "stroke_opacity": 0.78,
-                "fill_opacity": 0.08,
-                "weight": 1.8,
-                "point_radius": 6,
-                "dash_array": "7 5",
-                "use_global_opacity": False,
-            }
-        )
-
-    meta = {
-        "cache_key": runtime.get("cache_key"),
-        "group_count": len(runtime.get("groups") or {}),
-        "combined_land_share_pct": (combined or {}).get("land_share_pct"),
-    }
-    return layers, meta
-
-
-def _wind_runtime_preview_frame(
-    runtime: dict[str, Any] | None,
-    score_frame: pd.DataFrame,
-    h3_resolution: int,
-    breaks: list[dict[str, Any]],
-) -> pd.DataFrame | None:
-    combined = runtime.get("combined") if isinstance(runtime, dict) else None
-    if not isinstance(combined, dict) or not combined.get("geojson"):
-        return None
-
-    preview = runtime_combined_hex_frame(combined["geojson"], h3_resolution, breaks)
-    if preview.empty:
-        return preview
-
-    context_cols = [column for column in ["hex_id", "class_km", "landscape_type"] if column in score_frame.columns]
-    if context_cols:
-        context_frame = score_frame[context_cols].drop_duplicates(subset=["hex_id"])
-        preview = preview.merge(context_frame, on="hex_id", how="left")
-    if "class_km" not in preview.columns:
-        preview["class_km"] = ""
-    if "landscape_type" not in preview.columns:
-        preview["landscape_type"] = ""
-    return preview
-
-
-def _wind_runtime_layers(
-    ui_params: dict[str, float],
-    layer_selection: dict[str, list[str]] | None = None,
-) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    runtime = _wind_runtime_result(ui_params, layer_selection=layer_selection)
-    return _wind_runtime_layers_from_result(runtime)
-
-
-def _wind_builder_summary_panel(
-    frame: pd.DataFrame,
-    source_frame: pd.DataFrame,
-    ui_params: dict[str, float],
-    selected_layers: dict[str, list[str]],
-    h3_resolution: int,
-    runtime_meta: dict[str, Any] | None = None,
-    runtime_enabled: bool = False,
-    runtime_error: str | None = None,
-) -> None:
-    proto_tab, review_tab, data_tab = st.tabs(["Prototyp", "Modellgranskning", "Datastatus"])
-    with proto_tab:
-        _potential_detail_panel("Osparad vindförhandsvisning", frame, "wind", h3_resolution)
-        vector_stats = wind_candidate_summary(source_frame)
-        st.metric(f"Kandidatytor R{WIND_SOURCE_RESOLUTION}", vector_stats["candidate_cells"])
-        st.metric("Kandidatandel", f"{vector_stats['candidate_share']:.1f}%")
-        if runtime_enabled:
-            if runtime_error:
-                st.warning(f"Geometri-runtime kunde inte köras: {runtime_error}")
-            elif runtime_meta:
-                left, right = st.columns(2)
-                left.metric("Runtime-grupper", int(runtime_meta.get("group_count") or 0))
-                land_share = runtime_meta.get("combined_land_share_pct")
-                right.metric("Kombinerad landandel", "-" if land_share is None else f"{float(land_share):.1f}%")
-                if runtime_meta.get("cache_key"):
-                    st.caption(f"Runtime-cache: {runtime_meta['cache_key']}")
-            else:
-                st.caption("Geometri-runtime är påslagen men returnerade inga lager för nuvarande urval.")
-        else:
-            st.caption("Geometri-runtimeoverlay är avstängd.")
-        with st.expander("Aktiva regelgrupper", expanded=False):
-            st.dataframe(_wind_group_summary_frame(ui_params, layer_selection=selected_layers), use_container_width=True, hide_index=True, height=240)
-        with st.expander("Aktiva vindparametrar"):
-            st.json(ui_params)
-        with st.expander("Migrerad regelgruppslogik"):
-            st.dataframe(wind_acceptance_group_summary(), use_container_width=True, hide_index=True)
-
-    with review_tab:
-        st.subheader("Kritisk genomgång")
-        for item in critical_review_items("sv"):
-            st.write(f"- {item}")
-        st.subheader("Hexagonsnot")
-        for item in hexagon_note_items("sv"):
-            st.write(f"- {item}")
-
-    with data_tab:
-        st.dataframe(_wind_source_status_frame(), use_container_width=True, hide_index=True, height=300)
-
-
 def _landscape_layer(
     name: str,
     frame: pd.DataFrame,
@@ -1912,6 +1789,8 @@ def _landscape_layer(
         "legend_id": f"landscape_{mode}_{factor}",
         "legend_title": name,
         "default_visible": True,
+        "stroke": False,
+        "weight": 0.0,
     }
 
 
@@ -1930,10 +1809,44 @@ def _landscape_type_layer(
         "legend_id": "landscape_v10_types",
         "legend_title": name,
         "default_visible": True,
+        "stroke": False,
+        "weight": 0.0,
     }
 
 
 def _combined_summary(map_state: dict[str, Any], scenario_state: dict[str, Any]) -> None:
+    def _wind_share_summary(frame: pd.DataFrame) -> pd.DataFrame:
+        if frame.empty:
+            return pd.DataFrame(columns=["klass", "klass_label", "hexagoner", "medelandel"])
+        work = frame.copy()
+        work["potential_area_share_pct"] = pd.to_numeric(work["potential_area_share_pct"], errors="coerce").fillna(0.0)
+        work["share_class_index"] = pd.to_numeric(work.get("share_class_index"), errors="coerce").fillna(999).astype(int)
+        work["share_class_id"] = work["share_class_id"].astype(str)
+        work["share_class_label"] = work["share_class_label"].astype(str)
+        return (
+            work.groupby(["share_class_index", "share_class_id", "share_class_label"], as_index=False)
+            .agg(hexagoner=("hex_id", "count"), medelandel=("potential_area_share_pct", "mean"))
+            .sort_values(["share_class_index", "medelandel"])
+            .assign(medelandel=lambda data: data["medelandel"].round(1))
+            .rename(columns={"share_class_id": "klass", "share_class_label": "klass_label"})
+            [["klass", "klass_label", "hexagoner", "medelandel"]]
+        )
+
+    def _metric_value_text(frame: pd.DataFrame, score_col: str, template: str) -> str:
+        if frame.empty:
+            return "-"
+        value = float(frame[score_col].mean())
+        try:
+            return template.format(value=value)
+        except Exception:
+            return f"{value:.1f}"
+
+    def _high_share_pct(frame: pd.DataFrame, class_col: str, high_classes: list[str] | tuple[str, ...] | None) -> float:
+        if frame.empty:
+            return 0.0
+        target_classes = [str(value) for value in (high_classes or ["high", "very_high"])]
+        return float(frame[class_col].astype(str).isin(target_classes).mean() * 100.0)
+
     st.subheader("Tolkning")
     st.caption(f"Scenario: {scenario_state.get('scenario') or '-'}")
     st.metric("Aktiva lager", len(map_state.get("layers") or []))
@@ -1944,31 +1857,26 @@ def _combined_summary(map_state: dict[str, Any], scenario_state: dict[str, Any])
         technology = item["technology"]
         score_col = f"{technology}_score"
         class_col = f"{technology}_class"
-        high_share = float(frame[class_col].isin(["high", "very_high"]).mean() * 100.0) if not frame.empty else 0.0
+        high_share = _high_share_pct(frame, class_col, item.get("high_classes"))
+        mean_label = str(item.get("mean_label", "MedelpoÃ¤ng"))
+        mean_format = str(item.get("mean_format", "{value:.1f}"))
+        high_label = str(item.get("high_label", "HÃ¶g potential"))
         with st.expander(item["label"], expanded=True):
             left, right = st.columns(2)
-            left.metric("Medelpoäng", f"{frame[score_col].mean():.1f}" if not frame.empty else "-")
-            right.metric("Hög potential", f"{high_share:.1f}%")
-            st.dataframe(potential_summary(frame, technology), use_container_width=True, hide_index=True)
+            left.metric(mean_label, _metric_value_text(frame, score_col, mean_format))
+            right.metric(high_label, f"{high_share:.1f}%")
+            item_resolution = item.get("resolution")
+            if item_resolution is not None:
+                st.caption(f"H3-rollup: R{int(item_resolution)}")
+            if item.get("summary_mode") == "wind_share":
+                summary_frame = _wind_share_summary(frame)
+            else:
+                summary_frame = potential_summary(frame, technology)
+            st.dataframe(summary_frame, use_container_width=True, hide_index=True)
 
     if map_state.get("landscape_active"):
         with st.expander("Landskapsanalys", expanded=False):
             st.write("v9-kluster, v10-landskapstyper och faktorlager visas med samma H3-rollup som potentiallagren.")
-
-
-def _potential_detail_panel(label: str, frame: pd.DataFrame, technology: str, resolution: int) -> None:
-    score_col = f"{technology}_score"
-    class_col = f"{technology}_class"
-    high_share = float(frame[class_col].isin(["high", "very_high"]).mean() * 100.0) if not frame.empty else 0.0
-    st.subheader(label)
-    st.metric("H3-rollup", f"R{resolution}")
-    left, right = st.columns(2)
-    left.metric("Medelpoäng", f"{frame[score_col].mean():.1f}" if not frame.empty else "-")
-    right.metric("Hög potential", f"{high_share:.1f}%")
-    with st.expander("Potentialklasser", expanded=True):
-        st.dataframe(potential_summary(frame, technology), use_container_width=True, hide_index=True)
-    with st.expander("Per landskapstyp", expanded=True):
-        st.dataframe(potential_by_landscape(frame, technology), use_container_width=True, hide_index=True)
 
 
 def _data_method(region: dict[str, Any]) -> None:
@@ -1991,76 +1899,7 @@ def _data_method(region: dict[str, Any]) -> None:
         st.json(region)
 
 
-def _combined_layer_controls(
-    panel: Any | None,
-    region: dict[str, Any],
-    landscape_manifest: dict[str, Any],
-    factors: list[str],
-    saved_solar_params: dict[str, float] | None,
-    saved_wind_ui_params: dict[str, float] | None,
-) -> dict[str, Any]:
-    if panel is None:
-        h3_resolution, opacity, preserve_map_view, map_reset_token = _map_control_values(region, "combined")
-        selected_factor = str(st.session_state.get("combined_landscape_factor", factors[0] if factors else ""))
-        if selected_factor not in factors and factors:
-            selected_factor = factors[0]
-        return {
-            "h3_resolution": h3_resolution,
-            "opacity": opacity,
-            "preserve_map_view": preserve_map_view,
-            "map_reset_token": map_reset_token,
-            "display_mode": _display_mode_value("combined"),
-            "show_default_solar": bool(st.session_state.get("show_default_solar", True)),
-            "show_user_solar": bool(st.session_state.get("show_user_solar", False)),
-            "show_default_wind": bool(st.session_state.get("show_default_wind", False)),
-            "show_user_wind": bool(st.session_state.get("show_user_wind", False)),
-            "show_v10": bool(st.session_state.get("show_landscape_v10", False)),
-            "show_cluster": bool(st.session_state.get("show_landscape_cluster", False)),
-            "show_factor": bool(st.session_state.get("show_landscape_factor", False)),
-            "selected_factor": selected_factor,
-        }
-
-    h3_resolution, opacity, preserve_map_view, map_reset_token = _map_panel_controls(region, "combined", panel)
-    display_mode = _display_mode_panel("combined", panel)
-
-    with panel.expander("Potential", expanded=True):
-        show_default_solar = st.checkbox("Default solpotential", value=True, key="show_default_solar")
-        show_user_solar = st.checkbox("Egen solpotential", value=False, key="show_user_solar")
-        st.caption("Egen sol: sparad" if saved_solar_params is not None else "Egen sol: ej sparad")
-        show_default_wind = st.checkbox("Default vindpotential", value=False, key="show_default_wind")
-        show_user_wind = st.checkbox("Egen vindpotential", value=False, key="show_user_wind")
-        st.caption("Egen vind: sparad" if saved_wind_ui_params is not None else "Egen vind: ej sparad")
-
-    with panel.expander("Landskap", expanded=True):
-        show_v10 = st.checkbox("v10 landskapstyper", value=False, key="show_landscape_v10")
-        show_cluster = st.checkbox("v9 kluster K=8", value=False, key="show_landscape_cluster")
-        show_factor = st.checkbox("v9 faktorlager", value=False, key="show_landscape_factor")
-        selected_factor = st.selectbox(
-            "Faktor",
-            options=factors,
-            index=0,
-            format_func=lambda factor: f"{factor} - {factor_label(landscape_manifest, factor)}",
-            disabled=not show_factor,
-            key="combined_landscape_factor",
-        )
-    return {
-        "h3_resolution": int(h3_resolution),
-        "opacity": float(opacity),
-        "preserve_map_view": bool(preserve_map_view),
-        "map_reset_token": map_reset_token,
-        "display_mode": display_mode,
-        "show_default_solar": bool(show_default_solar),
-        "show_user_solar": bool(show_user_solar),
-        "show_default_wind": bool(show_default_wind),
-        "show_user_wind": bool(show_user_wind),
-        "show_v10": bool(show_v10),
-        "show_cluster": bool(show_cluster),
-        "show_factor": bool(show_factor),
-        "selected_factor": str(selected_factor),
-    }
-
-
-def _combined_tab(
+def _unified_workspace_tab(
     region: dict[str, Any],
     scenario_state: dict[str, Any],
     context: dict[str, Any],
@@ -2072,112 +1911,153 @@ def _combined_tab(
     solar_rules = context["solar_rules"]
     factors = factor_columns(landscape_manifest, load_factor_scores(landscape_manifest))
 
-    h3_resolution, opacity, preserve_map_view, map_reset_token = _map_panel_controls(region, "combined", left_panel)
-    display_mode = _display_mode_panel("combined", left_panel)
-    display_geometry_path = _h3_display_geometry_path(region, h3_resolution)
     saved_solar_params = _saved_solar_params()
-    saved_wind_ui_params = _saved_wind_params()
-    saved_wind_layer_selection = _saved_wind_layer_selection()
+    solar_defaults = _default_solar_params(solar_rules)
+    _prime_solar_builder_state(solar_defaults, saved_solar_params)
+    _prime_wind_builder_state(_default_wind_params(), _selected_wind_layers())
+    h3_resolution = int(st.session_state.get("combined_h3_resolution", _preferred_h3_resolution(region, 9)))
+    opacity = _current_opacity("combined")
+    preserve_map_view = True
+    map_reset_token = _map_view_reset_token()
+
+    st.session_state.setdefault("show_default_solar", False)
+    st.session_state.setdefault("show_user_solar", False)
+    st.session_state.setdefault("show_default_wind", False)
+    st.session_state.setdefault("show_user_wind", True)
+    st.session_state.setdefault("show_landscape_v10", True)
+    st.session_state.setdefault("show_landscape_cluster", False)
+    st.session_state.setdefault("show_landscape_factor", False)
+
+    show_default_solar = bool(st.session_state.get("show_default_solar"))
+    show_user_solar = bool(st.session_state.get("show_user_solar"))
+    show_default_wind = bool(st.session_state.get("show_default_wind"))
+    show_user_wind = bool(st.session_state.get("show_user_wind"))
+    show_v10 = bool(st.session_state.get("show_landscape_v10"))
+    show_cluster = bool(st.session_state.get("show_landscape_cluster", False))
+    show_factor = bool(st.session_state.get("show_landscape_factor", False))
+    selected_factor = str(st.session_state.get("combined_landscape_factor", factors[0] if factors else ""))
+    if selected_factor not in factors and factors:
+        selected_factor = factors[0]
+
+    wind_selected_layers = _selected_wind_layers()
+    wind_ui_params = _default_wind_params()
+    wind_controls_applied = False
 
     if left_panel is not None:
-        with left_panel.expander("Potential", expanded=True):
-            show_default_solar = st.checkbox("Default solpotential", value=True, key="show_default_solar")
-            show_user_solar = st.checkbox("Egen solpotential", value=False, key="show_user_solar")
-            st.caption("Egen sol: sparad" if saved_solar_params is not None else "Egen sol: ej sparad")
-            show_default_wind = st.checkbox("Default vindpotential", value=False, key="show_default_wind")
-            show_user_wind = st.checkbox("Egen vindpotential", value=False, key="show_user_wind")
-            st.caption("Egen vind: sparad" if saved_wind_ui_params is not None else "Egen vind: ej sparad")
         with left_panel.expander("Landskap", expanded=True):
-            show_v10 = st.checkbox("v10 landskapstyper", value=False, key="show_landscape_v10")
-            show_cluster = st.checkbox("v9 kluster K=8", value=False, key="show_landscape_cluster")
-            show_factor = st.checkbox("v9 faktorlager", value=False, key="show_landscape_factor")
+            show_v10 = st.checkbox("v10 landskapstyper", value=show_v10, key="show_landscape_v10")
+            show_cluster = st.checkbox("v9 kluster K=8", value=show_cluster, key="show_landscape_cluster")
+            show_factor = st.checkbox("v9 faktorlager", value=show_factor, key="show_landscape_factor")
             selected_factor = st.selectbox(
-                "Faktor för v9 faktorlager",
+                "Faktor",
                 options=factors,
-                index=0,
+                index=factors.index(selected_factor) if selected_factor in factors else 0,
                 format_func=lambda factor: f"{factor} - {factor_label(landscape_manifest, factor)}",
                 disabled=not show_factor,
                 key="combined_landscape_factor",
             )
 
-    else:
-        show_default_solar = bool(st.session_state.get("show_default_solar", True))
-        show_user_solar = bool(st.session_state.get("show_user_solar", False))
-        show_default_wind = bool(st.session_state.get("show_default_wind", False))
-        show_user_wind = bool(st.session_state.get("show_user_wind", False))
-        show_v10 = bool(st.session_state.get("show_landscape_v10", False))
-        show_cluster = bool(st.session_state.get("show_landscape_cluster", False))
-        show_factor = bool(st.session_state.get("show_landscape_factor", False))
-        selected_factor = str(st.session_state.get("combined_landscape_factor", factors[0] if factors else ""))
-        if selected_factor not in factors and factors:
-            selected_factor = factors[0]
+        h3_resolution, opacity, preserve_map_view, map_reset_token = _map_panel_controls(region, "combined", left_panel)
+
+        with left_panel.expander("Potential", expanded=True):
+            st.caption("VÃ¤lj vilka lagerfamiljer som ska visas i kartan.")
+            show_user_wind = st.checkbox("Egen vindpotential", value=show_user_wind, key="show_user_wind")
+            show_default_wind = st.checkbox("Default vindpotential", value=show_default_wind, key="show_default_wind")
+            show_user_solar = st.checkbox("Egen solpotential", value=show_user_solar, key="show_user_solar")
+            show_default_solar = st.checkbox("Default solpotential", value=show_default_solar, key="show_default_solar")
+
+        with left_panel.expander("Vindpotential", expanded=True):
+            st.caption("Bygg vindpotential direkt i samma vy. Kartan visar alltid bÃ¥de den kombinerade polygonen och R10-hexlagret.")
+            st.caption("Separat sparning behÃ¶vs inte lÃ¤ngre i den hÃ¤r arbetsvyn.")
+            wind_selected_layers, wind_ui_params, wind_controls_applied = _wind_group_controls("wind_unified", language=WIND_CONTROL_LANGUAGE)
+
+        with left_panel.expander("Solpotential", expanded=False):
+            st.caption("Bygg solpotential direkt i samma vy. Kartan visar alltid bÃ¥de hexlager och ett sammanhÃ¤ngande polygonlager.")
+            if st.button("Ã…terstÃ¤ll sol-default", key="reset_solar_builder_unified"):
+                _reset_builder("solar_builder", solar_defaults)
+            _builder_slider("solar_builder", "base_score", "BasnivÃ¥", 30.0, 75.0, 1.0, solar_defaults, "StartpoÃ¤ng innan landskapsvillkor lÃ¤ggs till.")
+            _builder_slider("solar_builder", "grid_access_bonus", "Infrastruktur/Ã¥tkomst-bonus", 0.0, 20.0, 1.0, solar_defaults, "Proxy fÃ¶r hur mycket nÃ¤rhet till vÃ¤g/elanslutning ska hÃ¶ja solpotentialen.")
+            _builder_slider("solar_builder", "everyday_matrix_bonus", "Ã–ppet vardagslandskap", 0.0, 30.0, 1.0, solar_defaults, "Bonus fÃ¶r bredare vardags-/produktionslandskap.")
+            _builder_slider("solar_builder", "coastal_penalty", "Kust- och lÃ¥glandsstraff", 0.0, 35.0, 1.0, solar_defaults, "SÃ¤nker potential i kustnÃ¤ra och lÃ¥glÃ¤nta landskap.")
+            _builder_slider("solar_builder", "terrain_penalty", "TerrÃ¤ng- och dalstraff", 0.0, 35.0, 1.0, solar_defaults, "SÃ¤nker potential dÃ¤r relief och sprickdalar dominerar.")
+            _builder_slider("solar_builder", "protected_penalty", "Skog/habitat-straff", 0.0, 40.0, 1.0, solar_defaults, "SÃ¤nker potential i skyddade skogs- och habitatmiljÃ¶er.")
+            _builder_slider("solar_builder", "settlement_penalty", "BosÃ¤ttningsstraff", 0.0, 35.0, 1.0, solar_defaults, "SÃ¤nker potential dÃ¤r bebyggelse och tÃ¤t struktur dominerar.")
+            if st.button("Spara solpotential", type="primary", use_container_width=True, key="save_solar_unified"):
+                _save_solar_potential(_state_params("solar_builder", solar_defaults), h3_resolution)
+                st.success("Solpotential sparad.")
+
+    display_geometry_path = _h3_display_geometry_path(region, h3_resolution)
+    solar_params = _state_params("solar_builder", solar_defaults)
+    st.session_state["solar_builder_params"] = solar_params
+    st.session_state["wind_builder_params"] = wind_ui_params
 
     layers: list[dict[str, Any]] = []
     potential_frames: list[dict[str, Any]] = []
-    vector_placeholders: list[str] = []
-
-    if show_user_solar and saved_solar_params is None:
-        st.error("Egen solpotential saknas. Gå till Bygg solpotential och tryck Spara solpotential när du är nöjd.")
-        st.button("Gå till Bygg solpotential", key="missing_solar_go_builder", on_click=_set_active_view, args=("Bygg solpotential",))
-
-    if show_user_wind and saved_wind_ui_params is None:
-        st.error("Egen vindpotential saknas. Gå till Bygg vindpotential och tryck Spara vindpotential när du är nöjd.")
-        st.button("Gå till Bygg vindpotential", key="missing_wind_go_builder", on_click=_set_active_view, args=("Bygg vindpotential",))
+    unified_notes: list[str] = []
 
     if show_default_solar:
-        if _mode_wants_hex(display_mode):
-            frame = _default_solar_frame(region, landscape_manifest, potential_manifest, solar_rules, h3_resolution)
-            layers.append(_potential_layer(f"Default solpotential R{h3_resolution}", frame, "solar", display_geometry_path, _solar_legend_items(solar_rules)))
-            potential_frames.append({"label": "Default solpotential", "technology": "solar", "frame": frame})
-        if _mode_wants_vector(display_mode):
-            vector_placeholders.append("default solpotential")
+        default_solar_frame = _default_solar_frame(region, landscape_manifest, potential_manifest, solar_rules, h3_resolution)
+        layers.append(_potential_layer(f"Default solpotential R{h3_resolution}", default_solar_frame, "solar", display_geometry_path, _solar_legend_items(solar_rules)))
+        default_solar_polygon = _solar_polygon_layer("Default solyta", default_solar_frame, display_geometry_path, stroke_color="#d97706", fill_color="#d97706")
+        if default_solar_polygon is not None:
+            layers.append(default_solar_polygon)
+        potential_frames.append({"label": "Default solpotential", "technology": "solar", "frame": default_solar_frame, "resolution": h3_resolution})
 
-    if show_user_solar and saved_solar_params is not None:
-        if _mode_wants_hex(display_mode):
-            frame = _custom_solar_frame(region, landscape_manifest, solar_rules, h3_resolution, saved_solar_params)
-            layers.append(_potential_layer(f"Egen solpotential R{h3_resolution}", frame, "solar", display_geometry_path, _solar_legend_items(solar_rules)))
-            potential_frames.append({"label": "Egen solpotential", "technology": "solar", "frame": frame})
-        if _mode_wants_vector(display_mode):
-            vector_placeholders.append("sparad egen solpotential")
+    if show_user_solar:
+        user_solar_frame = _custom_solar_frame(region, landscape_manifest, solar_rules, h3_resolution, solar_params)
+        layers.append(_potential_layer(f"Egen solpotential R{h3_resolution}", user_solar_frame, "solar", display_geometry_path, _solar_legend_items(solar_rules)))
+        user_solar_polygon = _solar_polygon_layer("Egen solyta", user_solar_frame, display_geometry_path, stroke_color="#b45309", fill_color="#b45309")
+        if user_solar_polygon is not None:
+            layers.append(user_solar_polygon)
+        potential_frames.append({"label": "Egen solpotential", "technology": "solar", "frame": user_solar_frame, "resolution": h3_resolution})
+        unified_notes.append("Solpolygonlagret byggs frÃ¥n de hex som klassas som hÃ¶g eller mycket hÃ¶g solpotential i aktuell H3-upplÃ¶sning.")
 
     if show_default_wind:
-        ui_params = _default_wind_params()
+        default_wind_params = _default_wind_params()
         default_layer_selection = normalize_group_layer_map(_default_wind_layer_selection())
-        source_frame = _wind_source_frame(
+        default_wind_source_frame = _wind_source_frame(
             landscape_manifest,
             solar_rules,
-            ui_params,
+            default_wind_params,
             group_layer_selection=default_layer_selection,
         )
-        frame = _filter_frame_to_display_geometries(
-            wind_acceptance_rollup_frame(source_frame, h3_resolution, _class_breaks(solar_rules)),
+        default_wind_frame = _filter_frame_to_display_geometries(
+            wind_acceptance_rollup_frame(default_wind_source_frame, h3_resolution, _class_breaks(solar_rules)),
             display_geometry_path,
         )
-        if _mode_wants_hex(display_mode):
-            layers.append(_potential_layer(f"Default vindpotential R{h3_resolution}", frame, "wind", display_geometry_path, _solar_legend_items(solar_rules)))
-        if _mode_wants_vector(display_mode):
-            layers.extend(_wind_source_vector_layers(ui_params, layer_selection=default_layer_selection))
-            layers.append(_wind_vector_layer("Default vindpotential vektor", source_frame, _h3_display_geometry_path(region, WIND_SOURCE_RESOLUTION), _solar_legend_items(solar_rules)))
-        potential_frames.append({"label": "Default vindpotential", "technology": "wind", "frame": frame})
+        layers.append(_potential_layer(f"Default vindpotential R{h3_resolution}", default_wind_frame, "wind", display_geometry_path, _solar_legend_items(solar_rules)))
+        layers.append(
+            _wind_vector_layer(
+                "Default vindpotential vektor",
+                default_wind_source_frame,
+                _h3_display_geometry_path(region, WIND_SOURCE_RESOLUTION),
+                _solar_legend_items(solar_rules),
+            )
+        )
+        potential_frames.append({"label": "Default vindpotential", "technology": "wind", "frame": default_wind_frame, "resolution": h3_resolution})
 
-    if show_user_wind and saved_wind_ui_params is not None:
-        user_layer_selection = normalize_group_layer_map(saved_wind_layer_selection or _selected_wind_layers())
-        source_frame = _wind_source_frame(
-            landscape_manifest,
-            solar_rules,
-            saved_wind_ui_params,
-            group_layer_selection=user_layer_selection,
-        )
-        frame = _filter_frame_to_display_geometries(
-            wind_acceptance_rollup_frame(source_frame, h3_resolution, _class_breaks(solar_rules)),
-            display_geometry_path,
-        )
-        if _mode_wants_hex(display_mode):
-            layers.append(_potential_layer(f"Egen vindpotential R{h3_resolution}", frame, "wind", display_geometry_path, _solar_legend_items(solar_rules)))
-        if _mode_wants_vector(display_mode):
-            layers.extend(_wind_source_vector_layers(saved_wind_ui_params, layer_selection=user_layer_selection))
-            layers.append(_wind_vector_layer("Egen vindpotential vektor", source_frame, _h3_display_geometry_path(region, WIND_SOURCE_RESOLUTION), _solar_legend_items(solar_rules)))
-        potential_frames.append({"label": "Egen vindpotential", "technology": "wind", "frame": frame})
+    custom_wind_preview_state: dict[str, Any] | None = None
+    if show_user_wind:
+        custom_wind_preview_state = _wind_polygon_preview_state(region, wind_ui_params, wind_selected_layers)
+        layers.extend(custom_wind_preview_state["layers"])
+        if custom_wind_preview_state["runtime_error"]:
+            unified_notes.append(f"Vindruntime kunde inte kÃ¶ras: {custom_wind_preview_state['runtime_error']}")
+        else:
+            custom_wind_summary = _wind_polygon_summary_frame(region, landscape_manifest, custom_wind_preview_state["runtime_result"])
+            potential_frames.append(
+                {
+                    "label": "Egen vindpotential",
+                    "technology": "wind",
+                    "frame": custom_wind_summary,
+                    "resolution": WIND_POLYGON_HEX_RESOLUTION,
+                    "high_classes": ["share_8", "share_9"],
+                    "mean_label": "Medelandel",
+                    "mean_format": "{value:.1f}%",
+                    "high_label": "Andel >65%",
+                    "summary_mode": "wind_share",
+                }
+            )
+            unified_notes.append("Vindpotentialen visar bÃ¥de den kombinerade etableringspolygonen och R10-hex med potentialandel frÃ¥n samma geometri.")
 
     if show_v10 or show_cluster or show_factor:
         landscape_frame = _landscape_frame(region, landscape_manifest, h3_resolution)
@@ -2188,15 +2068,17 @@ def _combined_tab(
         if show_factor:
             layers.append(_landscape_layer(f"v9 {selected_factor}: {factor_label(landscape_manifest, selected_factor)} R{h3_resolution}", landscape_frame, landscape_manifest, selected_factor, display_geometry_path, "factor"))
 
-    _vector_placeholder(vector_placeholders)
     _render_layers(
         region,
         layers,
         opacity,
-        map_state_key=f"{region.get('region_id', 'region')}:combined" if preserve_map_view else None,
+        map_state_key=f"{region.get('region_id', 'region')}:workspace" if preserve_map_view else None,
         map_reset_token=map_reset_token,
         opacity_key_prefix="combined",
+        note_title="Gemensam potentialvy",
+        note_body="Kartan visar bÃ¥de polygoner och hexagoner frÃ¥n samma potentialbyggen. Lager kan slÃ¥s av/pÃ¥ i kartkontrollen.",
     )
+
     summary_target = right_panel or st.container()
     with summary_target:
         _combined_summary(
@@ -2208,362 +2090,21 @@ def _combined_tab(
             },
             scenario_state,
         )
+        with st.expander("Byggstatus", expanded=False):
+            if show_user_solar:
+                st.metric("Aktiv solfÃ¶rhandsvisning", "PÃ¥")
+                st.caption("Solbygget visas som hexlager plus ett polygonlager som summerar hÃ¶g och mycket hÃ¶g solpotential.")
+            if show_user_wind and custom_wind_preview_state is not None:
+                left_metric, right_metric = st.columns(2)
+                left_metric.metric("Vind: aktiva kÃ¤llager", int(custom_wind_preview_state["active_source_count"]))
+                right_metric.metric("Vind: buffertgrupper", int(custom_wind_preview_state["active_group_count"]))
+                combined_share = custom_wind_preview_state["combined_land_share_pct"]
+                st.metric("Vind: potentiell landandel", "-" if combined_share is None else f"{float(combined_share):.1f}%")
+                if wind_controls_applied:
+                    st.caption(ui_text("controls_applied", WIND_CONTROL_LANGUAGE))
+            for note in unified_notes:
+                st.caption(note)
         _data_method(region)
-
-
-def _solar_builder_tab(
-    region: dict[str, Any],
-    context: dict[str, Any],
-    left_panel: Any | None = None,
-    right_panel: Any | None = None,
-) -> None:
-    landscape_manifest = context["landscape_manifest"]
-    solar_rules = context["solar_rules"]
-    defaults = _default_solar_params(solar_rules)
-    if left_panel is not None or right_panel is not None:
-        if left_panel is not None:
-            with left_panel:
-                st.header("Bygg solpotential")
-                st.caption("Justera reglagen och spara när kartbilden är användbar.")
-                if st.button("Återställ sol-default", key="reset_solar_builder"):
-                    _reset_builder("solar_builder", defaults)
-                _builder_slider("solar_builder", "base_score", "Basnivå", 30.0, 75.0, 1.0, defaults, "Startpoäng innan landskapsvillkor läggs till.")
-                _builder_slider("solar_builder", "grid_access_bonus", "Infrastruktur/åtkomst-bonus", 0.0, 20.0, 1.0, defaults, "Proxy för hur mycket närhet till väg/elanslutning ska höja solpotentialen.")
-                _builder_slider("solar_builder", "everyday_matrix_bonus", "Öppet vardagslandskap", 0.0, 30.0, 1.0, defaults, "Bonus för bredare vardags-/produktionslandskap.")
-                _builder_slider("solar_builder", "coastal_penalty", "Kust- och låglandsstraff", 0.0, 35.0, 1.0, defaults, "Sänker potential i kustnära och låglänta landskap.")
-                _builder_slider("solar_builder", "terrain_penalty", "Terräng- och dalstraff", 0.0, 35.0, 1.0, defaults, "Sänker potential där relief och sprickdalar dominerar.")
-                _builder_slider("solar_builder", "protected_penalty", "Skog/habitat-straff", 0.0, 40.0, 1.0, defaults, "Sänker potential i skyddade skogs- och habitatmiljöer.")
-                _builder_slider("solar_builder", "settlement_penalty", "Bosättningsstraff", 0.0, 35.0, 1.0, defaults, "Sänker potential där bebyggelse och tät struktur dominerar.")
-        params = _state_params("solar_builder", defaults)
-        st.session_state["solar_builder_params"] = params
-        h3_resolution, opacity, preserve_map_view, map_reset_token = _map_panel_controls(region, "solar_builder_preview", left_panel)
-        display_mode = _display_mode_panel("solar_builder_preview", left_panel)
-        display_geometry_path = _h3_display_geometry_path(region, h3_resolution)
-        frame = _custom_solar_frame(region, landscape_manifest, solar_rules, h3_resolution, params)
-        if _mode_wants_vector(display_mode):
-            _vector_placeholder(["egen solpotential"])
-        layers = []
-        if _mode_wants_hex(display_mode):
-            layers.append(_potential_layer(f"Osparad solförhandsvisning R{h3_resolution}", frame, "solar", display_geometry_path, _solar_legend_items(solar_rules)))
-        _render_layers(
-            region,
-            layers,
-            opacity,
-            map_state_key=f"{region.get('region_id', 'region')}:solar_builder" if preserve_map_view else None,
-            map_reset_token=map_reset_token,
-            opacity_key_prefix="solar_builder_preview",
-        )
-        summary_target = right_panel or st.container()
-        with summary_target:
-            _potential_detail_panel("Osparad solförhandsvisning", frame, "solar", h3_resolution)
-            with st.expander("Aktiva solparametrar"):
-                st.json(params)
-            if st.button("Spara solpotential", type="primary", use_container_width=True):
-                _save_solar_potential(params, h3_resolution)
-                st.success("Solpotential sparad. Den kan nu togglas på i Samlad potential.")
-        return
-
-    st.subheader("Bygg solpotential")
-    st.caption("Justera reglagen för att se hur mer eller mindre solpotential skapas i H3-ytan.")
-
-    if st.button("Återställ sol-default", key="reset_solar_builder"):
-        _reset_builder("solar_builder", defaults)
-
-    control_col, map_col, info_col = st.columns([0.24, 0.50, 0.26], gap="large")
-    with control_col:
-        _builder_slider("solar_builder", "base_score", "Basnivå", 30.0, 75.0, 1.0, defaults, "Startpoäng innan landskapsvillkor läggs till.")
-        _builder_slider("solar_builder", "grid_access_bonus", "Infrastruktur/åtkomst-bonus", 0.0, 20.0, 1.0, defaults, "Proxy för hur mycket närhet till väg/elanslutning ska höja solpotentialen.")
-        _builder_slider("solar_builder", "everyday_matrix_bonus", "Öppet vardagslandskap", 0.0, 30.0, 1.0, defaults, "Bonus för bredare vardags-/produktionslandskap.")
-        _builder_slider("solar_builder", "coastal_penalty", "Kust- och låglandsstraff", 0.0, 35.0, 1.0, defaults, "Sänker potential i kustnära och låglänta landskap.")
-        _builder_slider("solar_builder", "terrain_penalty", "Terräng- och dalstraff", 0.0, 35.0, 1.0, defaults, "Sänker potential där relief och sprickdalar dominerar.")
-        _builder_slider("solar_builder", "protected_penalty", "Skog/habitat-straff", 0.0, 40.0, 1.0, defaults, "Sänker potential i skyddade skogs- och habitatmiljöer.")
-        _builder_slider("solar_builder", "settlement_penalty", "Bosättningsstraff", 0.0, 35.0, 1.0, defaults, "Sänker potential där bebyggelse och tät struktur dominerar.")
-
-    params = _state_params("solar_builder", defaults)
-    st.session_state["solar_builder_params"] = params
-    with map_col:
-        h3_resolution, opacity, preserve_map_view, map_reset_token = _map_controls(region, "solar_builder_preview")
-        display_mode = _display_mode_control("solar_builder_preview")
-        display_geometry_path = _h3_display_geometry_path(region, h3_resolution)
-        frame = _custom_solar_frame(region, landscape_manifest, solar_rules, h3_resolution, params)
-        if _mode_wants_vector(display_mode):
-            _vector_placeholder(["egen solpotential"])
-        layers = []
-        if _mode_wants_hex(display_mode):
-            layers.append(_potential_layer(f"Osparad solförhandsvisning R{h3_resolution}", frame, "solar", display_geometry_path, _solar_legend_items(solar_rules)))
-        _render_layers(
-            region,
-            layers,
-            opacity,
-            map_state_key=f"{region.get('region_id', 'region')}:solar_builder" if preserve_map_view else None,
-            map_reset_token=map_reset_token,
-            opacity_key_prefix="solar_builder_preview",
-        )
-    with info_col:
-        with st.container(border=True):
-            _potential_detail_panel("Osparad solförhandsvisning", frame, "solar", h3_resolution)
-            with st.expander("Aktiva solparametrar"):
-                st.json(params)
-
-    st.divider()
-    if st.button("Spara solpotential", type="primary", use_container_width=True, key="save_solar_main_under_map"):
-        _save_solar_potential(params, h3_resolution)
-        st.success("Solpotential sparad. Den kan nu togglas på i Samlad potential.")
-
-
-def _wind_builder_preview_state(
-    region: dict[str, Any],
-    landscape_manifest: dict[str, Any],
-    solar_rules: dict[str, Any],
-    ui_params: dict[str, float],
-    selected_layers: dict[str, list[str]],
-    h3_resolution: int,
-    display_mode: str,
-    display_geometry_path: str | None,
-) -> dict[str, Any]:
-    source_frame = _wind_source_frame(landscape_manifest, solar_rules, ui_params, group_layer_selection=selected_layers)
-    score_frame = _filter_frame_to_display_geometries(
-        wind_acceptance_rollup_frame(source_frame, h3_resolution, _class_breaks(solar_rules)),
-        display_geometry_path,
-    )
-
-    runtime_meta: dict[str, Any] | None = None
-    runtime_error: str | None = None
-    runtime: dict[str, Any] | None = None
-    runtime_layers: list[dict[str, Any]] = []
-    runtime_preview_frame: pd.DataFrame | None = None
-    runtime_needed = _mode_wants_vector(display_mode) or _mode_wants_hex(display_mode)
-
-    if runtime_needed:
-        with st.spinner("Kör geometri-runtime för vindlager..."):
-            try:
-                runtime = _wind_runtime_result(ui_params, layer_selection=selected_layers)
-                runtime_layers, runtime_meta = _wind_runtime_layers_from_result(runtime)
-                runtime_preview_frame = _wind_runtime_preview_frame(runtime, score_frame, h3_resolution, _class_breaks(solar_rules))
-            except Exception as exc:
-                runtime_error = str(exc)
-
-    preview_frame = runtime_preview_frame if runtime_preview_frame is not None and not runtime_preview_frame.empty else score_frame
-    preview_label = (
-        f"Potentiell etableringsyta R{h3_resolution}"
-        if runtime_preview_frame is not None and not runtime_preview_frame.empty
-        else f"Osparad vindförhandsvisning R{h3_resolution}"
-    )
-    layers: list[dict[str, Any]] = []
-    if _mode_wants_hex(display_mode):
-        layers.append(_potential_layer(preview_label, preview_frame, "wind", display_geometry_path, _solar_legend_items(solar_rules)))
-    layers.extend(_wind_source_vector_layers(ui_params, layer_selection=selected_layers))
-    layers.extend(runtime_layers)
-    if _mode_wants_vector(display_mode):
-        h3_vector_layer = _wind_vector_layer(
-            "H3-kandidatytor (scoremodell)",
-            source_frame,
-            _h3_display_geometry_path(region, WIND_SOURCE_RESOLUTION),
-            _solar_legend_items(solar_rules),
-        )
-        if runtime_layers:
-            h3_vector_layer["default_visible"] = False
-        layers.append(h3_vector_layer)
-
-    return {
-        "source_frame": source_frame,
-        "score_frame": score_frame,
-        "preview_frame": preview_frame,
-        "layers": layers,
-        "runtime_meta": runtime_meta,
-        "runtime_error": runtime_error,
-        "runtime_enabled": runtime_needed,
-        "runtime_hex_preview": bool(runtime_preview_frame is not None and not runtime_preview_frame.empty),
-    }
-
-
-def _wind_builder_tab(
-    region: dict[str, Any],
-    context: dict[str, Any],
-    left_panel: Any | None = None,
-    right_panel: Any | None = None,
-) -> None:
-    _ = context
-    selected_layers: dict[str, list[str]] = _selected_wind_layers()
-    ui_params: dict[str, float] = _default_wind_params()
-    controls_applied = False
-    if left_panel is not None or right_panel is not None:
-        if left_panel is not None:
-            with left_panel:
-                selected_layers, ui_params, controls_applied = _wind_group_controls("wind_builder_panel", language=WIND_CONTROL_LANGUAGE)
-        st.session_state["wind_builder_params"] = ui_params
-        opacity = _current_opacity("wind_builder_preview")
-        preview_state = _wind_polygon_preview_state(region, ui_params, selected_layers)
-        _render_layers(
-            region,
-            preview_state["layers"],
-            opacity,
-            map_state_key=f"{region.get('region_id', 'region')}:wind_builder_polygon",
-            map_reset_token=_map_view_reset_token(),
-            opacity_key_prefix="wind_builder_preview",
-            note_title="Bygg vindpotential",
-            note_body="R10-hex visar potentialandel från den kombinerade polygonen. Källa och buffert kan slås på vid behov i kartkontrollen.",
-        )
-        save_col, _ = st.columns([0.34, 0.66], gap="small")
-        with save_col:
-            if st.button("Spara vindpotential", type="primary", use_container_width=True, key="wind_builder_save_under_map_panel"):
-                _save_wind_potential(ui_params, int(region.get("default_h3_resolution", 9)), layer_selection=selected_layers)
-                st.success("Vindpotential sparad. Den kan nu togglas på i Samlad potential.")
-        summary_target = right_panel or st.container()
-        with summary_target:
-            st.subheader("Polygonförhandsvisning")
-            left_metric, right_metric = st.columns(2)
-            left_metric.metric("Aktiva källager", int(preview_state["active_source_count"]))
-            right_metric.metric("Aktiva buffertgrupper", int(preview_state["active_group_count"]))
-            combined_share = preview_state["combined_land_share_pct"]
-            st.metric("Potentiell landandel", "-" if combined_share is None else f"{float(combined_share):.1f}%")
-            if controls_applied:
-                st.caption(ui_text("controls_applied", WIND_CONTROL_LANGUAGE))
-            if preview_state["runtime_error"]:
-                st.warning(f"Geometri-runtime kunde inte köras: {preview_state['runtime_error']}")
-            else:
-                st.caption("Källager visas i ursprunglig geometri. Buffertlagren visar de upplösta skydds-/restriktionsytorna. Den kombinerade polygonen visar kvarvarande mark där vindkraft kan placeras.")
-                if preview_state["hex_layer_available"]:
-                    st.caption("R10-hexlagret visar potentialandel per hex. Mörkare ton inom samma färgfamilj betyder högre kärnscore, alltså en mer central hex i en sammanhängande zon.")
-                cache_key = preview_state["runtime_result"].get("cache_key")
-                if cache_key:
-                    st.caption(f"Runtime-cache: {cache_key}")
-            with st.expander("Aktiva regelgrupper", expanded=False):
-                st.dataframe(
-                    _wind_polygon_group_summary_frame(ui_params, selected_layers, preview_state["runtime_result"]),
-                    use_container_width=True,
-                    hide_index=True,
-                    height=280,
-                )
-            with st.expander("Aktiva vindparametrar"):
-                st.json(ui_params)
-            with st.expander("Modellgranskning", expanded=False):
-                st.markdown("**Kritisk genomgång**")
-                for item in critical_review_items("sv"):
-                    st.write(f"- {item}")
-            with st.expander("Datastatus vindlager", expanded=False):
-                st.dataframe(_wind_source_status_frame(), use_container_width=True, hide_index=True, height=280)
-        return
-
-    st.subheader("Bygg vindpotential")
-
-    control_col, map_col, info_col = st.columns([0.24, 0.50, 0.26], gap="large")
-    with control_col:
-        selected_layers, ui_params, controls_applied = _wind_group_controls("wind_builder_main", language=WIND_CONTROL_LANGUAGE)
-
-    st.session_state["wind_builder_params"] = ui_params
-    opacity = _current_opacity("wind_builder_preview")
-    preview_state = _wind_polygon_preview_state(region, ui_params, selected_layers)
-    with map_col:
-        _render_layers(
-            region,
-            preview_state["layers"],
-            opacity,
-            map_state_key=f"{region.get('region_id', 'region')}:wind_builder_polygon",
-            map_reset_token=_map_view_reset_token(),
-            opacity_key_prefix="wind_builder_preview",
-            note_title="Bygg vindpotential",
-            note_body="R10-hex visar potentialandel från den kombinerade polygonen. Källa och buffert kan slås på vid behov i kartkontrollen.",
-        )
-        save_col, _ = st.columns([0.34, 0.66], gap="small")
-        with save_col:
-            if st.button("Spara vindpotential", type="primary", use_container_width=True, key="wind_builder_save_under_map_main"):
-                _save_wind_potential(ui_params, int(region.get("default_h3_resolution", 9)), layer_selection=selected_layers)
-                st.success("Vindpotential sparad. Den kan nu togglas på i Samlad potential.")
-    with info_col:
-        with st.container(border=True):
-            st.subheader("Polygonförhandsvisning")
-            left_metric, right_metric = st.columns(2)
-            left_metric.metric("Aktiva källager", int(preview_state["active_source_count"]))
-            right_metric.metric("Aktiva buffertgrupper", int(preview_state["active_group_count"]))
-            combined_share = preview_state["combined_land_share_pct"]
-            st.metric("Potentiell landandel", "-" if combined_share is None else f"{float(combined_share):.1f}%")
-            if controls_applied:
-                st.caption(ui_text("controls_applied", WIND_CONTROL_LANGUAGE))
-            if preview_state["runtime_error"]:
-                st.warning(f"Geometri-runtime kunde inte köras: {preview_state['runtime_error']}")
-            else:
-                st.caption("Källager visas i ursprunglig geometri. Buffertlagren visar de upplösta skydds-/restriktionsytorna. Den kombinerade polygonen visar kvarvarande mark där vindkraft kan placeras.")
-                if preview_state["hex_layer_available"]:
-                    st.caption("R10-hexlagret visar potentialandel per hex. Mörkare ton inom samma färgfamilj betyder högre kärnscore, alltså en mer central hex i en sammanhängande zon.")
-                cache_key = preview_state["runtime_result"].get("cache_key")
-                if cache_key:
-                    st.caption(f"Runtime-cache: {cache_key}")
-            with st.expander("Aktiva regelgrupper", expanded=False):
-                st.dataframe(
-                    _wind_polygon_group_summary_frame(ui_params, selected_layers, preview_state["runtime_result"]),
-                    use_container_width=True,
-                    hide_index=True,
-                    height=280,
-                )
-            with st.expander("Aktiva vindparametrar"):
-                st.json(ui_params)
-            with st.expander("Modellgranskning", expanded=False):
-                st.markdown("**Kritisk genomgång**")
-                for item in critical_review_items("sv"):
-                    st.write(f"- {item}")
-            with st.expander("Datastatus vindlager", expanded=False):
-                st.dataframe(_wind_source_status_frame(), use_container_width=True, hide_index=True, height=280)
-
-
-def _view_selector(panel: Any | None = None) -> str:
-    current_view = _active_view()
-    widget_key = LEFT_VIEW_WIDGET_KEY if panel is not None else MAIN_VIEW_WIDGET_KEY
-    if widget_key not in st.session_state or _valid_view(st.session_state.get(widget_key)) != current_view:
-        st.session_state[widget_key] = current_view
-    if panel is not None:
-        with panel.expander("Vy", expanded=True):
-            if hasattr(st, "segmented_control"):
-                selected = st.segmented_control(
-                    "Vy",
-                    VIEW_OPTIONS,
-                    key=widget_key,
-                    label_visibility="collapsed",
-                    on_change=_sync_active_view_from_widget,
-                    args=(widget_key,),
-                )
-                selected_view = _valid_view(selected or current_view)
-                st.session_state[ACTIVE_VIEW_KEY] = selected_view
-                return selected_view
-            selected_view = _valid_view(
-                st.radio(
-                    "Vy",
-                    VIEW_OPTIONS,
-                    horizontal=False,
-                    key=widget_key,
-                    label_visibility="collapsed",
-                    on_change=_sync_active_view_from_widget,
-                    args=(widget_key,),
-                )
-            )
-            st.session_state[ACTIVE_VIEW_KEY] = selected_view
-            return selected_view
-    target = st
-    if hasattr(st, "segmented_control"):
-        selected = target.segmented_control(
-            "Vy",
-            VIEW_OPTIONS,
-            key=widget_key,
-            label_visibility="collapsed",
-            on_change=_sync_active_view_from_widget,
-            args=(widget_key,),
-        )
-        selected_view = _valid_view(selected or current_view)
-        st.session_state[ACTIVE_VIEW_KEY] = selected_view
-        return selected_view
-    selected_view = _valid_view(
-        target.radio(
-            "Vy",
-            VIEW_OPTIONS,
-            horizontal=panel is None,
-            key=widget_key,
-            label_visibility="collapsed",
-            on_change=_sync_active_view_from_widget,
-            args=(widget_key,),
-        )
-    )
-    st.session_state[ACTIVE_VIEW_KEY] = selected_view
-    return selected_view
 
 
 def main() -> None:
@@ -2572,20 +2113,14 @@ def main() -> None:
     region, scenario_state = _render_region_scenario_panel(left_panel)
     context = _load_context(region)
 
-    view = _view_selector(left_panel) if left_panel is not None else None
-    h3_resolution = int(st.session_state.get("combined_h3_resolution", region.get("default_h3_resolution", 9)))
+    st.session_state.setdefault("combined_h3_resolution", _preferred_h3_resolution(region, 9))
+    h3_resolution = int(st.session_state.get("combined_h3_resolution", _preferred_h3_resolution(region, 9)))
     with main_panel:
-        if view is None:
-            view = _view_selector(None)
         _workspace_header(region, scenario_state, h3_resolution)
-
-        if view == "Bygg solpotential":
-            _solar_builder_tab(region, context, left_panel, right_panel)
-        elif view == "Bygg vindpotential":
-            _wind_builder_tab(region, context, left_panel, right_panel)
-        else:
-            _combined_tab(region, scenario_state, context, left_panel, right_panel)
+        _unified_workspace_tab(region, scenario_state, context, left_panel, right_panel)
 
 
 if __name__ == "__main__":
     main()
+
+

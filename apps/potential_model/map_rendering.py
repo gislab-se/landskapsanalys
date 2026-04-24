@@ -237,6 +237,24 @@ def build_layered_hex_map_html(
       return null;
     }}
 
+    function readSavedOverlayVisibility() {{
+      if (!viewStorage || !mapStateKey) {{
+        return null;
+      }}
+      try {{
+        const raw = viewStorage.getItem(storageKey('overlays'));
+        if (!raw) {{
+          return null;
+        }}
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') {{
+          return null;
+        }}
+        return parsed;
+      }} catch (err) {{}}
+      return null;
+    }}
+
     function storeMapView() {{
       if (!viewStorage || !mapStateKey) {{
         return;
@@ -253,6 +271,7 @@ def build_layered_hex_map_html(
     }}
 
     const savedView = readSavedView();
+    const savedOverlayVisibility = readSavedOverlayVisibility();
     const mapStartCenter = savedView ? [savedView.lat, savedView.lng] : defaultCenter;
     const mapStartZoom = savedView ? savedView.zoom : {int(zoom)};
     const map = L.map('map', {{ preferCanvas: true }}).setView(mapStartCenter, mapStartZoom);
@@ -304,6 +323,28 @@ def build_layered_hex_map_html(
       return spec.stroke_color || '#555555';
     }}
 
+    function layerStrokeWeight(spec, isPointLayer) {{
+      const parsed = Number(spec.weight);
+      if (Number.isFinite(parsed)) {{
+        return isPointLayer ? Math.max(parsed, 1.0) : parsed;
+      }}
+      return isPointLayer ? 1.0 : 0.25;
+    }}
+
+    function layerStrokeOpacity(spec, fillOpacity) {{
+      if (spec.stroke_opacity != null) {{
+        return clamp01(spec.stroke_opacity, Math.min(0.85, fillOpacity + 0.1));
+      }}
+      return Math.min(0.85, fillOpacity + 0.1);
+    }}
+
+    function layerStrokeEnabled(spec, strokeWeight, strokeOpacity) {{
+      if (spec.stroke === false) {{
+        return false;
+      }}
+      return strokeWeight > 0.01 && strokeOpacity > 0.01;
+    }}
+
     function popupHtml(spec, feature) {{
       const props = (feature && feature.properties) || {{}};
       if (props.popup) {{
@@ -316,15 +357,25 @@ def build_layered_hex_map_html(
 
     const overlays = {{}};
     const renderedLayers = [];
-    layerSpecs.forEach(function(spec) {{
+    const layerRecords = [];
+    layerSpecs.forEach(function(spec, index) {{
+      const paneName = 'overlay-pane-' + index;
+      const pane = map.createPane(paneName);
+      const zIndex = Number.isFinite(Number(spec.z_index)) ? Number(spec.z_index) : (400 + index);
+      pane.style.zIndex = String(zIndex);
+
       const layer = L.geoJSON(spec.feature_collection, {{
+        pane: paneName,
         style: function(feature) {{
           const fillOpacity = layerFillOpacity(spec, feature);
-          const strokeOpacity = spec.stroke_opacity != null ? clamp01(spec.stroke_opacity, Math.min(0.85, fillOpacity + 0.1)) : Math.min(0.85, fillOpacity + 0.1);
+          const strokeWeight = layerStrokeWeight(spec, false);
+          const strokeOpacity = layerStrokeOpacity(spec, fillOpacity);
+          const strokeEnabled = layerStrokeEnabled(spec, strokeWeight, strokeOpacity);
           return {{
+            stroke: strokeEnabled,
             color: layerStrokeColor(spec, feature),
-            weight: Number.isFinite(Number(spec.weight)) ? Number(spec.weight) : 0.25,
-            opacity: strokeOpacity,
+            weight: strokeEnabled ? strokeWeight : 0,
+            opacity: strokeEnabled ? strokeOpacity : 0,
             dashArray: spec.dash_array || null,
             fillColor: layerFillColor(spec, feature),
             fillOpacity: fillOpacity
@@ -332,12 +383,16 @@ def build_layered_hex_map_html(
         }},
         pointToLayer: function(feature, latlng) {{
           const fillOpacity = layerFillOpacity(spec, feature);
-          const strokeOpacity = spec.stroke_opacity != null ? clamp01(spec.stroke_opacity, Math.min(0.85, fillOpacity + 0.1)) : Math.min(0.85, fillOpacity + 0.1);
+          const strokeWeight = layerStrokeWeight(spec, true);
+          const strokeOpacity = layerStrokeOpacity(spec, fillOpacity);
+          const strokeEnabled = layerStrokeEnabled(spec, strokeWeight, strokeOpacity);
           return L.circleMarker(latlng, {{
             radius: Number.isFinite(Number(spec.point_radius)) ? Number(spec.point_radius) : 4.0,
+            pane: paneName,
+            stroke: strokeEnabled,
             color: layerStrokeColor(spec, feature),
-            weight: Number.isFinite(Number(spec.weight)) ? Math.max(Number(spec.weight), 1.0) : 1.0,
-            opacity: strokeOpacity,
+            weight: strokeEnabled ? strokeWeight : 0,
+            opacity: strokeEnabled ? strokeOpacity : 0,
             dashArray: spec.dash_array || null,
             fillColor: layerFillColor(spec, feature),
             fillOpacity: Math.max(fillOpacity, 0.22)
@@ -349,13 +404,30 @@ def build_layered_hex_map_html(
       }});
       overlays[spec.name] = layer;
       renderedLayers.push(layer);
-      if (spec.default_visible !== false) {{
+      layerRecords.push({{ name: spec.name, layer: layer }});
+      const shouldShow = savedOverlayVisibility && Object.prototype.hasOwnProperty.call(savedOverlayVisibility, spec.name)
+        ? Boolean(savedOverlayVisibility[spec.name])
+        : (spec.default_visible !== false);
+      if (shouldShow) {{
         layer.addTo(map);
       }}
     }});
 
     L.control.layers({{ 'OSM': osm, 'Satellite': satellite }}, overlays, {{ collapsed: true }}).addTo(map);
     L.control.scale({{ metric: true, imperial: false, maxWidth: 160 }}).addTo(map);
+
+    function storeOverlayVisibility() {{
+      if (!viewStorage || !mapStateKey) {{
+        return;
+      }}
+      const payload = {{}};
+      layerRecords.forEach(function(record) {{
+        payload[record.name] = map.hasLayer(record.layer);
+      }});
+      viewStorage.setItem(storageKey('overlays'), JSON.stringify(payload));
+    }}
+    map.on('overlayadd overlayremove', storeOverlayVisibility);
+    storeOverlayVisibility();
 
     const note = L.control({{ position: 'topright' }});
     note.onAdd = function() {{
