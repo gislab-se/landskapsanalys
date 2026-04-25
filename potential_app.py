@@ -3,6 +3,7 @@
 from collections import deque
 import h3
 import json
+import math
 from pathlib import Path
 import sys
 from typing import Any
@@ -26,6 +27,20 @@ from potential_model.manifests import (  # noqa: E402
     resolve_repo_path,
 )
 from potential_model.map_rendering import build_layered_hex_map_html  # noqa: E402
+from potential_model.energy_modeling import (  # noqa: E402
+    AREA_SCENARIO_LABELS,
+    AREA_SCENARIO_ORDER,
+    allocate_wind_area_from_core_hexes,
+    build_times_summary,
+    calculate_area_demand,
+    h3_hex_area_km2,
+    load_area_demand_bundle,
+    load_energy_model_inputs,
+    planning_scenario_label,
+    planning_scenarios,
+    scenario_display_label,
+    select_planning_mix,
+)
 from potential_model.potential import (  # noqa: E402
     potential_by_landscape,
     potential_feature_collection,
@@ -489,6 +504,267 @@ def _scenario_state(region: dict[str, Any], panel: Any | None = None) -> dict[st
         if not scenario_manifest.get("layers"):
             panel.caption("Scenariofiler kopplas in senare.")
     return {"scenario": selected, "manifest": scenario_manifest}
+
+
+@st.cache_data(show_spinner=False)
+def _cached_energy_inputs(manifest_json: str, root_str: str) -> tuple[pd.DataFrame, dict[str, str], str]:
+    manifest = json.loads(manifest_json)
+    inputs = load_energy_model_inputs(manifest, Path(root_str))
+    return inputs.times_rows, inputs.scenario_descriptions, inputs.source_status
+
+
+@st.cache_data(show_spinner=False)
+def _cached_area_demand(manifest_json: str, root_str: str) -> dict[str, Any]:
+    manifest = json.loads(manifest_json)
+    bundle = load_area_demand_bundle(manifest, Path(root_str))
+    return {
+        "factors_by_scenario": bundle.factors_by_scenario,
+        "scenario_table": bundle.scenario_table,
+        "observation_table": bundle.observation_table,
+        "warning_table": bundle.warning_table,
+        "local_reference_table": bundle.local_reference_table,
+        "references": bundle.references,
+        "rules_text": bundle.rules_text,
+        "source_path": bundle.source_path,
+    }
+
+
+def _energy_model_manifest_json(scenario_manifest: dict[str, Any] | None) -> str:
+    return json.dumps(scenario_manifest or {}, sort_keys=True, ensure_ascii=False)
+
+
+def _technology_to_times_map(scenario_manifest: dict[str, Any] | None) -> dict[str, str]:
+    area_cfg = (((scenario_manifest or {}).get("energy_model") or {}).get("area_demand") or {})
+    mapping = area_cfg.get("times_technology_map") or {}
+    result: dict[str, str] = {}
+    for times_tech, rule in mapping.items():
+        energy_key = str((rule or {}).get("energy_key", "")).strip()
+        if energy_key:
+            result[energy_key] = str(times_tech)
+    return result or {"wind": "NRG_WIN", "solar": "NRG_SOL"}
+
+
+def _area_scenario_label(scenario_id: str) -> str:
+    labels = {"low": "Låg", "mid": "Mellan", "high": "Hög"}
+    return labels.get(str(scenario_id), AREA_SCENARIO_LABELS.get(str(scenario_id), str(scenario_id)))
+
+
+def _energy_key_label(energy_key: str) -> str:
+    return {"wind": "Vind", "solar": "Sol"}.get(str(energy_key), str(energy_key))
+
+
+def _render_hex_area_card(
+    area_by_scenario: dict[str, float],
+    hex_area: float,
+    selected_scenario: str,
+    scenario_order: list[str] | tuple[str, ...] | None = None,
+    label_func: Any | None = None,
+) -> None:
+    scenario_order = list(scenario_order or AREA_SCENARIO_ORDER)
+    label_func = label_func or _area_scenario_label
+    max_area = max([0.0, *[float(value or 0.0) for value in area_by_scenario.values()]])
+    max_hex = max(1, int(math.ceil(max_area / max(hex_area, 1e-9))))
+    symbol_scale = max(1, int(math.ceil(max_hex / 54)))
+    rows: list[str] = []
+    for scenario_id in scenario_order:
+        area = float(area_by_scenario.get(scenario_id, 0.0) or 0.0)
+        needed_hex = int(math.ceil(area / max(hex_area, 1e-9))) if area > 0 else 0
+        symbols = max(1, int(math.ceil(needed_hex / symbol_scale))) if needed_hex else 0
+        active = scenario_id == selected_scenario
+        color = "#1f7a3f" if active else "#9ca3af"
+        bg = "rgba(31,122,63,0.08)" if active else "rgba(255,255,255,0.55)"
+        hexes = "".join(
+            f"<span style='display:inline-block;width:0.58rem;height:0.52rem;margin:0.035rem;background:{color};clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);'></span>"
+            for _ in range(min(symbols, 54))
+        )
+        if symbols > 54:
+            hexes += "<span style='font-size:0.72rem;color:#6b7280;margin-left:0.2rem;'>+</span>"
+        rows.append(
+            "<div style='padding:0.45rem 0.5rem;border:1px solid rgba(49,51,63,0.14);"
+            f"background:{bg};border-radius:6px;margin:0.32rem 0;'>"
+            f"<div style='display:flex;justify-content:space-between;gap:0.5rem;font-size:0.82rem;font-weight:650;'>"
+            f"<span>{label_func(scenario_id)}</span><span>{area:.2f} km²</span></div>"
+            f"<div style='font-size:0.75rem;color:#6b7280;margin:0.1rem 0 0.25rem;'>~{needed_hex} hex</div>"
+            f"<div style='line-height:0.55rem;'>{hexes}</div>"
+            "</div>"
+        )
+    st.markdown(
+        "<div style='font-size:0.82rem;font-weight:650;margin-bottom:0.25rem;'>Area demand som hex</div>"
+        + "".join(rows)
+        + f"<div style='font-size:0.74rem;color:#6b7280;margin-top:0.3rem;'>1 symbol ≈ {symbol_scale} hex i vald H3-upplösning.</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def _render_energy_modeling_panel(
+    region: dict[str, Any],
+    scenario_state: dict[str, Any],
+    h3_resolution: int,
+    panel: Any,
+) -> dict[str, Any]:
+    scenario_manifest = scenario_state.get("manifest")
+    if not scenario_manifest or not (scenario_manifest.get("energy_model") or {}):
+        with panel.expander("Scenarier", expanded=False):
+            return _scenario_state(region, st) | {"available": False}
+
+    manifest_json = _energy_model_manifest_json(scenario_manifest)
+    state: dict[str, Any] = {"available": False, "manifest": scenario_manifest}
+    try:
+        times_rows, scenario_descriptions, source_status = _cached_energy_inputs(manifest_json, str(ROOT))
+        area_payload = _cached_area_demand(manifest_json, str(ROOT))
+    except Exception as exc:
+        panel.warning(f"Energimodellering kunde inte laddas: {exc}")
+        panel.caption("Kontrollera DuckDB/AreaDemand-sökvägar, schema i manifestet och Pythonpaketen duckdb/openpyxl.")
+        return state
+
+    scenario_totals, mix = build_times_summary(times_rows)
+    if not scenario_totals:
+        panel.warning("DuckDB gav inga konfigurerade vind-/solrader.")
+        return state
+
+    planning_options = planning_scenarios(scenario_manifest)
+    planning_by_id = {str(option.get("id")): option for option in planning_options if option.get("id")}
+    planning_ids = [str(option.get("id")) for option in planning_options if option.get("id")]
+    if not planning_ids:
+        panel.warning("Manifestet saknar planeringsscenarier.")
+        return state
+
+    planning_cfg = ((scenario_manifest.get("energy_model") or {}).get("planning") or {})
+    scenario_key = f"energy_model_planning_scenario_{region.get('region_id', 'region')}"
+    default_planning_id = str(planning_cfg.get("default_scenario") or "medium")
+    if default_planning_id not in planning_by_id:
+        default_planning_id = planning_ids[0]
+    if st.session_state.get(scenario_key) not in planning_ids:
+        st.session_state[scenario_key] = default_planning_id
+    planning_id = panel.selectbox(
+        "Framtidsscenario",
+        options=planning_ids,
+        key=scenario_key,
+        format_func=lambda value: planning_scenario_label(planning_by_id.get(str(value), {"id": value})),
+    )
+    selected_planning = planning_by_id[str(planning_id)]
+    selected_planning_label = planning_scenario_label(selected_planning)
+    source_scenario = str(selected_planning.get("source_scenario", "")).strip()
+    planning_year = int(selected_planning.get("planning_year", planning_cfg.get("planning_year", 2050)) or 2050)
+    energy_scale = float(selected_planning.get("energy_scale", 1.0) or 1.0)
+    area_scenario_id = str(selected_planning.get("area_demand_scenario", "mid") or "mid")
+    if area_scenario_id not in AREA_SCENARIO_ORDER:
+        area_scenario_id = "mid"
+    source_label = scenario_display_label(source_scenario, scenario_descriptions) if source_scenario else "-"
+
+    panel.caption(
+        f"Markintensitet: {_area_scenario_label(area_scenario_id)} · "
+        f"modellkälla: {source_label}, {planning_year}, skala {energy_scale:g}x"
+    )
+
+    placement_key = f"energy_model_placement_{region.get('region_id', 'region')}"
+    placement_mode = panel.radio(
+        "Placering",
+        options=["auto", "manual"],
+        key=placement_key,
+        format_func=lambda value: {"auto": "Placera automatiskt", "manual": "Placera själv"}.get(value, value),
+    )
+    if placement_mode == "manual":
+        panel.info("Självplacering är förberedd som arbetsläge. Första robusta steg blir klicka för att lägga till/ta bort hex; drag-and-drop kräver ett separat kartinteraktionssteg.")
+
+    selected_mix = select_planning_mix(mix, selected_planning)
+    if selected_mix.empty:
+        panel.warning(
+            f"Planeringsscenariot pekar på {source_scenario or '-'} {planning_year}, men de raderna finns inte i DuckDB."
+        )
+        return state
+
+    technology_to_times = _technology_to_times_map(scenario_manifest)
+    area_bundle_obj = type(
+        "AreaBundleShim",
+        (),
+        {"factors_by_scenario": area_payload["factors_by_scenario"]},
+    )()
+    area_demand = calculate_area_demand(selected_mix, area_bundle_obj, str(area_scenario_id), technology_to_times)
+    area_demand["Teknik"] = area_demand["energy_key"].map(_energy_key_label)
+    hex_area = h3_hex_area_km2(int(h3_resolution))
+
+    planning = ((scenario_manifest.get("energy_model") or {}).get("planning") or {})
+    primary_technology = str(planning.get("primary_technology", "wind"))
+    primary_row = area_demand[area_demand["energy_key"].astype(str) == primary_technology]
+    primary_area_need = float(primary_row["area_need_km2"].fillna(0.0).sum()) if not primary_row.empty else 0.0
+    primary_twh = float(primary_row["twh"].fillna(0.0).sum()) if not primary_row.empty else 0.0
+    primary_factor = float(primary_row["km2_per_twh"].dropna().iloc[0]) if not primary_row["km2_per_twh"].dropna().empty else math.nan
+
+    metric_cols = panel.columns(3)
+    metric_cols[0].metric("Vind från EML", f"{primary_twh:.2f} TWh")
+    metric_cols[1].metric("Markanspråk", f"{primary_area_need:.2f} km²")
+    metric_cols[2].metric("Hexbehov", str(int(math.ceil(primary_area_need / max(hex_area, 1e-9))) if primary_area_need > 0 else 0))
+
+    planning_area_by_scenario: dict[str, float] = {}
+    for scenario_option in planning_options:
+        option_id = str(scenario_option.get("id"))
+        option_mix = select_planning_mix(mix, scenario_option)
+        option_area_scenario = str(scenario_option.get("area_demand_scenario", "mid") or "mid")
+        if option_area_scenario not in AREA_SCENARIO_ORDER:
+            option_area_scenario = "mid"
+        scenario_frame = calculate_area_demand(option_mix, area_bundle_obj, option_area_scenario, technology_to_times)
+        row = scenario_frame[scenario_frame["energy_key"].astype(str) == primary_technology]
+        planning_area_by_scenario[option_id] = float(row["area_need_km2"].fillna(0.0).sum()) if not row.empty else 0.0
+    with panel.container(border=True):
+        _render_hex_area_card(
+            planning_area_by_scenario,
+            hex_area,
+            str(planning_id),
+            scenario_order=planning_ids,
+            label_func=lambda value: planning_scenario_label(planning_by_id.get(str(value), {"id": value})),
+        )
+
+    show_key = f"energy_model_show_proposal_{region.get('region_id', 'region')}"
+    show_proposal = panel.checkbox("Visa EML-lager: föreslagen etableringsyta", value=True, key=show_key)
+
+    with panel.expander("Beräkning och datakvalitet", expanded=False):
+        calc_df = area_demand[["Teknik", "twh", "km2_per_twh", "area_need_km2"]].rename(
+            columns={"twh": "TWh", "km2_per_twh": "km²/TWh", "area_need_km2": "km²"}
+        )
+        st.dataframe(calc_df.round(3), width="stretch", hide_index=True)
+        st.caption(source_status)
+        st.caption(f"AreaDemand: {area_payload.get('source_path', '-')}")
+        local_reference_table = pd.DataFrame(area_payload.get("local_reference_table", pd.DataFrame()))
+        if not local_reference_table.empty:
+            st.caption(
+                "Nedre Bornholm-sektionen i AreaDemand.xlsx läses som lokal referens. "
+                "Den visas för transparens men styr inte scenarierna förrän manifestet väljer den som faktor."
+            )
+            st.dataframe(local_reference_table.round(4), width="stretch", hide_index=True, height=180)
+        warning_table = pd.DataFrame(area_payload.get("warning_table", pd.DataFrame()))
+        if not warning_table.empty:
+            st.warning("AreaDemand innehåller outliers som har exkluderats från scenariofaktorer.")
+            st.dataframe(warning_table, width="stretch", hide_index=True, height=180)
+        scenario_table = pd.DataFrame(area_payload.get("scenario_table", pd.DataFrame()))
+        if not scenario_table.empty:
+            st.dataframe(scenario_table.round(3), width="stretch", hide_index=True)
+
+    state.update(
+        {
+            "available": True,
+            "scenario": str(planning_id),
+            "scenario_label": selected_planning_label,
+            "source_scenario": source_scenario,
+            "source_scenario_label": source_label,
+            "source_year": int(planning_year),
+            "energy_scale": energy_scale,
+            "area_scenario_id": str(area_scenario_id),
+            "area_scenario_label": _area_scenario_label(str(area_scenario_id)),
+            "placement_mode": str(placement_mode),
+            "show_proposal": bool(show_proposal),
+            "area_demand": area_demand,
+            "primary_technology": primary_technology,
+            "primary_area_need_km2": primary_area_need,
+            "primary_twh": primary_twh,
+            "primary_km2_per_twh": primary_factor,
+            "hex_area_km2": hex_area,
+            "auto_min_potential_share_pct": float(planning.get("auto_min_potential_share_pct", 65.0)),
+            "source_status": source_status,
+            "area_warnings": pd.DataFrame(area_payload.get("warning_table", pd.DataFrame())),
+        }
+    )
+    return state
 
 
 def _render_region_scenario_panel(panel: Any | None) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -1889,6 +2165,66 @@ def _wind_runtime_hex_layer(
     }
 
 
+def _energy_area_proposal_layer(
+    selected: pd.DataFrame,
+    display_geometry_path: str | None,
+    target_resolution: int,
+) -> dict[str, Any] | None:
+    if selected.empty or not display_geometry_path:
+        return None
+    display_geometries = load_h3_display_geometries(display_geometry_path)
+    features: list[dict[str, Any]] = []
+    for row in selected.itertuples(index=False):
+        geometry = display_geometries.get(str(row.hex_id))
+        if geometry is None:
+            continue
+        rank = int(getattr(row, "selected_rank", 0) or 0)
+        share = float(getattr(row, "potential_area_share_pct", 0.0) or 0.0)
+        core_score = float(getattr(row, "core_score", 0.0) or 0.0)
+        zone_size = int(getattr(row, "zone_size", 0) or 0)
+        popup = (
+            f"<strong>EML: föreslagen etableringsyta</strong><br>"
+            f"Hex: {row.hex_id}<br>"
+            f"Prioritet: {rank}<br>"
+            f"Potentialandel: {share:.1f}%<br>"
+            f"Kärnscore: {core_score:.2f}<br>"
+            f"Sammanhängande zon: {zone_size} hex<br>"
+            f"H3: R{int(target_resolution)}"
+        )
+        features.append(
+            {
+                "type": "Feature",
+                "geometry": geometry,
+                "properties": {
+                    "hex_id": str(row.hex_id),
+                    "fill": "#38bdf8",
+                    "stroke": "#0f172a",
+                    "popup": popup,
+                    "tooltip_title": f"EML-yta #{rank}",
+                    "tooltip_body": f"{share:.1f}% potential · kärnscore {core_score:.2f}",
+                },
+            }
+        )
+    if not features:
+        return None
+    return {
+        "name": "EML: föreslagen etableringsyta",
+        "feature_collection": {"type": "FeatureCollection", "features": features},
+        "fill_property": "fill",
+        "stroke_property": "stroke",
+        "legend_items": [{"label": "EML: föreslagen etableringsyta", "color": "#38bdf8"}],
+        "legend_id": "energy_area_proposal",
+        "legend_title": "Energimodellering",
+        "default_visible": True,
+        "stroke": True,
+        "stroke_opacity": 0.95,
+        "fill_opacity": 0.30,
+        "weight": 1.2,
+        "z_index": 470,
+        "layer_kind": "vector",
+    }
+
+
 def _wind_runtime_hex_layers(
     region: dict[str, Any],
     runtime_result: dict[str, Any],
@@ -2256,6 +2592,39 @@ def _data_method(region: dict[str, Any]) -> None:
         st.json(region)
 
 
+def _render_energy_model_summary(energy_model_state: dict[str, Any]) -> None:
+    if not energy_model_state.get("available"):
+        return
+    with st.expander("Energimodellering", expanded=True):
+        st.caption(
+            f"{energy_model_state.get('scenario_label', energy_model_state.get('scenario', '-'))} · "
+            f"markintensitet {energy_model_state.get('area_scenario_label', '-')} · "
+            f"källa {energy_model_state.get('source_scenario_label', '-')} "
+            f"{energy_model_state.get('source_year', '-')}, skala {float(energy_model_state.get('energy_scale', 1.0) or 1.0):g}x"
+        )
+        c1, c2 = st.columns(2)
+        c1.metric("Vind från EML", f"{float(energy_model_state.get('primary_twh', 0.0) or 0.0):.2f} TWh")
+        c2.metric("Markanspråk", f"{float(energy_model_state.get('primary_area_need_km2', 0.0) or 0.0):.2f} km²")
+        proposal_stats = energy_model_state.get("proposal_stats") or {}
+        if proposal_stats:
+            c3, c4 = st.columns(2)
+            c3.metric("Täckt yta", f"{float(proposal_stats.get('selected_area_km2', 0.0) or 0.0):.2f} km²")
+            c4.metric("Kvar", f"{float(proposal_stats.get('unmet_area_km2', 0.0) or 0.0):.2f} km²")
+            needed_hex = int(proposal_stats.get("needed_hex", 0) or 0)
+            selected_count = len(energy_model_state.get("proposal_frame", pd.DataFrame()))
+            st.caption(f"EML-lager: {selected_count} av {needed_hex} efterfrågade hex vid vald H3-upplösning.")
+            if float(proposal_stats.get("unmet_area_km2", 0.0) or 0.0) > 0:
+                st.warning(
+                    "Lämplig mörkgrön kärnyta räcker inte. Planeringsval behövs: sänk potentialkrav, släpp in kantzoner, "
+                    "ändra restriktioner, välj ett lägre framtidsscenario eller minska area demand."
+                )
+        elif energy_model_state.get("placement_mode") == "manual":
+            st.info("Självplacering är valt. Kartklick/drag-and-drop är nästa interaktionssteg; inget manuellt urval ritas ännu.")
+        warning_table = energy_model_state.get("area_warnings")
+        if isinstance(warning_table, pd.DataFrame) and not warning_table.empty:
+            st.caption("AreaDemand har datakvalitetsvarningar. Se Energimodellering-panelen för detaljer.")
+
+
 def _unified_workspace_tab(
     region: dict[str, Any],
     scenario_state: dict[str, Any],
@@ -2303,6 +2672,7 @@ def _unified_workspace_tab(
     wind_selected_layers = _selected_wind_layers()
     wind_ui_params = _default_wind_params()
     wind_controls_applied = False
+    energy_model_state: dict[str, Any] = {"available": False}
 
     if left_panel is not None:
         with left_panel.expander("Geografier", expanded=False):
@@ -2358,8 +2728,14 @@ def _unified_workspace_tab(
         with left_panel.expander("Energimodellering", expanded=False):
             st.caption("Levereras av EML")
             st.markdown(f"[Energy Modelling Lab]({EML_PROVIDER_URL})")
-            with st.expander("Scenarier", expanded=False):
-                scenario_state = _scenario_state(region, st)
+            energy_model_state = _render_energy_modeling_panel(region, scenario_state, h3_resolution, st)
+            if energy_model_state.get("available"):
+                scenario_state = {
+                    "scenario": energy_model_state.get("scenario_label") or energy_model_state.get("scenario"),
+                    "manifest": scenario_state.get("manifest"),
+                    "year": energy_model_state.get("source_year"),
+                    "energy_model": energy_model_state,
+                }
 
         with left_panel.expander("Social acceptans", expanded=False):
             st.caption("Levereras av IVL")
@@ -2534,6 +2910,27 @@ def _unified_workspace_tab(
             unified_notes.append(
                 "Mörkare gröna och röda nyanser visar kärnhexagoner som ligger djupare inne i en sammanhängande zon av samma potentialklass."
             )
+            if (
+                energy_model_state.get("available")
+                and energy_model_state.get("show_proposal")
+                and energy_model_state.get("placement_mode") == "auto"
+            ):
+                proposal_frame, proposal_stats = allocate_wind_area_from_core_hexes(
+                    custom_wind_summary,
+                    float(energy_model_state.get("primary_area_need_km2", 0.0) or 0.0),
+                    float(energy_model_state.get("hex_area_km2", h3_hex_area_km2(h3_resolution)) or h3_hex_area_km2(h3_resolution)),
+                    float(energy_model_state.get("auto_min_potential_share_pct", 65.0) or 65.0),
+                )
+                energy_model_state["proposal_frame"] = proposal_frame
+                energy_model_state["proposal_stats"] = proposal_stats
+                proposal_layer = _energy_area_proposal_layer(proposal_frame, display_geometry_path, h3_resolution)
+                if proposal_layer is not None:
+                    layers.append(proposal_layer)
+                    unified_notes.append(
+                        "Etableringsförslaget väljer mörkgröna kärnhexar först och fyller area demand tills ytan inte räcker längre."
+                    )
+                elif float(energy_model_state.get("primary_area_need_km2", 0.0) or 0.0) > 0:
+                    unified_notes.append("Etableringsförslaget hittade inga vindhex som uppfyller minsta kärn-/potentialkrav.")
 
     if show_v10 or show_cluster or show_factor:
         landscape_frame = _landscape_frame(region, landscape_manifest, h3_resolution)
@@ -2619,6 +3016,7 @@ def _unified_workspace_tab(
             },
             scenario_state,
         )
+        _render_energy_model_summary(energy_model_state)
         with st.expander("Byggstatus", expanded=False):
             if show_user_solar:
                 st.metric("Aktiv solförhandsvisning", "På")
