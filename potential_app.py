@@ -18,21 +18,7 @@ if str(APPS_DIR) not in sys.path:
     sys.path.insert(0, str(APPS_DIR))
 
 from potential_model.geometry import geometry_for_hex, load_h3_display_geometries  # noqa: E402
-from potential_model.landscape import (  # noqa: E402
-    CLUSTER_COLORS,
-    FACTOR_STOPS,
-    cluster_summary,
-    factor_columns,
-    factor_label,
-    feature_collection_for_frame,
-    landscape_source_resolution,
-    landscape_type_display_colors,
-    landscape_type_feature_collection_for_frame,
-    landscape_frame_for_resolution,
-    load_cluster_profile,
-    load_factor_scores,
-    load_run_summary,
-)
+import potential_model.landscape as landscape_model  # noqa: E402
 from potential_model.manifests import (  # noqa: E402
     list_regions,
     load_linked_manifest,
@@ -78,6 +64,39 @@ from acceptance_model.i18n import (  # noqa: E402
     layer_note,
     ui_text,
 )
+
+
+CLUSTER_COLORS = landscape_model.CLUSTER_COLORS
+FACTOR_STOPS = landscape_model.FACTOR_STOPS
+cluster_summary = landscape_model.cluster_summary
+factor_columns = landscape_model.factor_columns
+factor_label = landscape_model.factor_label
+feature_collection_for_frame = landscape_model.feature_collection_for_frame
+landscape_frame_for_resolution = landscape_model.landscape_frame_for_resolution
+landscape_source_resolution = landscape_model.landscape_source_resolution
+landscape_type_feature_collection_for_frame = landscape_model.landscape_type_feature_collection_for_frame
+load_cluster_profile = landscape_model.load_cluster_profile
+load_factor_scores = landscape_model.load_factor_scores
+load_run_summary = landscape_model.load_run_summary
+
+
+def landscape_type_display_colors(manifest: dict[str, Any] | None = None) -> dict[str, str]:
+    color_func = getattr(landscape_model, "landscape_type_display_colors", None)
+    if callable(color_func):
+        return color_func(manifest)
+
+    # Backward compatibility for deployments where potential_app.py is newer than landscape.py.
+    colors = dict(getattr(landscape_model, "V10_TYPE_COLORS", {}))
+    if not manifest:
+        return colors
+
+    manifest_colors = manifest.get("landscape_type_colors") or {}
+    manifest_labels = manifest.get("landscape_type_labels") or {}
+    for key, value in manifest_colors.items():
+        colors.setdefault(str(key), str(value))
+    for key in manifest_labels:
+        colors.setdefault(str(key), "#999999")
+    return colors
 
 
 PAGE_TITLE = "Sol- och vindpotential"
@@ -647,6 +666,41 @@ def _apply_layer_opacity_state(layers: list[dict[str, Any]], key_prefix: str) ->
     return adjusted_layers
 
 
+def _layer_control_rows(layers: list[dict[str, Any]], key_prefix: str) -> list[dict[str, Any]]:
+    rows_by_control: dict[str, dict[str, Any]] = {}
+    for layer in layers:
+        control_name = str(layer.get("control_name") or layer.get("name") or "Lager")
+        kind = str(layer.get("layer_kind") or "lager")
+        resolution = layer.get("auto_resolution")
+        row = rows_by_control.setdefault(
+            control_name,
+            {
+                "lager": control_name,
+                "typ": "Hex" if kind == "hex" else "Polygon/linje" if kind == "vector" else kind.title(),
+                "visning": "",
+                "opacitet": "",
+            },
+        )
+        if kind == "hex":
+            family_key = str(layer.get("opacity_family") or control_name)
+            row["opacitet"] = f"{_hex_opacity_value(key_prefix, family_key, float(layer.get('fill_opacity', 0.78) or 0.78)):.2f}"
+        elif not row["opacitet"]:
+            row["opacitet"] = f"{_current_opacity(key_prefix):.2f}"
+        if resolution is not None:
+            values = str(row["visning"]).split(", ") if row["visning"] else []
+            label = f"R{int(resolution)}"
+            if label not in values:
+                values.append(label)
+            row["visning"] = ", ".join(values)
+        elif not row["visning"]:
+            row["visning"] = "Direkt"
+    return list(rows_by_control.values())
+
+
+def _count_enabled(*values: bool) -> int:
+    return sum(1 for value in values if bool(value))
+
+
 def _map_panel_controls(region: dict[str, Any], key_prefix: str, panel: Any | None = None) -> tuple[int, bool, float, bool, int]:
     available = _available_h3_resolutions(region)
     state_key = f"{key_prefix}_h3_resolution"
@@ -678,6 +732,9 @@ def _map_panel_controls(region: dict[str, Any], key_prefix: str, panel: Any | No
                 help="När avstängd får kartan visa grövre aggregat vid utzoomning. När påslagen visas alltid exakt vald upplösning.",
             )
             st.markdown("[Learn more about H3 resolutions](https://h3geo.org/).")
+            if st.button("Återställ kartvy", key=f"{key_prefix}_reset_map_view"):
+                _request_browser_map_view_reset()
+                st.rerun()
     else:
         h3_resolution = current_value
         lock_resolution = bool(st.session_state.get(lock_state_key, False))
@@ -991,7 +1048,7 @@ def _wind_builder_controls(defaults: dict[str, float]) -> None:
         _builder_slider("wind_builder", "aviation_approach_buffer_m", "Buffert inflygningszoner", 0.0, 3000.0, 100.0, defaults, "0 stänger av gruppen. Högre värden hard-excludar flygplatsens inflygningszoner.")
         _builder_slider("wind_builder", "aviation_bird_distance_m", "Minsta avstånd fågelkollision", 0.0, 4000.0, 100.0, defaults, "0 stänger av gruppen. Högre värden ger distance-conflict mot fågelkollisionszoner.")
         _builder_slider("wind_builder", "military_buffer_m", "Buffert militära områden", 0.0, 2000.0, 50.0, defaults, "0 stänger av gruppen. Högre värden hard-excludar militära områden.")
-        st.dataframe(wind_acceptance_group_summary(), use_container_width=True, hide_index=True, height=220)
+        st.dataframe(wind_acceptance_group_summary(), width="stretch", hide_index=True, height=220)
 
 
 def _save_solar_potential(params: dict[str, float], resolution: int) -> None:
@@ -1308,7 +1365,7 @@ def _wind_group_controls(
                         selected[group.id].append(layer.id)
                 if not selected[group.id]:
                     st.caption(ui_text("group_inactive", language))
-        applied = st.form_submit_button(ui_text("apply_changes", language), type="primary", use_container_width=True)
+        applied = st.form_submit_button(ui_text("apply_changes", language), type="primary", width="stretch")
 
     normalized = normalize_group_layer_map(selected)
     st.session_state[WIND_LAYER_SELECTION_KEY] = normalized
@@ -1351,7 +1408,7 @@ def _wind_layer_selector_controls(widget_prefix: str) -> None:
                     format_func=lambda layer_id: layers[layer_id].label,
                     key=f"{widget_prefix}_wind_layers_{group_id}",
                 )
-            applied = st.form_submit_button("Anvand andringar", type="primary", use_container_width=True)
+            applied = st.form_submit_button("Anvand andringar", type="primary", width="stretch")
         if applied:
             st.session_state[WIND_LAYER_SELECTION_KEY] = normalize_group_layer_map(draft_layers)
             st.success("Vindlager uppdaterade.")
@@ -1425,8 +1482,24 @@ def _wind_share_legend_items() -> list[dict[str, str]]:
     for spec in WIND_SHARE_CLASS_SPECS:
         if not spec.get("legend_label"):
             continue
+        if str(spec.get("id")) == "share_0":
+            items.append({"label": "Mörkare röd = djupare kärnområde", "color": "#7f0000"})
         items.append({"label": str(spec["legend_label"]), "color": str(spec["base_color"])})
+        if str(spec.get("id")) == "share_9":
+            items.append({"label": "Mörkare grön = djupare kärnområde", "color": "#006d2c"})
     return items
+
+
+def _wind_core_label(core_score: float, zone_size: int) -> str:
+    core_value = max(0.0, min(1.0, float(core_score)))
+    zone_size_value = max(0, int(zone_size))
+    if zone_size_value <= 1:
+        return "Enskild hex"
+    if core_value >= 0.72:
+        return "Djup kärna"
+    if core_value >= 0.36:
+        return "Mellanläge"
+    return "Kantzon"
 
 
 def _wind_polygon_source_layers(
@@ -1717,6 +1790,10 @@ def _build_wind_runtime_hex_layer_data(
             frame["zone_size"],
         )
     ]
+    frame["core_label"] = [
+        _wind_core_label(core_value, zone_size)
+        for core_value, zone_size in zip(frame["core_score"], frame["zone_size"])
+    ]
     frame["stroke"] = frame["fill"].map(lambda value: _mix_hex_colors(str(value), "#3a3a3a", 0.28))
     return frame.sort_values("hex_id").reset_index(drop=True)
 
@@ -1755,8 +1832,11 @@ def _wind_runtime_hex_feature_collection(
             f"Hex: {row.hex_id}<br>"
             f"Potentialandel: {float(row.potential_area_share_pct):.1f}%<br>"
             f"Klass: {row.share_class_label}<br>"
+            f"Kärnläge: {row.core_label}<br>"
             f"Kärnscore: {float(row.core_score):.2f}<br>"
-            f"Kärnrank i zon: {int(row.center_mass_rank)} av {int(row.zone_size)}"
+            f"Sammanhängande zon: {int(row.zone_size)} hex<br>"
+            f"Kärnrank i zon: {int(row.center_mass_rank)} av {int(row.zone_size)}<br>"
+            f"<em>Mörkare nyans betyder längre in i en sammanhängande zon av samma potentialklass.</em>"
         )
         features.append(
             {
@@ -1766,6 +1846,11 @@ def _wind_runtime_hex_feature_collection(
                     "hex_id": str(row.hex_id),
                     "fill": str(row.fill),
                     "stroke": str(row.stroke),
+                    "core_score": float(row.core_score),
+                    "core_label": str(row.core_label),
+                    "zone_size": int(row.zone_size),
+                    "tooltip_title": f"Potentialandel {float(row.potential_area_share_pct):.1f}%",
+                    "tooltip_body": f"{row.share_class_label} · {row.core_label}",
                     "popup": popup,
                 },
             }
@@ -1876,6 +1961,10 @@ def _wind_polygon_summary_frame(
                 "wind_class",
                 "wind_class_label",
                 "wind_color",
+                "core_score",
+                "core_label",
+                "zone_size",
+                "center_mass_rank",
                 "class_km",
                 "landscape_type",
             ]
@@ -1885,6 +1974,10 @@ def _wind_polygon_summary_frame(
     frame["wind_class"] = frame["share_class_id"].astype(str)
     frame["wind_class_label"] = frame["share_class_label"].astype(str)
     frame["wind_color"] = frame["fill"].astype(str)
+    frame["core_score"] = pd.to_numeric(frame.get("core_score"), errors="coerce").fillna(0.0)
+    frame["core_label"] = frame.get("core_label", "").fillna("").astype(str)
+    frame["zone_size"] = pd.to_numeric(frame.get("zone_size"), errors="coerce").fillna(0).astype(int)
+    frame["center_mass_rank"] = pd.to_numeric(frame.get("center_mass_rank"), errors="coerce").fillna(1).astype(int)
 
     landscape = _landscape_frame(region, landscape_manifest, int(target_resolution))
     context_cols = [column for column in ["hex_id", "class_km", "landscape_type"] if column in landscape.columns]
@@ -2035,19 +2128,43 @@ def _landscape_type_layer(
 def _combined_summary(map_state: dict[str, Any], scenario_state: dict[str, Any]) -> None:
     def _wind_share_summary(frame: pd.DataFrame) -> pd.DataFrame:
         if frame.empty:
-            return pd.DataFrame(columns=["klass", "klass_label", "hexagoner", "medelandel"])
+            return pd.DataFrame(columns=["klass", "klass_label", "hexagoner", "medelandel", "djupa_karnor"])
         work = frame.copy()
         work["potential_area_share_pct"] = pd.to_numeric(work["potential_area_share_pct"], errors="coerce").fillna(0.0)
         work["share_class_index"] = pd.to_numeric(work.get("share_class_index"), errors="coerce").fillna(999).astype(int)
+        work["core_score"] = pd.to_numeric(work.get("core_score"), errors="coerce").fillna(0.0)
         work["share_class_id"] = work["share_class_id"].astype(str)
         work["share_class_label"] = work["share_class_label"].astype(str)
+        work["deep_core"] = work["core_score"].ge(0.72)
         return (
             work.groupby(["share_class_index", "share_class_id", "share_class_label"], as_index=False)
-            .agg(hexagoner=("hex_id", "count"), medelandel=("potential_area_share_pct", "mean"))
+            .agg(
+                hexagoner=("hex_id", "count"),
+                medelandel=("potential_area_share_pct", "mean"),
+                djupa_karnor=("deep_core", "sum"),
+            )
             .sort_values(["share_class_index", "medelandel"])
             .assign(medelandel=lambda data: data["medelandel"].round(1))
             .rename(columns={"share_class_id": "klass", "share_class_label": "klass_label"})
-            [["klass", "klass_label", "hexagoner", "medelandel"]]
+            [["klass", "klass_label", "hexagoner", "medelandel", "djupa_karnor"]]
+        )
+
+    def _wind_core_summary(frame: pd.DataFrame) -> pd.DataFrame:
+        if frame.empty or "core_label" not in frame.columns:
+            return pd.DataFrame(columns=["kärnläge", "hexagoner", "medelandel"])
+        work = frame.copy()
+        work["potential_area_share_pct"] = pd.to_numeric(work["potential_area_share_pct"], errors="coerce").fillna(0.0)
+        work["core_score"] = pd.to_numeric(work.get("core_score"), errors="coerce").fillna(0.0)
+        work["core_label"] = work["core_label"].fillna("").astype(str).replace("", "Okänt")
+        order = {"Kantzon": 1, "Mellanläge": 2, "Djup kärna": 3, "Enskild hex": 4, "Okänt": 5}
+        return (
+            work.groupby("core_label", as_index=False)
+            .agg(hexagoner=("hex_id", "count"), medelandel=("potential_area_share_pct", "mean"), kärnscore=("core_score", "mean"))
+            .assign(sort=lambda data: data["core_label"].map(order).fillna(99))
+            .sort_values("sort")
+            .assign(medelandel=lambda data: data["medelandel"].round(1), kärnscore=lambda data: data["kärnscore"].round(2))
+            .rename(columns={"core_label": "kärnläge"})
+            [["kärnläge", "hexagoner", "medelandel", "kärnscore"]]
         )
 
     def _metric_value_text(frame: pd.DataFrame, score_col: str, template: str) -> str:
@@ -2066,15 +2183,24 @@ def _combined_summary(map_state: dict[str, Any], scenario_state: dict[str, Any])
         return float(frame[class_col].astype(str).isin(target_classes).mean() * 100.0)
 
     st.subheader("Tolkning")
-    st.caption(f"Scenario: {scenario_state.get('scenario') or '-'}")
     resolution_info = map_state.get("resolution_info") or {}
-    metric_left, metric_center, metric_right, metric_mode = st.columns(4)
-    metric_left.metric("Aktiva lager", len(map_state.get("layers") or []))
-    metric_center.metric("Vald H3", str(resolution_info.get("selected_label", f"R{map_state.get('resolution')}")))
-    metric_right.metric("Hexvisning", str(resolution_info.get("display_label", f"R{map_state.get('resolution')}")))
-    metric_mode.metric("Läge", str(resolution_info.get("mode_label", "Fast")))
+    context_rows = [
+        {"inställning": "Scenario", "värde": str(scenario_state.get("scenario") or "-")},
+        {"inställning": "Vald H3", "värde": str(resolution_info.get("selected_label", f"R{map_state.get('resolution')}"))},
+        {"inställning": "Hexvisning", "värde": str(resolution_info.get("display_label", f"R{map_state.get('resolution')}"))},
+        {"inställning": "Läge", "värde": str(resolution_info.get("mode_label", "Fast"))},
+    ]
+    st.dataframe(pd.DataFrame(context_rows), width="stretch", hide_index=True, height=176)
     if resolution_info.get("caption"):
         st.caption(str(resolution_info.get("caption")))
+
+    layer_rows = _layer_control_rows(map_state.get("layers") or [], str(map_state.get("opacity_key_prefix") or "combined"))
+    with st.expander(f"Tända lager ({len(layer_rows)})", expanded=True):
+        if layer_rows:
+            st.dataframe(pd.DataFrame(layer_rows), width="stretch", hide_index=True, height=min(260, 72 + 36 * len(layer_rows)))
+            st.caption("Samma lager kan även döljas direkt i kartans lagerkontroll.")
+        else:
+            st.caption("Inga lager är tända.")
 
     for item in map_state.get("potential_frames") or []:
         frame = item["frame"]
@@ -2099,7 +2225,11 @@ def _combined_summary(map_state: dict[str, Any], scenario_state: dict[str, Any])
                 summary_frame = _wind_share_summary(frame)
             else:
                 summary_frame = potential_summary(frame, technology)
-            st.dataframe(summary_frame, use_container_width=True, hide_index=True)
+            st.dataframe(summary_frame, width="stretch", hide_index=True)
+            if item.get("summary_mode") == "wind_share":
+                with st.expander("Kärnområden", expanded=False):
+                    st.caption("Mörkare nyans inom samma potentialklass markerar hexagoner som ligger djupare i en sammanhängande zon.")
+                    st.dataframe(_wind_core_summary(frame), width="stretch", hide_index=True)
 
     if map_state.get("landscape_active"):
         with st.expander("Landskapsanalys", expanded=False):
@@ -2122,7 +2252,7 @@ def _data_method(region: dict[str, Any]) -> None:
                     "exists": bool(path and path.exists()),
                 }
             )
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
         st.json(region)
 
 
@@ -2166,6 +2296,9 @@ def _unified_workspace_tab(
     selected_factor = str(st.session_state.get("combined_landscape_factor", factors[0] if factors else ""))
     if selected_factor not in factors and factors:
         selected_factor = factors[0]
+    active_landscape_count = _count_enabled(show_v10, show_cluster, show_factor)
+    active_wind_count = _count_enabled(show_user_wind, show_default_wind)
+    active_solar_count = _count_enabled(show_user_solar, show_default_solar)
 
     wind_selected_layers = _selected_wind_layers()
     wind_ui_params = _default_wind_params()
@@ -2176,7 +2309,7 @@ def _unified_workspace_tab(
             with st.expander("Region", expanded=False):
                 region = _select_region(st)
 
-            with st.expander("Landskap", expanded=True):
+            with st.expander(f"Landskap ({active_landscape_count})", expanded=True):
                 show_v10 = st.checkbox("Landskapstyper", value=show_v10, key="show_landscape_v10")
                 show_cluster = st.checkbox("Landskapstrukturer", value=show_cluster, key="show_landscape_cluster")
                 show_factor = st.checkbox("Landskapsfaktorer", value=show_factor, key="show_landscape_factor")
@@ -2191,7 +2324,7 @@ def _unified_workspace_tab(
 
             h3_resolution, lock_h3_resolution, opacity, preserve_map_view, map_reset_token = _map_panel_controls(region, "combined", st)
 
-            with st.expander("Vindpotential", expanded=False):
+            with st.expander(f"Vindpotential ({active_wind_count})", expanded=False):
                 show_user_wind = st.checkbox("Egen vindpotential", value=show_user_wind, key="show_user_wind")
                 show_default_wind = st.checkbox("Default vindpotential", value=show_default_wind, key="show_default_wind")
                 st.caption(
@@ -2205,7 +2338,7 @@ def _unified_workspace_tab(
                 st.caption("Separat sparning behövs inte längre i den här arbetsvyn.")
                 wind_selected_layers, wind_ui_params, wind_controls_applied = _wind_group_controls("wind_unified", language=WIND_CONTROL_LANGUAGE)
 
-            with st.expander("Solpotential", expanded=False):
+            with st.expander(f"Solpotential ({active_solar_count})", expanded=False):
                 show_user_solar = st.checkbox("Egen solpotential", value=show_user_solar, key="show_user_solar")
                 show_default_solar = st.checkbox("Default solpotential", value=show_default_solar, key="show_default_solar")
                 st.caption("Bygg solpotential direkt i samma vy. Kartan visar alltid både hexlager och ett sammanhängande polygonlager.")
@@ -2218,7 +2351,7 @@ def _unified_workspace_tab(
                 _builder_slider("solar_builder", "terrain_penalty", "Terräng- och dalstraff", 0.0, 35.0, 1.0, solar_defaults, "Sänker potential där relief och sprickdalar dominerar.")
                 _builder_slider("solar_builder", "protected_penalty", "Skog/habitat-straff", 0.0, 40.0, 1.0, solar_defaults, "Sänker potential i skyddade skogs- och habitatmiljöer.")
                 _builder_slider("solar_builder", "settlement_penalty", "Bosättningsstraff", 0.0, 35.0, 1.0, solar_defaults, "Sänker potential där bebyggelse och tät struktur dominerar.")
-                if st.button("Spara solpotential", type="primary", use_container_width=True, key="save_solar_unified"):
+                if st.button("Spara solpotential", type="primary", width="stretch", key="save_solar_unified"):
                     _save_solar_potential(_state_params("solar_builder", solar_defaults), h3_resolution)
                     st.success("Solpotential sparad.")
 
@@ -2398,6 +2531,9 @@ def _unified_workspace_tab(
                     f"Vindpotentialen beräknas i R{WIND_RUNTIME_BASE_RESOLUTION} och visar polygonen tillsammans med zoomanpassade hexagonlager "
                     f"med R{h3_resolution} som prefererad detaljnivå."
                 )
+            unified_notes.append(
+                "Mörkare gröna och röda nyanser visar kärnhexagoner som ligger djupare inne i en sammanhängande zon av samma potentialklass."
+            )
 
     if show_v10 or show_cluster or show_factor:
         landscape_frame = _landscape_frame(region, landscape_manifest, h3_resolution)
@@ -2454,6 +2590,11 @@ def _unified_workspace_tab(
                 )
             )
 
+    layer_control_count = len(_layer_control_rows(layers, "combined"))
+    note_body = (
+        f"{layer_control_count} lagergrupper är tända. "
+        f"{resolution_info.get('caption') or 'Hexvisningen följer vald H3-upplösning.'}"
+    )
     _render_layers(
         region,
         layers,
@@ -2462,7 +2603,7 @@ def _unified_workspace_tab(
         map_reset_token=map_reset_token,
         opacity_key_prefix="combined",
         note_title="Gemensam potentialvy",
-        note_body="Kartan visar både polygoner och hexagoner från samma potentialbyggen. Lager kan slås av/på i kartkontrollen.",
+        note_body=note_body,
     )
 
     summary_target = right_panel or st.container()
@@ -2474,6 +2615,7 @@ def _unified_workspace_tab(
                 "resolution": h3_resolution,
                 "resolution_info": resolution_info,
                 "landscape_active": bool(show_v10 or show_cluster or show_factor),
+                "opacity_key_prefix": "combined",
             },
             scenario_state,
         )

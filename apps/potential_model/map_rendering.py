@@ -408,6 +408,15 @@ def build_layered_hex_map_html(
           }});
         }},
         onEachFeature: function(feature, itemLayer) {{
+          const props = (feature && feature.properties) || {{}};
+          if (props.tooltip_title || props.tooltip_body) {{
+            const tooltipTitle = props.tooltip_title || props.hex_id || spec.name;
+            const tooltipBody = props.tooltip_body || '';
+            itemLayer.bindTooltip(
+              tooltipBody ? ('<strong>' + tooltipTitle + '</strong><br>' + tooltipBody) : tooltipTitle,
+              {{ sticky: true, direction: 'top', opacity: 0.92 }}
+            );
+          }}
           itemLayer.bindPopup(popupHtml(spec, feature));
         }}
       }});
