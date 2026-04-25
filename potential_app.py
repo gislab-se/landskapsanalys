@@ -2185,10 +2185,22 @@ def _energy_area_proposal_layer(
         allocated_share = float(getattr(row, "allocated_hex_share_pct", 0.0) or 0.0)
         allocated_twh = float(getattr(row, "allocated_twh", 0.0) or 0.0)
         remaining_area = float(getattr(row, "remaining_area_after_km2", 0.0) or 0.0)
-        allocation_phase = str(getattr(row, "allocation_phase", "") or "")
+        raw_phase = getattr(row, "allocation_phase", "")
+        allocation_phase = "" if pd.isna(raw_phase) else str(raw_phase or "")
         core_score = float(getattr(row, "core_score", 0.0) or 0.0)
         zone_size = int(getattr(row, "zone_size", 0) or 0)
-        if allocated_share >= 85.0:
+        raw_outside = getattr(row, "outside_et", False)
+        outside_et = False if pd.isna(raw_outside) else bool(raw_outside)
+        raw_expansion_ring = getattr(row, "expansion_ring", 0)
+        expansion_ring = 0 if pd.isna(raw_expansion_ring) else int(raw_expansion_ring or 0)
+        if outside_et:
+            if core_score >= 0.72:
+                fill = "#7e22ce"
+            elif core_score >= 0.36:
+                fill = "#c026d3"
+            else:
+                fill = "#ec4899"
+        elif allocated_share >= 85.0:
             fill = "#075985"
         elif allocated_share >= 65.0:
             fill = "#0284c7"
@@ -2199,11 +2211,12 @@ def _energy_area_proposal_layer(
         else:
             fill = "#bae6fd"
         popup = (
-            f"<strong>Föreslagen etableringsyta</strong><br>"
+            f"<strong>{'Yta utanför ET' if outside_et else 'Föreslagen etableringsyta'}</strong><br>"
             "Visas som hexaggregerat urval; hela hexen är inte nödvändigtvis tillgänglig.<br>"
             f"Hex: {row.hex_id}<br>"
             f"Prioritet: {rank}<br>"
             f"Urvalssteg: {allocation_phase}<br>"
+            f"Expansionslager: {expansion_ring if outside_et else '-'}<br>"
             f"Potentialandel: {share:.1f}%<br>"
             f"Potentiell yta i hex: {potential_area:.3f} km²<br>"
             f"Fördelad yta här: {allocated_area:.3f} km² ({allocated_share:.1f}% av hex)<br>"
@@ -2220,9 +2233,9 @@ def _energy_area_proposal_layer(
                 "properties": {
                     "hex_id": str(row.hex_id),
                     "fill": fill,
-                    "stroke": "#e0f2fe",
+                    "stroke": "#fdf2f8" if outside_et else "#e0f2fe",
                     "popup": popup,
-                    "tooltip_title": f"Föreslagen yta #{rank}",
+                    "tooltip_title": f"{'Konfliktyta' if outside_et else 'Föreslagen yta'} #{rank}",
                     "tooltip_body": f"{allocation_phase} · {allocated_area:.3f} km² · {allocated_share:.1f}% av hex",
                 },
             }
@@ -2238,6 +2251,8 @@ def _energy_area_proposal_layer(
             {"label": "Liten etableringsyta i hex", "color": "#bae6fd"},
             {"label": "Mellan", "color": "#0ea5e9"},
             {"label": "Stor etableringsyta i hex", "color": "#075985"},
+            {"label": "Utanför ET: låg konflikt", "color": "#ec4899"},
+            {"label": "Utanför ET: hög konflikt", "color": "#7e22ce"},
         ],
         "legend_id": "energy_area_proposal",
         "legend_title": "Energimodellering",
@@ -2249,6 +2264,110 @@ def _energy_area_proposal_layer(
         "z_index": 470,
         "layer_kind": "vector",
     }
+
+
+def _expand_wind_area_outside_et(
+    source_frame: pd.DataFrame,
+    selected_frame: pd.DataFrame,
+    proposal_stats: dict[str, Any],
+    display_geometry_path: str | None,
+    hex_area_km2: float,
+) -> tuple[pd.DataFrame, dict[str, Any]]:
+    if source_frame.empty or not display_geometry_path or hex_area_km2 <= 0:
+        return selected_frame, proposal_stats
+
+    et_shortage = float(proposal_stats.get("unmet_area_km2", 0.0) or 0.0)
+    proposal_stats["et_selected_area_km2"] = float(proposal_stats.get("selected_area_km2", 0.0) or 0.0)
+    proposal_stats["et_unmet_area_km2"] = max(0.0, et_shortage)
+    if et_shortage <= 1e-9:
+        proposal_stats.setdefault("outside_selected_area_km2", 0.0)
+        proposal_stats.setdefault("outside_hex_count", 0)
+        proposal_stats.setdefault("max_expansion_ring", 0)
+        return selected_frame, proposal_stats
+
+    display_hexes = set(load_h3_display_geometries(display_geometry_path))
+    if not display_hexes:
+        return selected_frame, proposal_stats
+
+    work = source_frame.copy()
+    work["hex_id"] = work["hex_id"].astype(str)
+    work["potential_area_share_pct"] = pd.to_numeric(work.get("potential_area_share_pct"), errors="coerce").fillna(0.0)
+    work["core_score"] = pd.to_numeric(work.get("core_score"), errors="coerce").fillna(0.0)
+    work["zone_size"] = pd.to_numeric(work.get("zone_size"), errors="coerce").fillna(0).astype(int)
+    et_hexes = set(work.loc[work["potential_area_share_pct"].gt(0.0), "hex_id"].astype(str)) & display_hexes
+    selected_hexes = set(selected_frame.get("hex_id", pd.Series(dtype=str)).astype(str)) if not selected_frame.empty else set()
+    anchor_hexes = (selected_hexes or et_hexes) & display_hexes
+
+    neighbor_map = _wind_runtime_hex_neighbor_map(display_geometry_path)
+    distance_lookup: dict[str, int] = {}
+    if anchor_hexes:
+        visited = set(anchor_hexes)
+        frontier: deque[tuple[str, int]] = deque((hex_id, 0) for hex_id in anchor_hexes)
+        while frontier:
+            current, distance = frontier.popleft()
+            for neighbor in neighbor_map.get(current, []):
+                neighbor = str(neighbor)
+                if neighbor not in display_hexes or neighbor in visited:
+                    continue
+                visited.add(neighbor)
+                distance_lookup[neighbor] = distance + 1
+                frontier.append((neighbor, distance + 1))
+
+    outside = work[work["hex_id"].isin(display_hexes - et_hexes)].copy()
+    if outside.empty:
+        return selected_frame, proposal_stats
+    outside["expansion_ring"] = outside["hex_id"].map(distance_lookup).fillna(999999).astype(int)
+    outside = outside[outside["expansion_ring"].lt(999999)].copy()
+    if outside.empty:
+        return selected_frame, proposal_stats
+
+    outside = outside.sort_values(
+        ["expansion_ring", "core_score", "zone_size", "hex_id"],
+        ascending=[True, True, True, True],
+    ).reset_index(drop=True)
+
+    remaining_area = et_shortage
+    start_rank = int(len(selected_frame)) + 1
+    outside_rows: list[dict[str, Any]] = []
+    for offset, row in enumerate(outside.itertuples(index=False), start=0):
+        allocated_area = min(float(hex_area_km2), max(0.0, remaining_area))
+        if allocated_area <= 0:
+            break
+        record = row._asdict()
+        record["selected_rank"] = start_rank + offset
+        record["outside_et"] = True
+        record["allocation_phase"] = "Utanför ET"
+        record["potential_area_km2"] = 0.0
+        record["allocated_area_km2"] = allocated_area
+        record["allocated_hex_share_pct"] = (allocated_area / max(float(hex_area_km2), 1e-9)) * 100.0
+        remaining_area = max(0.0, remaining_area - allocated_area)
+        record["remaining_area_after_km2"] = remaining_area
+        outside_rows.append(record)
+        if remaining_area <= 1e-9:
+            break
+
+    if not outside_rows:
+        return selected_frame, proposal_stats
+
+    outside_frame = pd.DataFrame(outside_rows)
+    if "outside_et" not in selected_frame.columns and not selected_frame.empty:
+        selected_frame = selected_frame.copy()
+        selected_frame["outside_et"] = False
+    combined = pd.concat([selected_frame, outside_frame], ignore_index=True, sort=False)
+    outside_area = float(outside_frame["allocated_area_km2"].sum())
+    proposal_stats.update(
+        {
+            "selected_area_km2": float(proposal_stats.get("et_selected_area_km2", 0.0) or 0.0) + outside_area,
+            "unmet_area_km2": max(0.0, remaining_area),
+            "selected_hex_count": int(len(combined)),
+            "outside_selected_area_km2": outside_area,
+            "outside_hex_count": int(len(outside_frame)),
+            "outside_candidate_hex": int(len(outside)),
+            "outside_candidate_area_km2": float(len(outside) * float(hex_area_km2)),
+            "max_expansion_ring": int(outside_frame["expansion_ring"].max()),
+        }
+    )
+    return combined, proposal_stats
 
 
 def _wind_runtime_hex_layers(
@@ -2643,6 +2762,19 @@ def _render_energy_model_summary(energy_model_state: dict[str, Any]) -> None:
             selected_twh = float(proposal_stats.get("selected_twh", 0.0) or 0.0)
             if selected_twh > 0:
                 st.metric("Fördelad vindproduktion", f"{selected_twh:.2f} TWh")
+            et_shortage = float(proposal_stats.get("et_unmet_area_km2", 0.0) or 0.0)
+            outside_area = float(proposal_stats.get("outside_selected_area_km2", 0.0) or 0.0)
+            outside_hex_count = int(proposal_stats.get("outside_hex_count", 0) or 0)
+            max_ring = int(proposal_stats.get("max_expansion_ring", 0) or 0)
+            if et_shortage > 0:
+                st.error(
+                    f"Potentiell etableringsyta räcker inte. {et_shortage:.2f} km² måste visas som konfliktyta utanför ET."
+                )
+                if outside_hex_count > 0:
+                    st.caption(
+                        f"Utanför ET: {outside_hex_count:,} rosa/lila hex, {outside_area:.2f} km², "
+                        f"upp till expansionslager {max_ring} från blå ET.".replace(",", " ")
+                    )
             needed_hex = int(proposal_stats.get("needed_hex", 0) or 0)
             selected_count = int(proposal_stats.get("selected_hex_count", 0) or 0)
             if selected_count <= 0:
@@ -2985,6 +3117,13 @@ def _unified_workspace_tab(
                     float(energy_model_state.get("hex_area_km2", h3_hex_area_km2(h3_resolution)) or h3_hex_area_km2(h3_resolution)),
                     float(energy_model_state.get("auto_min_potential_share_pct", 65.0) or 65.0),
                 )
+                proposal_frame, proposal_stats = _expand_wind_area_outside_et(
+                    custom_wind_summary,
+                    proposal_frame,
+                    proposal_stats,
+                    display_geometry_path,
+                    float(energy_model_state.get("hex_area_km2", h3_hex_area_km2(h3_resolution)) or h3_hex_area_km2(h3_resolution)),
+                )
                 if not proposal_frame.empty:
                     primary_twh = float(energy_model_state.get("primary_twh", 0.0) or 0.0)
                     primary_area = float(energy_model_state.get("primary_area_need_km2", 0.0) or 0.0)
@@ -3071,6 +3210,13 @@ def _unified_workspace_tab(
         f"{layer_control_count} lagergrupper är tända. "
         f"{resolution_info.get('caption') or 'Hexvisningen följer vald H3-upplösning.'}"
     )
+    proposal_stats_for_note = energy_model_state.get("proposal_stats") if isinstance(energy_model_state, dict) else None
+    if isinstance(proposal_stats_for_note, dict) and float(proposal_stats_for_note.get("et_unmet_area_km2", 0.0) or 0.0) > 0:
+        note_body = (
+            "<strong style='color:#be123c;'>VARNING:</strong> "
+            f"ET räcker inte. {float(proposal_stats_for_note.get('outside_selected_area_km2', 0.0) or 0.0):.2f} km² "
+            "visas som rosa/lila konfliktyta utanför potentiell etableringsyta."
+        )
     _render_layers(
         region,
         layers,
