@@ -796,29 +796,112 @@ def allocate_wind_area_from_core_hexes(
     hex_area_km2: float,
     min_share_pct: float = 65.0,
 ) -> tuple[pd.DataFrame, dict[str, float]]:
-    empty = pd.DataFrame(columns=["hex_id", "potential_area_share_pct", "core_score", "zone_size", "selected_rank"])
+    empty = pd.DataFrame(
+        columns=[
+            "hex_id",
+            "potential_area_share_pct",
+            "potential_area_km2",
+            "allocated_area_km2",
+            "allocated_hex_share_pct",
+            "remaining_area_after_km2",
+            "allocation_phase",
+            "core_score",
+            "zone_size",
+            "selected_rank",
+        ]
+    )
     if frame.empty or area_need_km2 <= 0 or hex_area_km2 <= 0:
-        return empty, {"selected_area_km2": 0.0, "unmet_area_km2": max(0.0, float(area_need_km2)), "needed_hex": 0}
+        return empty, {
+            "selected_area_km2": 0.0,
+            "selected_potential_area_km2": 0.0,
+            "selected_hex_footprint_km2": 0.0,
+            "unmet_area_km2": max(0.0, float(area_need_km2)),
+            "needed_hex": 0,
+            "selected_hex_count": 0,
+            "primary_candidate_hex": 0,
+            "extension_candidate_hex": 0,
+        }
 
     candidates = frame.copy()
     candidates["potential_area_share_pct"] = pd.to_numeric(candidates.get("potential_area_share_pct"), errors="coerce").fillna(0.0)
     candidates["core_score"] = pd.to_numeric(candidates.get("core_score"), errors="coerce").fillna(0.0)
     candidates["zone_size"] = pd.to_numeric(candidates.get("zone_size"), errors="coerce").fillna(0).astype(int)
-    candidates = candidates[candidates["potential_area_share_pct"].ge(float(min_share_pct))].copy()
+    candidates = candidates[candidates["potential_area_share_pct"].gt(0.0)].copy()
     if candidates.empty:
-        return empty, {"selected_area_km2": 0.0, "unmet_area_km2": float(area_need_km2), "needed_hex": int(math.ceil(area_need_km2 / hex_area_km2))}
+        return empty, {
+            "selected_area_km2": 0.0,
+            "selected_potential_area_km2": 0.0,
+            "selected_hex_footprint_km2": 0.0,
+            "unmet_area_km2": float(area_need_km2),
+            "needed_hex": int(math.ceil(area_need_km2 / hex_area_km2)),
+            "selected_hex_count": 0,
+            "available_candidate_hex": 0,
+            "primary_candidate_hex": 0,
+            "extension_candidate_hex": 0,
+        }
 
+    candidates["allocation_phase"] = candidates["potential_area_share_pct"].ge(float(min_share_pct)).map(
+        {True: "Kärn-ET", False: "Kompletterande ET"}
+    )
+    candidates["priority_group"] = candidates["allocation_phase"].map({"Kärn-ET": 0, "Kompletterande ET": 1}).fillna(1).astype(int)
     candidates = candidates.sort_values(
-        ["core_score", "zone_size", "potential_area_share_pct", "hex_id"],
-        ascending=[False, False, False, True],
+        ["priority_group", "core_score", "zone_size", "potential_area_share_pct", "hex_id"],
+        ascending=[True, False, False, False, True],
     ).reset_index(drop=True)
+
+    candidates["potential_area_km2"] = (
+        candidates["potential_area_share_pct"].clip(lower=0.0, upper=100.0).div(100.0) * float(hex_area_km2)
+    )
+    candidates = candidates[candidates["potential_area_km2"].gt(0.0)].copy()
+    if candidates.empty:
+        return empty, {
+            "selected_area_km2": 0.0,
+            "selected_potential_area_km2": 0.0,
+            "selected_hex_footprint_km2": 0.0,
+            "unmet_area_km2": float(area_need_km2),
+            "needed_hex": int(math.ceil(area_need_km2 / hex_area_km2)),
+            "selected_hex_count": 0,
+            "available_candidate_hex": 0,
+            "primary_candidate_hex": 0,
+            "extension_candidate_hex": 0,
+        }
+
+    remaining_area = float(area_need_km2)
+    selected_rows: list[dict[str, object]] = []
+    for rank, row in enumerate(candidates.itertuples(index=False), start=1):
+        potential_area = float(getattr(row, "potential_area_km2", 0.0) or 0.0)
+        allocated_area = min(potential_area, max(0.0, remaining_area))
+        if allocated_area <= 0:
+            break
+        record = row._asdict()
+        record["selected_rank"] = rank
+        record["allocated_area_km2"] = allocated_area
+        record["allocated_hex_share_pct"] = (allocated_area / max(float(hex_area_km2), 1e-9)) * 100.0
+        remaining_area = max(0.0, remaining_area - allocated_area)
+        record["remaining_area_after_km2"] = remaining_area
+        selected_rows.append(record)
+        if remaining_area <= 1e-9:
+            break
+
+    selected = pd.DataFrame(selected_rows) if selected_rows else empty.copy()
+    selected_area = float(selected["allocated_area_km2"].sum()) if not selected.empty else 0.0
+    selected_potential_area = float(selected["potential_area_km2"].sum()) if not selected.empty else 0.0
+    selected_hex_footprint = float(len(selected) * float(hex_area_km2))
     needed_hex = int(math.ceil(float(area_need_km2) / max(float(hex_area_km2), 1e-9)))
-    selected = candidates.head(min(needed_hex, len(candidates))).copy()
-    selected["selected_rank"] = range(1, len(selected) + 1)
-    selected_area = float(len(selected) * float(hex_area_km2))
+    phase_counts = selected["allocation_phase"].value_counts().to_dict() if not selected.empty else {}
     return selected, {
         "selected_area_km2": selected_area,
+        "selected_potential_area_km2": selected_potential_area,
+        "selected_hex_footprint_km2": selected_hex_footprint,
         "unmet_area_km2": max(0.0, float(area_need_km2) - selected_area),
         "needed_hex": needed_hex,
+        "selected_hex_count": int(len(selected)),
+        "mean_selected_share_pct": float(selected["potential_area_share_pct"].mean()) if not selected.empty else 0.0,
         "available_candidate_hex": int(len(candidates)),
+        "available_candidate_area_km2": float(candidates["potential_area_km2"].sum()),
+        "primary_candidate_hex": int(candidates["allocation_phase"].eq("Kärn-ET").sum()),
+        "extension_candidate_hex": int(candidates["allocation_phase"].eq("Kompletterande ET").sum()),
+        "selected_primary_hex": int(phase_counts.get("Kärn-ET", 0)),
+        "selected_extension_hex": int(phase_counts.get("Kompletterande ET", 0)),
+        "min_share_pct": float(min_share_pct),
     }

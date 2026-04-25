@@ -716,7 +716,7 @@ def _render_energy_modeling_panel(
         )
 
     show_key = f"energy_model_show_proposal_{region.get('region_id', 'region')}"
-    show_proposal = panel.checkbox("Visa EML-lager: föreslagen etableringsyta", value=True, key=show_key)
+    show_proposal = panel.checkbox("Visa föreslagen etableringsyta", value=True, key=show_key)
 
     with panel.expander("Beräkning och datakvalitet", expanded=False):
         calc_df = area_demand[["Teknik", "twh", "km2_per_twh", "area_need_km2"]].rename(
@@ -2180,13 +2180,35 @@ def _energy_area_proposal_layer(
             continue
         rank = int(getattr(row, "selected_rank", 0) or 0)
         share = float(getattr(row, "potential_area_share_pct", 0.0) or 0.0)
+        potential_area = float(getattr(row, "potential_area_km2", 0.0) or 0.0)
+        allocated_area = float(getattr(row, "allocated_area_km2", 0.0) or 0.0)
+        allocated_share = float(getattr(row, "allocated_hex_share_pct", 0.0) or 0.0)
+        allocated_twh = float(getattr(row, "allocated_twh", 0.0) or 0.0)
+        remaining_area = float(getattr(row, "remaining_area_after_km2", 0.0) or 0.0)
+        allocation_phase = str(getattr(row, "allocation_phase", "") or "")
         core_score = float(getattr(row, "core_score", 0.0) or 0.0)
         zone_size = int(getattr(row, "zone_size", 0) or 0)
+        if allocated_share >= 85.0:
+            fill = "#075985"
+        elif allocated_share >= 65.0:
+            fill = "#0284c7"
+        elif allocated_share >= 40.0:
+            fill = "#0ea5e9"
+        elif allocated_share >= 15.0:
+            fill = "#7dd3fc"
+        else:
+            fill = "#bae6fd"
         popup = (
-            f"<strong>EML: föreslagen etableringsyta</strong><br>"
+            f"<strong>Föreslagen etableringsyta</strong><br>"
+            "Visas som hexaggregerat urval; hela hexen är inte nödvändigtvis tillgänglig.<br>"
             f"Hex: {row.hex_id}<br>"
             f"Prioritet: {rank}<br>"
+            f"Urvalssteg: {allocation_phase}<br>"
             f"Potentialandel: {share:.1f}%<br>"
+            f"Potentiell yta i hex: {potential_area:.3f} km²<br>"
+            f"Fördelad yta här: {allocated_area:.3f} km² ({allocated_share:.1f}% av hex)<br>"
+            f"Fördelad vindproduktion: {allocated_twh * 1000.0:.2f} GWh<br>"
+            f"Kvar efter denna hex: {remaining_area:.3f} km²<br>"
             f"Kärnscore: {core_score:.2f}<br>"
             f"Sammanhängande zon: {zone_size} hex<br>"
             f"H3: R{int(target_resolution)}"
@@ -2197,29 +2219,33 @@ def _energy_area_proposal_layer(
                 "geometry": geometry,
                 "properties": {
                     "hex_id": str(row.hex_id),
-                    "fill": "#38bdf8",
-                    "stroke": "#0f172a",
+                    "fill": fill,
+                    "stroke": "#e0f2fe",
                     "popup": popup,
-                    "tooltip_title": f"EML-yta #{rank}",
-                    "tooltip_body": f"{share:.1f}% potential · kärnscore {core_score:.2f}",
+                    "tooltip_title": f"Föreslagen yta #{rank}",
+                    "tooltip_body": f"{allocation_phase} · {allocated_area:.3f} km² · {allocated_share:.1f}% av hex",
                 },
             }
         )
     if not features:
         return None
     return {
-        "name": "EML: föreslagen etableringsyta",
+        "name": "Föreslagen etableringsyta",
         "feature_collection": {"type": "FeatureCollection", "features": features},
         "fill_property": "fill",
         "stroke_property": "stroke",
-        "legend_items": [{"label": "EML: föreslagen etableringsyta", "color": "#38bdf8"}],
+        "legend_items": [
+            {"label": "Liten etableringsyta i hex", "color": "#bae6fd"},
+            {"label": "Mellan", "color": "#0ea5e9"},
+            {"label": "Stor etableringsyta i hex", "color": "#075985"},
+        ],
         "legend_id": "energy_area_proposal",
         "legend_title": "Energimodellering",
         "default_visible": True,
         "stroke": True,
-        "stroke_opacity": 0.95,
-        "fill_opacity": 0.30,
-        "weight": 1.2,
+        "stroke_opacity": 0.45,
+        "fill_opacity": 0.50,
+        "weight": 0.45,
         "z_index": 470,
         "layer_kind": "vector",
     }
@@ -2605,14 +2631,52 @@ def _render_energy_model_summary(energy_model_state: dict[str, Any]) -> None:
         c1, c2 = st.columns(2)
         c1.metric("Vind från EML", f"{float(energy_model_state.get('primary_twh', 0.0) or 0.0):.2f} TWh")
         c2.metric("Markanspråk", f"{float(energy_model_state.get('primary_area_need_km2', 0.0) or 0.0):.2f} km²")
+        st.caption(
+            "Potentiell etableringsyta är den möjliga ytan i vindpotentiallagret. "
+            "Föreslagen etableringsyta är det automatiska urvalet som försöker möta scenario och area demand."
+        )
         proposal_stats = energy_model_state.get("proposal_stats") or {}
         if proposal_stats:
             c3, c4 = st.columns(2)
             c3.metric("Täckt yta", f"{float(proposal_stats.get('selected_area_km2', 0.0) or 0.0):.2f} km²")
             c4.metric("Kvar", f"{float(proposal_stats.get('unmet_area_km2', 0.0) or 0.0):.2f} km²")
+            selected_twh = float(proposal_stats.get("selected_twh", 0.0) or 0.0)
+            if selected_twh > 0:
+                st.metric("Fördelad vindproduktion", f"{selected_twh:.2f} TWh")
             needed_hex = int(proposal_stats.get("needed_hex", 0) or 0)
-            selected_count = len(energy_model_state.get("proposal_frame", pd.DataFrame()))
-            st.caption(f"EML-lager: {selected_count} av {needed_hex} efterfrågade hex vid vald H3-upplösning.")
+            selected_count = int(proposal_stats.get("selected_hex_count", 0) or 0)
+            if selected_count <= 0:
+                selected_count = len(energy_model_state.get("proposal_frame", pd.DataFrame()))
+            hex_area = float(energy_model_state.get("hex_area_km2", 0.0) or 0.0)
+            available_hex = int(proposal_stats.get("available_candidate_hex", 0) or 0)
+            available_area = float(proposal_stats.get("available_candidate_area_km2", 0.0) or 0.0)
+            primary_candidates = int(proposal_stats.get("primary_candidate_hex", 0) or 0)
+            extension_candidates = int(proposal_stats.get("extension_candidate_hex", 0) or 0)
+            selected_primary = int(proposal_stats.get("selected_primary_hex", 0) or 0)
+            selected_extension = int(proposal_stats.get("selected_extension_hex", 0) or 0)
+            min_share = float(proposal_stats.get("min_share_pct", energy_model_state.get("auto_min_potential_share_pct", 65.0)) or 65.0)
+            mean_share = float(proposal_stats.get("mean_selected_share_pct", 0.0) or 0.0)
+            available_hex_text = f"{available_hex:,}".replace(",", " ")
+            h1, h2, h3_col = st.columns(3)
+            h1.metric("Area per hex", f"{hex_area:.4f} km²")
+            h2.metric("Hela hex behövs", f"{needed_hex:,}".replace(",", " "))
+            h3_col.metric("Valda hex", f"{selected_count:,}".replace(",", " "))
+            selected_potential_area = float(proposal_stats.get("selected_potential_area_km2", 0.0) or 0.0)
+            selected_hex_footprint = float(proposal_stats.get("selected_hex_footprint_km2", 0.0) or 0.0)
+            st.caption(
+                f"Föreslagen etableringsyta: {selected_count} hex valda. "
+                f"De innehåller {selected_potential_area:.2f} km² potentiell yta inom {selected_hex_footprint:.2f} km² hexavtryck "
+                f"({needed_hex} hela hex som grov jämförelse). "
+                f"Valbara ET-hex: {available_hex_text} med {available_area:.2f} km² potentiell yta; "
+                f"medelandel i urvalet {mean_share:.1f}%."
+            )
+            st.caption(
+                f"Urvalsordning: först Kärn-ET med VPA ≥ {min_share:.0f}% "
+                f"({selected_primary:,}/{primary_candidates:,} valda), sedan kompletterande ET "
+                f"({selected_extension:,}/{extension_candidates:,} valda).".replace(",", " ")
+            )
+            if selected_count > needed_hex:
+                st.caption("Area-share gör att fler hex behövs än den teoretiska jämförelsen med helt fyllda hex.")
             if float(proposal_stats.get("unmet_area_km2", 0.0) or 0.0) > 0:
                 st.warning(
                     "Lämplig mörkgrön kärnyta räcker inte. Planeringsval behövs: sänk potentialkrav, släpp in kantzoner, "
@@ -2921,13 +2985,28 @@ def _unified_workspace_tab(
                     float(energy_model_state.get("hex_area_km2", h3_hex_area_km2(h3_resolution)) or h3_hex_area_km2(h3_resolution)),
                     float(energy_model_state.get("auto_min_potential_share_pct", 65.0) or 65.0),
                 )
+                if not proposal_frame.empty:
+                    primary_twh = float(energy_model_state.get("primary_twh", 0.0) or 0.0)
+                    primary_area = float(energy_model_state.get("primary_area_need_km2", 0.0) or 0.0)
+                    primary_factor = float(energy_model_state.get("primary_km2_per_twh", math.nan) or math.nan)
+                    if primary_factor > 0 and math.isfinite(primary_factor):
+                        proposal_frame["allocated_twh"] = proposal_frame["allocated_area_km2"].astype(float) / primary_factor
+                    elif primary_area > 0:
+                        proposal_frame["allocated_twh"] = primary_twh * proposal_frame["allocated_area_km2"].astype(float) / primary_area
+                    else:
+                        proposal_frame["allocated_twh"] = 0.0
+                    proposal_frame["allocated_gwh"] = proposal_frame["allocated_twh"].astype(float) * 1000.0
+                    proposal_frame["allocated_share_of_need_pct"] = (
+                        proposal_frame["allocated_area_km2"].astype(float) / max(primary_area, 1e-9) * 100.0
+                    )
+                    proposal_stats["selected_twh"] = float(proposal_frame["allocated_twh"].sum())
                 energy_model_state["proposal_frame"] = proposal_frame
                 energy_model_state["proposal_stats"] = proposal_stats
                 proposal_layer = _energy_area_proposal_layer(proposal_frame, display_geometry_path, h3_resolution)
                 if proposal_layer is not None:
                     layers.append(proposal_layer)
                     unified_notes.append(
-                        "Etableringsförslaget väljer mörkgröna kärnhexar först och fyller area demand tills ytan inte räcker längre."
+                        "Etableringsförslaget väljer mörkgröna kärnhexar först och räknar täckning med potentiell area per hex, inte hela hexytan."
                     )
                 elif float(energy_model_state.get("primary_area_need_km2", 0.0) or 0.0) > 0:
                     unified_notes.append("Etableringsförslaget hittade inga vindhex som uppfyller minsta kärn-/potentialkrav.")
