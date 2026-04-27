@@ -841,9 +841,9 @@ def allocate_wind_area_from_core_hexes(
         }
 
     candidates["allocation_phase"] = candidates["potential_area_share_pct"].ge(float(min_share_pct)).map(
-        {True: "Kärn-ET", False: "Kompletterande ET"}
+        {True: "Karn-LP", False: "Kompletterande LP"}
     )
-    candidates["priority_group"] = candidates["allocation_phase"].map({"Kärn-ET": 0, "Kompletterande ET": 1}).fillna(1).astype(int)
+    candidates["priority_group"] = candidates["allocation_phase"].map({"Karn-LP": 0, "Kompletterande LP": 1}).fillna(1).astype(int)
     candidates = candidates.sort_values(
         ["priority_group", "core_score", "zone_size", "potential_area_share_pct", "hex_id"],
         ascending=[True, False, False, False, True],
@@ -899,9 +899,9 @@ def allocate_wind_area_from_core_hexes(
         "mean_selected_share_pct": float(selected["potential_area_share_pct"].mean()) if not selected.empty else 0.0,
         "available_candidate_hex": int(len(candidates)),
         "available_candidate_area_km2": float(candidates["potential_area_km2"].sum()),
-        "primary_candidate_hex": int(candidates["allocation_phase"].eq("Kärn-ET").sum()),
-        "extension_candidate_hex": int(candidates["allocation_phase"].eq("Kompletterande ET").sum()),
-        "selected_primary_hex": int(phase_counts.get("Kärn-ET", 0)),
-        "selected_extension_hex": int(phase_counts.get("Kompletterande ET", 0)),
+        "primary_candidate_hex": int(candidates["allocation_phase"].eq("Karn-LP").sum()),
+        "extension_candidate_hex": int(candidates["allocation_phase"].eq("Kompletterande LP").sum()),
+        "selected_primary_hex": int(phase_counts.get("Karn-LP", 0)),
+        "selected_extension_hex": int(phase_counts.get("Kompletterande LP", 0)),
         "min_share_pct": float(min_share_pct),
     }

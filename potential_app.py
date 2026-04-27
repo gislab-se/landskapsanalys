@@ -123,6 +123,8 @@ WIND_LAYER_SELECTION_KEY = "wind_builder_selected_layers"
 WIND_RUNTIME_OVERLAY_KEY = "wind_builder_runtime_overlay_enabled"
 WIND_CONTROL_LANGUAGE = "sv"
 WIND_RUNTIME_BASE_RESOLUTION = 10
+WIND_LANDSCAPE_POTENTIAL_LABEL = "Landskapspotential Vind"
+ENERGY_PROPOSAL_LAYER_LABEL = "Energimodellering: potentiell etableringsyta"
 WIND_AUTO_RESOLUTION_MIN_ZOOM: dict[int, int] = {10: 11, 9: 9, 8: 7, 7: 5, 6: 0}
 EML_PROVIDER_URL = "https://energymodellinglab.com/"
 IVL_PROVIDER_URL = "https://www.ivl.se/"
@@ -781,7 +783,7 @@ def _render_region_scenario_panel(panel: Any | None) -> tuple[dict[str, Any], di
 
 def _metric_header(region: dict[str, Any], scenario_state: dict[str, Any], h3_resolution: int | None = None) -> None:
     st.title(PAGE_TITLE)
-    st.caption("Regional v0 för scenarier, solpotential, vindpotential och landskapsanalys.")
+    st.caption(f"Regional v0 för scenarier, solpotential, {WIND_LANDSCAPE_POTENTIAL_LABEL} och landskapsanalys.")
 
     c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("Region", str(region.get("display_name", region.get("region_id"))))
@@ -1294,6 +1296,20 @@ def _reference_default_wind_layer_selection() -> dict[str, list[str]]:
     )
 
 
+def _apply_reference_default_wind_to_controls() -> None:
+    params = _reference_default_wind_params()
+    selected = _reference_default_wind_layer_selection()
+    st.session_state[WIND_LAYER_SELECTION_KEY] = selected
+    for group_id, layer_ids in WIND_GROUP_LAYER_DEFAULTS.items():
+        param_key = GROUP_PARAM_MAP.get(group_id)
+        group_param_value = params.get(param_key) if param_key else None
+        if group_param_value is not None:
+            st.session_state[_wind_control_key("analysis", group_id)] = int(round(float(group_param_value)))
+        selected_ids = set(selected.get(group_id, []))
+        for layer_id in layer_ids:
+            st.session_state[_wind_control_key("layer", layer_id)] = layer_id in selected_ids
+
+
 def _wind_score_params_from_ui(ui_params: dict[str, float]) -> dict[str, float]:
     return {
         "base_score": 55.0,
@@ -1347,7 +1363,7 @@ def _wind_builder_controls(defaults: dict[str, float]) -> None:
     _builder_slider("wind_builder", "grid_max_distance_m", "Max avstånd till elinfrastruktur", 500.0, 15000.0, 250.0, defaults, "Större tillåtet avstånd gör fler lägen tekniskt möjliga.")
     _builder_slider("wind_builder", "protected_buffer_m", "Buffert skyddade områden", 0.0, 2000.0, 50.0, defaults, "0 stänger av gruppen. Högre värden hard-excludar skyddade natur- och habitatlager.")
     _builder_slider("wind_builder", "coastal_buffer_m", "Buffert kust/strand", 0.0, 1000.0, 50.0, defaults, "0 stänger av gruppen. Högre värden hard-excludar kustzon och strandskydd.")
-    _builder_slider("wind_builder", "landscape_sensitivity_percent", "Landskapskänslighet", 0.0, 120.0, 5.0, defaults, "Viktar hur starkt landskapsrollerna ska bromsa vindpotentialen.")
+    _builder_slider("wind_builder", "landscape_sensitivity_percent", "Landskapskänslighet", 0.0, 120.0, 5.0, defaults, f"Viktar hur starkt landskapsrollerna ska bromsa {WIND_LANDSCAPE_POTENTIAL_LABEL}.")
     with st.expander("Avancerade restriktioner"):
         _builder_slider("wind_builder", "culture_buffer_m", "Buffert kulturmiljöer", 0.0, 1500.0, 50.0, defaults, "0 stänger av gruppen. Högre värden hard-excludar värdefulla kulturmiljöer.")
         _builder_slider("wind_builder", "aviation_approach_buffer_m", "Buffert inflygningszoner", 0.0, 3000.0, 100.0, defaults, "0 stänger av gruppen. Högre värden hard-excludar flygplatsens inflygningszoner.")
@@ -1884,7 +1900,7 @@ def _wind_polygon_combined_layer(runtime_result: dict[str, Any]) -> dict[str, An
     if not isinstance(combined, dict) or combined.get("geojson") is None:
         return None
     return {
-        "name": "Potentiell etableringsyta",
+        "name": f"{WIND_LANDSCAPE_POTENTIAL_LABEL} polygon",
         "feature_collection": combined["geojson"],
         "fill_property": "fill",
         "legend_items": [],
@@ -2133,9 +2149,9 @@ def _wind_runtime_hex_feature_collection(
         if geometry is None:
             continue
         popup = (
-            f"<strong>R{int(target_resolution)} potentialandel</strong><br>"
+            f"<strong>{WIND_LANDSCAPE_POTENTIAL_LABEL}</strong><br>"
             f"Hex: {row.hex_id}<br>"
-            f"Potentialandel: {float(row.potential_area_share_pct):.1f}%<br>"
+            f"LP-andel: {float(row.potential_area_share_pct):.1f}%<br>"
             f"Klass: {row.share_class_label}<br>"
             f"Kärnläge: {row.core_label}<br>"
             f"Kärnscore: {float(row.core_score):.2f}<br>"
@@ -2154,7 +2170,7 @@ def _wind_runtime_hex_feature_collection(
                     "core_score": float(row.core_score),
                     "core_label": str(row.core_label),
                     "zone_size": int(row.zone_size),
-                    "tooltip_title": f"Potentialandel {float(row.potential_area_share_pct):.1f}%",
+                    "tooltip_title": f"{WIND_LANDSCAPE_POTENTIAL_LABEL} {float(row.potential_area_share_pct):.1f}%",
                     "tooltip_body": f"{row.share_class_label} · {row.core_label}",
                     "popup": popup,
                 },
@@ -2176,21 +2192,21 @@ def _wind_runtime_hex_layer(
     if frame.empty:
         return None
     return {
-        "name": str(control_name or f"R{int(target_resolution)} potentialandel"),
+        "name": str(control_name or WIND_LANDSCAPE_POTENTIAL_LABEL),
         "feature_collection": _wind_runtime_hex_feature_collection(frame, display_geometry_path, int(target_resolution)),
         "fill_property": "fill",
         "stroke_property": "stroke",
         "legend_items": _wind_share_legend_items(),
         "legend_id": "wind_polygon_hex_share",
-        "legend_title": f"R{int(target_resolution)} potentialandel",
+        "legend_title": WIND_LANDSCAPE_POTENTIAL_LABEL,
         "default_visible": True,
         "stroke": False,
         "weight": 0.0,
         "point_radius": 4,
         "z_index": 410,
         "layer_kind": "hex",
-        "opacity_family": str(control_name or "Vindpotentialandel"),
-        "opacity_label": str(control_name or "Vindpotentialandel"),
+        "opacity_family": str(control_name or WIND_LANDSCAPE_POTENTIAL_LABEL),
+        "opacity_label": str(control_name or WIND_LANDSCAPE_POTENTIAL_LABEL),
     }
 
 
@@ -2204,19 +2220,19 @@ def _energy_area_proposal_fill(
     if outside_et:
         ring = max(1, int(expansion_ring or 1))
         if ring <= 1:
-            return "#ec4899"
+            return "#ef4444"
         if ring == 2:
-            return "#c026d3"
+            return "#b91c1c"
         if ring == 3:
-            return "#9333ea"
-        return "#581c87"
+            return "#7f1d1d"
+        return "#2f0606"
 
     share_value = max(0.0, min(100.0, float(potential_area_share_pct or 0.0))) / 100.0
     core_value = max(0.0, min(1.0, float(core_score or 0.0)))
     zone_factor = min(1.0, max(0.0, float(max(0, int(zone_size or 0)) - 1)) / 32.0)
-    base = _mix_hex_colors("#dbeafe", "#3b82f6", share_value ** 0.72)
+    base = _mix_hex_colors("#dbeafe", "#2563eb", share_value ** 0.62)
     core_intensity = (core_value ** 0.86) * min(1.0, 0.55 + zone_factor)
-    return _mix_hex_colors(base, "#08306b", core_intensity)
+    return _mix_hex_colors(base, "#061a4f", core_intensity)
 
 
 def _energy_area_proposal_layer(
@@ -2249,13 +2265,13 @@ def _energy_area_proposal_layer(
         expansion_ring = 0 if pd.isna(raw_expansion_ring) else int(raw_expansion_ring or 0)
         fill = _energy_area_proposal_fill(share, core_score, zone_size, outside_et, expansion_ring)
         popup = (
-            f"<strong>{'Yta utanför ET' if outside_et else 'Föreslagen etableringsyta'}</strong><br>"
+            f"<strong>{'Utanför LP' if outside_et else 'Inom LP'}</strong><br>"
             "Visas som hexaggregerat urval; hela hexen är inte nödvändigtvis tillgänglig.<br>"
             f"Hex: {row.hex_id}<br>"
             f"Prioritet: {rank}<br>"
             f"Urvalssteg: {allocation_phase}<br>"
             f"Expansionslager: {expansion_ring if outside_et else '-'}<br>"
-            f"Potentialandel: {share:.1f}%<br>"
+            f"LP-andel: {share:.1f}%<br>"
             f"Potentiell yta i hex: {potential_area:.3f} km²<br>"
             f"Fördelad yta här: {allocated_area:.3f} km² ({allocated_share:.1f}% av hex)<br>"
             f"Fördelad vindproduktion: {allocated_twh * 1000.0:.2f} GWh<br>"
@@ -2271,9 +2287,9 @@ def _energy_area_proposal_layer(
                 "properties": {
                     "hex_id": str(row.hex_id),
                     "fill": fill,
-                    "stroke": "#fdf2f8" if outside_et else "#e0f2fe",
+                    "stroke": "#fee2e2" if outside_et else "#dbeafe",
                     "popup": popup,
-                    "tooltip_title": f"{'Konfliktyta' if outside_et else 'Föreslagen yta'} #{rank}",
+                    "tooltip_title": f"{'Utanför LP' if outside_et else 'Inom LP'} #{rank}",
                     "tooltip_body": f"{allocation_phase} · {allocated_area:.3f} km² · {allocated_share:.1f}% av hex",
                 },
             }
@@ -2281,19 +2297,19 @@ def _energy_area_proposal_layer(
     if not features:
         return None
     return {
-        "name": "Föreslagen etableringsyta",
+        "name": ENERGY_PROPOSAL_LAYER_LABEL,
         "feature_collection": {"type": "FeatureCollection", "features": features},
         "fill_property": "fill",
         "stroke_property": "stroke",
         "legend_items": [
-            {"label": "Inom ET: låg potential / kant", "color": "#dbeafe"},
-            {"label": "Inom ET: hög potential", "color": "#3b82f6"},
-            {"label": "Inom ET: kärnområde", "color": "#08306b"},
-            {"label": "Utanför ET: nära kanten", "color": "#ec4899"},
-            {"label": "Utanför ET: längre ut", "color": "#581c87"},
+            {"label": "Inom LP: låg potential / kant", "color": "#dbeafe"},
+            {"label": "Inom LP: hög potential", "color": "#2563eb"},
+            {"label": "Inom LP: kärnområde", "color": "#061a4f"},
+            {"label": "Utanför LP: nära kanten", "color": "#ef4444"},
+            {"label": "Utanför LP: längre ut", "color": "#2f0606"},
         ],
         "legend_id": "energy_area_proposal",
-        "legend_title": "Energimodellering",
+        "legend_title": ENERGY_PROPOSAL_LAYER_LABEL,
         "default_visible": True,
         "stroke": True,
         "stroke_opacity": 0.45,
@@ -2302,6 +2318,75 @@ def _energy_area_proposal_layer(
         "z_index": 470,
         "layer_kind": "vector",
     }
+
+
+def _rollup_energy_area_proposal_frame(
+    selected: pd.DataFrame,
+    target_resolution: int,
+    source_resolution: int,
+) -> pd.DataFrame:
+    if selected.empty or int(target_resolution) >= int(source_resolution):
+        return selected.copy()
+
+    work = selected.copy()
+    work["hex_id"] = work["hex_id"].astype(str).map(lambda value: h3.cell_to_parent(value, int(target_resolution)))
+    work["allocated_area_km2"] = pd.to_numeric(work.get("allocated_area_km2"), errors="coerce").fillna(0.0)
+    work["potential_area_km2"] = pd.to_numeric(work.get("potential_area_km2"), errors="coerce").fillna(0.0)
+    work["allocated_twh"] = pd.to_numeric(work.get("allocated_twh"), errors="coerce").fillna(0.0)
+    work["selected_rank"] = pd.to_numeric(work.get("selected_rank"), errors="coerce").fillna(0).astype(int)
+    work["core_score"] = pd.to_numeric(work.get("core_score"), errors="coerce").fillna(0.0)
+    work["zone_size"] = pd.to_numeric(work.get("zone_size"), errors="coerce").fillna(0).astype(int)
+    work["expansion_ring"] = pd.to_numeric(work.get("expansion_ring"), errors="coerce").fillna(0).astype(int)
+    if "outside_et" not in work.columns:
+        work["outside_et"] = False
+    work["outside_et"] = work["outside_et"].fillna(False).astype(bool)
+    work["outside_area_km2"] = work["allocated_area_km2"].where(work["outside_et"], 0.0)
+    work["inside_area_km2"] = work["allocated_area_km2"].where(~work["outside_et"], 0.0)
+
+    rolled = (
+        work.groupby("hex_id", as_index=False)
+        .agg(
+            selected_rank=("selected_rank", "min"),
+            potential_area_km2=("potential_area_km2", "sum"),
+            allocated_area_km2=("allocated_area_km2", "sum"),
+            allocated_twh=("allocated_twh", "sum"),
+            outside_area_km2=("outside_area_km2", "sum"),
+            inside_area_km2=("inside_area_km2", "sum"),
+            core_score=("core_score", "max"),
+            zone_size=("zone_size", "sum"),
+            expansion_ring=("expansion_ring", "max"),
+        )
+        .sort_values(["selected_rank", "hex_id"])
+        .reset_index(drop=True)
+    )
+    hex_area = h3_hex_area_km2(int(target_resolution))
+    rolled["outside_et"] = rolled["outside_area_km2"].gt(rolled["inside_area_km2"])
+    rolled["allocation_phase"] = rolled["outside_et"].map(lambda value: "Utanför LP" if value else "Inom LP")
+    rolled["potential_area_share_pct"] = (rolled["potential_area_km2"] / max(hex_area, 1e-9) * 100.0).clip(lower=0.0, upper=100.0)
+    rolled["allocated_hex_share_pct"] = (rolled["allocated_area_km2"] / max(hex_area, 1e-9) * 100.0).clip(lower=0.0, upper=100.0)
+    rolled["remaining_area_after_km2"] = 0.0
+    rolled["allocated_gwh"] = rolled["allocated_twh"] * 1000.0
+    return rolled
+
+
+def _energy_area_proposal_family_layers(
+    region: dict[str, Any],
+    selected: pd.DataFrame,
+    selected_resolution: int,
+    lock_resolution: bool,
+) -> list[dict[str, Any]]:
+    return _hex_family_layers(
+        region,
+        int(selected_resolution),
+        bool(lock_resolution),
+        "energy_area_proposal",
+        ENERGY_PROPOSAL_LAYER_LABEL,
+        lambda resolution: _energy_area_proposal_layer(
+            _rollup_energy_area_proposal_frame(selected, int(resolution), int(selected_resolution)),
+            _h3_display_geometry_path(region, int(resolution)),
+            int(resolution),
+        ),
+    )
 
 
 def _expand_wind_area_outside_et(
@@ -2374,7 +2459,7 @@ def _expand_wind_area_outside_et(
         record = row._asdict()
         record["selected_rank"] = start_rank + offset
         record["outside_et"] = True
-        record["allocation_phase"] = "Utanför ET"
+        record["allocation_phase"] = "Utanför LP"
         record["potential_area_km2"] = 0.0
         record["allocated_area_km2"] = allocated_area
         record["allocated_hex_share_pct"] = (allocated_area / max(float(hex_area_km2), 1e-9)) * 100.0
@@ -2413,15 +2498,17 @@ def _wind_runtime_hex_layers(
     runtime_result: dict[str, Any],
     preferred_resolution: int,
     lock_resolution: bool,
+    family_key: str = "wind_runtime_share",
+    control_name: str = WIND_LANDSCAPE_POTENTIAL_LABEL,
 ) -> list[dict[str, Any]]:
     preferred = min(int(preferred_resolution), WIND_RUNTIME_BASE_RESOLUTION)
     return _hex_family_layers(
         region,
         preferred,
         bool(lock_resolution),
-        "wind_runtime_share",
-        "Vindpotentialandel",
-        lambda resolution: _wind_runtime_hex_layer(region, runtime_result, int(resolution)),
+        family_key,
+        control_name,
+        lambda resolution: _wind_runtime_hex_layer(region, runtime_result, int(resolution), control_name),
     )
 
 
@@ -2431,6 +2518,8 @@ def _wind_polygon_preview_state(
     layer_selection: dict[str, list[str]],
     target_resolution: int,
     lock_resolution: bool,
+    family_key: str = "wind_runtime_share",
+    control_name: str = WIND_LANDSCAPE_POTENTIAL_LABEL,
 ) -> dict[str, Any]:
     runtime_error: str | None = None
     runtime_result: dict[str, Any] = {"groups": {}, "combined": None, "cache_key": None}
@@ -2440,7 +2529,14 @@ def _wind_polygon_preview_state(
         runtime_error = str(exc)
 
     layers: list[dict[str, Any]] = []
-    hex_layers = [] if runtime_error else _wind_runtime_hex_layers(region, runtime_result, int(target_resolution), bool(lock_resolution))
+    hex_layers = [] if runtime_error else _wind_runtime_hex_layers(
+        region,
+        runtime_result,
+        int(target_resolution),
+        bool(lock_resolution),
+        family_key=family_key,
+        control_name=control_name,
+    )
     combined_layer = None if runtime_error else _wind_polygon_combined_layer(runtime_result)
     if hex_layers:
         layers.extend(hex_layers)
@@ -2789,8 +2885,8 @@ def _render_energy_model_summary(energy_model_state: dict[str, Any]) -> None:
         c1.metric("Vind från EML", f"{float(energy_model_state.get('primary_twh', 0.0) or 0.0):.2f} TWh")
         c2.metric("Markanspråk", f"{float(energy_model_state.get('primary_area_need_km2', 0.0) or 0.0):.2f} km²")
         st.caption(
-            "Potentiell etableringsyta är den möjliga ytan i vindpotentiallagret. "
-            "Föreslagen etableringsyta är det automatiska urvalet som försöker möta scenario och area demand."
+            f"{WIND_LANDSCAPE_POTENTIAL_LABEL} är den möjliga ytan i landskapsmodellen. "
+            f"{ENERGY_PROPOSAL_LAYER_LABEL} är det automatiska urvalet som försöker möta scenario och area demand."
         )
         proposal_stats = energy_model_state.get("proposal_stats") or {}
         if proposal_stats:
@@ -2806,12 +2902,12 @@ def _render_energy_model_summary(energy_model_state: dict[str, Any]) -> None:
             max_ring = int(proposal_stats.get("max_expansion_ring", 0) or 0)
             if et_shortage > 0:
                 st.error(
-                    f"Potentiell etableringsyta räcker inte. {et_shortage:.2f} km² måste visas som konfliktyta utanför ET."
+                    f"Landskapspotentialen räcker inte. {et_shortage:.2f} km² måste visas som konfliktyta utanför LP."
                 )
                 if outside_hex_count > 0:
                     st.caption(
-                        f"Utanför ET: {outside_hex_count:,} rosa/lila hex, {outside_area:.2f} km², "
-                        f"upp till expansionslager {max_ring} från blå ET.".replace(",", " ")
+                        f"Utanför LP: {outside_hex_count:,} röda hex, {outside_area:.2f} km², "
+                        f"upp till expansionslager {max_ring} från blå LP.".replace(",", " ")
                     )
             needed_hex = int(proposal_stats.get("needed_hex", 0) or 0)
             selected_count = int(proposal_stats.get("selected_hex_count", 0) or 0)
@@ -2834,22 +2930,22 @@ def _render_energy_model_summary(energy_model_state: dict[str, Any]) -> None:
             selected_potential_area = float(proposal_stats.get("selected_potential_area_km2", 0.0) or 0.0)
             selected_hex_footprint = float(proposal_stats.get("selected_hex_footprint_km2", 0.0) or 0.0)
             st.caption(
-                f"Föreslagen etableringsyta: {selected_count} hex valda. "
+                f"{ENERGY_PROPOSAL_LAYER_LABEL}: {selected_count} hex valda. "
                 f"De innehåller {selected_potential_area:.2f} km² potentiell yta inom {selected_hex_footprint:.2f} km² hexavtryck "
                 f"({needed_hex} hela hex som grov jämförelse). "
-                f"Valbara ET-hex: {available_hex_text} med {available_area:.2f} km² potentiell yta; "
+                f"Valbara LP-hex: {available_hex_text} med {available_area:.2f} km² potentiell yta; "
                 f"medelandel i urvalet {mean_share:.1f}%."
             )
             st.caption(
-                f"Urvalsordning: först Kärn-ET med VPA ≥ {min_share:.0f}% "
-                f"({selected_primary:,}/{primary_candidates:,} valda), sedan kompletterande ET "
+                f"Urvalsordning: först kärn-LP med LP ≥ {min_share:.0f}% "
+                f"({selected_primary:,}/{primary_candidates:,} valda), sedan kompletterande LP "
                 f"({selected_extension:,}/{extension_candidates:,} valda).".replace(",", " ")
             )
             if selected_count > needed_hex:
                 st.caption("Area-share gör att fler hex behövs än den teoretiska jämförelsen med helt fyllda hex.")
             if float(proposal_stats.get("unmet_area_km2", 0.0) or 0.0) > 0:
                 st.warning(
-                    "Lämplig mörkgrön kärnyta räcker inte. Planeringsval behövs: sänk potentialkrav, släpp in kantzoner, "
+                    "Lämplig blå kärnyta räcker inte. Planeringsval behövs: sänk potentialkrav, släpp in kantzoner, "
                     "ändra restriktioner, välj ett lägre framtidsscenario eller minska area demand."
                 )
         elif energy_model_state.get("placement_mode") == "manual":
@@ -2899,6 +2995,8 @@ def _unified_workspace_tab(
     selected_factor = str(st.session_state.get("combined_landscape_factor", factors[0] if factors else ""))
     if selected_factor not in factors and factors:
         selected_factor = factors[0]
+    if show_default_wind:
+        _apply_reference_default_wind_to_controls()
     active_landscape_count = _count_enabled(show_v10, show_cluster, show_factor)
     active_wind_count = _count_enabled(show_user_wind, show_default_wind)
     active_solar_count = _count_enabled(show_user_solar, show_default_solar)
@@ -2928,15 +3026,21 @@ def _unified_workspace_tab(
 
             h3_resolution, lock_h3_resolution, opacity, preserve_map_view, map_reset_token = _map_panel_controls(region, "combined", st)
 
-            with st.expander(f"Vindpotential ({active_wind_count})", expanded=False):
-                show_user_wind = st.checkbox("Egen vindpotential", value=show_user_wind, key="show_user_wind")
-                show_default_wind = st.checkbox("Default vindpotential", value=show_default_wind, key="show_default_wind")
+            with st.expander(f"{WIND_LANDSCAPE_POTENTIAL_LABEL} ({active_wind_count})", expanded=False):
+                show_user_wind = st.checkbox(f"Egen {WIND_LANDSCAPE_POTENTIAL_LABEL}", value=show_user_wind, key="show_user_wind")
+                show_default_wind = st.checkbox(
+                    f"Default {WIND_LANDSCAPE_POTENTIAL_LABEL}",
+                    value=show_default_wind,
+                    key="show_default_wind",
+                )
+                if show_default_wind:
+                    _apply_reference_default_wind_to_controls()
                 st.caption(
-                    "Default vindpotential är avstängd vid start. När den slås på används bebyggelsepunkter 200 m, "
+                    f"Default {WIND_LANDSCAPE_POTENTIAL_LABEL} är avstängd vid start. När den slås på används bebyggelsepunkter 200 m, "
                     "stora vägar 200 m, transformatorstationer 1000 m och alla skyddade områden."
                 )
                 st.caption(
-                    f"Bygg vindpotential direkt i samma vy. Potentialandelen beräknas alltid i R{WIND_RUNTIME_BASE_RESOLUTION} "
+                    f"Bygg {WIND_LANDSCAPE_POTENTIAL_LABEL} direkt i samma vy. Potentialandelen beräknas alltid i R{WIND_RUNTIME_BASE_RESOLUTION} "
                     f"och visas här som polygon plus hexagoner med R{h3_resolution} som vald detaljnivå."
                 )
                 if lock_h3_resolution:
@@ -3056,52 +3160,42 @@ def _unified_workspace_tab(
     if show_default_wind:
         default_wind_params = _reference_default_wind_params()
         default_layer_selection = _reference_default_wind_layer_selection()
-        default_wind_source_frame = _wind_source_frame(
-            landscape_manifest,
-            solar_rules,
+        default_wind_preview_state = _wind_polygon_preview_state(
+            region,
             default_wind_params,
-            group_layer_selection=default_layer_selection,
+            default_layer_selection,
+            h3_resolution,
+            lock_h3_resolution,
+            family_key="default_wind_landscape_potential",
+            control_name=f"Default {WIND_LANDSCAPE_POTENTIAL_LABEL}",
         )
-        default_wind_frame = _filter_frame_to_display_geometries(
-            wind_acceptance_rollup_frame(default_wind_source_frame, h3_resolution, _class_breaks(solar_rules)),
-            display_geometry_path,
-        )
-        layers.extend(
-            _hex_family_layers(
+        layers.extend(default_wind_preview_state["layers"])
+        if default_wind_preview_state["runtime_error"]:
+            unified_notes.append(f"Default {WIND_LANDSCAPE_POTENTIAL_LABEL} kunde inte köras: {default_wind_preview_state['runtime_error']}")
+        else:
+            default_wind_summary = _wind_polygon_summary_frame(
                 region,
+                landscape_manifest,
+                default_wind_preview_state["runtime_result"],
                 h3_resolution,
-                lock_h3_resolution,
-                "default_wind_hex",
-                "Default vindpotential",
-                lambda resolution: _potential_layer(
-                    "Default vindpotential",
-                    _filter_frame_to_display_geometries(
-                        wind_acceptance_rollup_frame(default_wind_source_frame, int(resolution), _class_breaks(solar_rules)),
-                        _h3_display_geometry_path(region, int(resolution)),
-                    ),
-                    "wind",
-                    _h3_display_geometry_path(region, int(resolution)),
-                    _solar_legend_items(solar_rules),
-                ),
             )
-        )
-        layers.append(
-            _wind_vector_layer(
-                "Default vindpotential vektor",
-                default_wind_source_frame,
-                _h3_display_geometry_path(region, WIND_SOURCE_RESOLUTION),
-                _solar_legend_items(solar_rules),
+            potential_frames.append(
+                {
+                    "label": f"Default {WIND_LANDSCAPE_POTENTIAL_LABEL}",
+                    "technology": "wind",
+                    "frame": default_wind_summary,
+                    "resolution": h3_resolution,
+                    "high_classes": ["share_8", "share_9"],
+                    "mean_label": "Medelandel",
+                    "mean_format": "{value:.1f}%",
+                    "high_label": "Andel >65%",
+                    "summary_mode": "wind_share",
+                    "resolution_note": resolution_info["item_note"],
+                }
             )
-        )
-        potential_frames.append(
-            {
-                "label": "Default vindpotential",
-                "technology": "wind",
-                "frame": default_wind_frame,
-                "resolution": h3_resolution,
-                "resolution_note": resolution_info["item_note"],
-            }
-        )
+            unified_notes.append(
+                f"Default {WIND_LANDSCAPE_POTENTIAL_LABEL} använder samma geometri-runtime som manuella val."
+            )
 
     custom_wind_preview_state: dict[str, Any] | None = None
     if show_user_wind:
@@ -3111,6 +3205,8 @@ def _unified_workspace_tab(
             wind_selected_layers,
             h3_resolution,
             lock_h3_resolution,
+            family_key="user_wind_landscape_potential",
+            control_name=f"Egen {WIND_LANDSCAPE_POTENTIAL_LABEL}",
         )
         layers.extend(custom_wind_preview_state["layers"])
         if custom_wind_preview_state["runtime_error"]:
@@ -3124,7 +3220,7 @@ def _unified_workspace_tab(
             )
             potential_frames.append(
                 {
-                    "label": "Egen vindpotential",
+                    "label": f"Egen {WIND_LANDSCAPE_POTENTIAL_LABEL}",
                     "technology": "wind",
                     "frame": custom_wind_summary,
                     "resolution": h3_resolution,
@@ -3138,15 +3234,15 @@ def _unified_workspace_tab(
             )
             if lock_h3_resolution:
                 unified_notes.append(
-                    f"Vindpotentialen beräknas i R{WIND_RUNTIME_BASE_RESOLUTION} och visas låst i vald upplösning R{h3_resolution}."
+                    f"{WIND_LANDSCAPE_POTENTIAL_LABEL} beräknas i R{WIND_RUNTIME_BASE_RESOLUTION} och visas låst i vald upplösning R{h3_resolution}."
                 )
             else:
                 unified_notes.append(
-                    f"Vindpotentialen beräknas i R{WIND_RUNTIME_BASE_RESOLUTION} och visar polygonen tillsammans med zoomanpassade hexagonlager "
+                    f"{WIND_LANDSCAPE_POTENTIAL_LABEL} beräknas i R{WIND_RUNTIME_BASE_RESOLUTION} och visar polygonen tillsammans med zoomanpassade hexagonlager "
                     f"med R{h3_resolution} som prefererad detaljnivå."
                 )
             unified_notes.append(
-                "Mörkare gröna och röda nyanser visar kärnhexagoner som ligger djupare inne i en sammanhängande zon av samma potentialklass."
+                "I landskapspotentialen visar mörkare nyanser kärnhexagoner som ligger djupare inne i en sammanhängande zon av samma potentialklass."
             )
             if (
                 energy_model_state.get("available")
@@ -3183,14 +3279,14 @@ def _unified_workspace_tab(
                     proposal_stats["selected_twh"] = float(proposal_frame["allocated_twh"].sum())
                 energy_model_state["proposal_frame"] = proposal_frame
                 energy_model_state["proposal_stats"] = proposal_stats
-                proposal_layer = _energy_area_proposal_layer(proposal_frame, display_geometry_path, h3_resolution)
-                if proposal_layer is not None:
-                    layers.append(proposal_layer)
+                proposal_layers = _energy_area_proposal_family_layers(region, proposal_frame, h3_resolution, lock_h3_resolution)
+                if proposal_layers:
+                    layers.extend(proposal_layers)
                     unified_notes.append(
-                        "Etableringsförslaget väljer mörkgröna kärnhexar först och räknar täckning med potentiell area per hex, inte hela hexytan."
+                        "Energimodelleringens potentiella etableringsyta visas som zoomanpassat hexlager och räknar täckning med potentiell area per hex, inte hela hexytan."
                     )
                 elif float(energy_model_state.get("primary_area_need_km2", 0.0) or 0.0) > 0:
-                    unified_notes.append("Etableringsförslaget hittade inga vindhex som uppfyller minsta kärn-/potentialkrav.")
+                    unified_notes.append("Energimodelleringen hittade inga vindhex som uppfyller minsta kärn-/potentialkrav.")
 
     if show_v10 or show_cluster or show_factor:
         landscape_frame = _landscape_frame(region, landscape_manifest, h3_resolution)
@@ -3256,8 +3352,8 @@ def _unified_workspace_tab(
     if isinstance(proposal_stats_for_note, dict) and float(proposal_stats_for_note.get("et_unmet_area_km2", 0.0) or 0.0) > 0:
         note_body = (
             "<strong style='color:#be123c;'>VARNING:</strong> "
-            f"ET räcker inte. {float(proposal_stats_for_note.get('outside_selected_area_km2', 0.0) or 0.0):.2f} km² "
-            "visas som rosa/lila konfliktyta utanför potentiell etableringsyta."
+            f"LP räcker inte. {float(proposal_stats_for_note.get('outside_selected_area_km2', 0.0) or 0.0):.2f} km² "
+            "visas som röd konfliktyta utanför landskapspotentialen."
         )
     _render_layers(
         region,
@@ -3290,10 +3386,10 @@ def _unified_workspace_tab(
                 st.caption("Solbygget visas som hexlager plus ett polygonlager som summerar hög och mycket hög solpotential.")
             if show_user_wind and custom_wind_preview_state is not None:
                 left_metric, right_metric = st.columns(2)
-                left_metric.metric("Vind: aktiva källager", int(custom_wind_preview_state["active_source_count"]))
-                right_metric.metric("Vind: buffertgrupper", int(custom_wind_preview_state["active_group_count"]))
+                left_metric.metric("LP Vind: aktiva källager", int(custom_wind_preview_state["active_source_count"]))
+                right_metric.metric("LP Vind: buffertgrupper", int(custom_wind_preview_state["active_group_count"]))
                 combined_share = custom_wind_preview_state["combined_land_share_pct"]
-                st.metric("Vind: potentiell landandel", "-" if combined_share is None else f"{float(combined_share):.1f}%")
+                st.metric("LP Vind: potentiell landandel", "-" if combined_share is None else f"{float(combined_share):.1f}%")
                 if wind_controls_applied:
                     st.caption(ui_text("controls_applied", WIND_CONTROL_LANGUAGE))
             for note in unified_notes:
