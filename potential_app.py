@@ -2165,6 +2165,31 @@ def _wind_runtime_hex_layer(
     }
 
 
+def _energy_area_proposal_fill(
+    potential_area_share_pct: float,
+    core_score: float,
+    zone_size: int,
+    outside_et: bool,
+    expansion_ring: int,
+) -> str:
+    if outside_et:
+        ring = max(1, int(expansion_ring or 1))
+        if ring <= 1:
+            return "#ec4899"
+        if ring == 2:
+            return "#c026d3"
+        if ring == 3:
+            return "#9333ea"
+        return "#581c87"
+
+    share_value = max(0.0, min(100.0, float(potential_area_share_pct or 0.0))) / 100.0
+    core_value = max(0.0, min(1.0, float(core_score or 0.0)))
+    zone_factor = min(1.0, max(0.0, float(max(0, int(zone_size or 0)) - 1)) / 32.0)
+    base = _mix_hex_colors("#dbeafe", "#3b82f6", share_value ** 0.72)
+    core_intensity = (core_value ** 0.86) * min(1.0, 0.55 + zone_factor)
+    return _mix_hex_colors(base, "#08306b", core_intensity)
+
+
 def _energy_area_proposal_layer(
     selected: pd.DataFrame,
     display_geometry_path: str | None,
@@ -2193,23 +2218,7 @@ def _energy_area_proposal_layer(
         outside_et = False if pd.isna(raw_outside) else bool(raw_outside)
         raw_expansion_ring = getattr(row, "expansion_ring", 0)
         expansion_ring = 0 if pd.isna(raw_expansion_ring) else int(raw_expansion_ring or 0)
-        if outside_et:
-            if core_score >= 0.72:
-                fill = "#7e22ce"
-            elif core_score >= 0.36:
-                fill = "#c026d3"
-            else:
-                fill = "#ec4899"
-        elif allocated_share >= 85.0:
-            fill = "#075985"
-        elif allocated_share >= 65.0:
-            fill = "#0284c7"
-        elif allocated_share >= 40.0:
-            fill = "#0ea5e9"
-        elif allocated_share >= 15.0:
-            fill = "#7dd3fc"
-        else:
-            fill = "#bae6fd"
+        fill = _energy_area_proposal_fill(share, core_score, zone_size, outside_et, expansion_ring)
         popup = (
             f"<strong>{'Yta utanför ET' if outside_et else 'Föreslagen etableringsyta'}</strong><br>"
             "Visas som hexaggregerat urval; hela hexen är inte nödvändigtvis tillgänglig.<br>"
@@ -2248,11 +2257,11 @@ def _energy_area_proposal_layer(
         "fill_property": "fill",
         "stroke_property": "stroke",
         "legend_items": [
-            {"label": "Liten etableringsyta i hex", "color": "#bae6fd"},
-            {"label": "Mellan", "color": "#0ea5e9"},
-            {"label": "Stor etableringsyta i hex", "color": "#075985"},
-            {"label": "Utanför ET: låg konflikt", "color": "#ec4899"},
-            {"label": "Utanför ET: hög konflikt", "color": "#7e22ce"},
+            {"label": "Inom ET: låg potential / kant", "color": "#dbeafe"},
+            {"label": "Inom ET: hög potential", "color": "#3b82f6"},
+            {"label": "Inom ET: kärnområde", "color": "#08306b"},
+            {"label": "Utanför ET: nära kanten", "color": "#ec4899"},
+            {"label": "Utanför ET: längre ut", "color": "#581c87"},
         ],
         "legend_id": "energy_area_proposal",
         "legend_title": "Energimodellering",
