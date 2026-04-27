@@ -124,6 +124,7 @@ WIND_RUNTIME_OVERLAY_KEY = "wind_builder_runtime_overlay_enabled"
 WIND_CONTROL_LANGUAGE = "sv"
 WIND_RUNTIME_BASE_RESOLUTION = 10
 WIND_LANDSCAPE_POTENTIAL_LABEL = "Landskapspotential Vind"
+SOLAR_LANDSCAPE_POTENTIAL_LABEL = "Landskapspotential Sol"
 ENERGY_PROPOSAL_LAYER_LABEL = "Energimodellering: potentiell etableringsyta"
 WIND_AUTO_RESOLUTION_MIN_ZOOM: dict[int, int] = {10: 11, 9: 9, 8: 7, 7: 5, 6: 0}
 EML_PROVIDER_URL = "https://energymodellinglab.com/"
@@ -140,6 +141,95 @@ WIND_SHARE_CLASS_SPECS: list[dict[str, Any]] = [
     {"id": "share_8", "label": ">65-80%", "max_pct": 80.0, "legend_label": None, "base_color": "#a6d96a", "core_color": "#66bd63"},
     {"id": "share_9", "label": ">80-100%", "max_pct": 100.0, "legend_label": "100%", "base_color": "#66bd63", "core_color": "#006d2c"},
 ]
+SOLAR_CONTROL_GROUPS: list[dict[str, Any]] = [
+    {
+        "id": "open_landscape",
+        "label": "Robusta öppna landskap",
+        "caption": "Plus för öppna, jämna och storskaliga produktionslandskap.",
+        "params": ["everyday_matrix_bonus"],
+    },
+    {
+        "id": "grid",
+        "label": "Elinfrastruktur",
+        "caption": "Plus för teknisk logik nära elnät och transformatorstationer.",
+        "params": ["grid_access_bonus"],
+    },
+    {
+        "id": "settlement",
+        "label": "Bebyggelse och rekreation",
+        "caption": "Minus där bebyggelse, tät struktur och vardagslandskap ökar konflikt.",
+        "params": ["settlement_penalty"],
+    },
+    {
+        "id": "protected",
+        "label": "Skyddad natur och habitat",
+        "caption": "Minus för skog, habitatkärnor och skyddade naturmiljöer.",
+        "params": ["protected_penalty"],
+    },
+    {
+        "id": "coast",
+        "label": "Kust och öppna strandmiljöer",
+        "caption": "Minus för kustnära landskap där solparker kan få visuell kontakt med kustlinjen.",
+        "params": ["coastal_penalty"],
+    },
+    {
+        "id": "terrain",
+        "label": "Terräng, dalar och utsikt",
+        "caption": "Minus för relief, sprickdalar, sluttningar och visuellt känsliga lägen.",
+        "params": ["terrain_penalty"],
+    },
+]
+SOLAR_PARAM_CONTROLS: dict[str, dict[str, Any]] = {
+    "base_score": {
+        "label": "Basnivå",
+        "min": 30.0,
+        "max": 75.0,
+        "step": 1.0,
+        "help": "Startpoäng innan landskapsvillkor läggs till.",
+    },
+    "grid_access_bonus": {
+        "label": "Infrastrukturbonus",
+        "min": 0.0,
+        "max": 20.0,
+        "step": 1.0,
+        "help": "Proxy för hur mycket närhet till väg/elanslutning ska höja LP Sol.",
+    },
+    "everyday_matrix_bonus": {
+        "label": "Öppet vardagslandskap",
+        "min": 0.0,
+        "max": 30.0,
+        "step": 1.0,
+        "help": "Bonus för bredare vardags-/produktionslandskap.",
+    },
+    "coastal_penalty": {
+        "label": "Kust- och låglandsstraff",
+        "min": 0.0,
+        "max": 35.0,
+        "step": 1.0,
+        "help": "Sänker potential i kustnära och låglänta landskap.",
+    },
+    "terrain_penalty": {
+        "label": "Terräng- och dalstraff",
+        "min": 0.0,
+        "max": 35.0,
+        "step": 1.0,
+        "help": "Sänker potential där relief och sprickdalar dominerar.",
+    },
+    "protected_penalty": {
+        "label": "Skog/habitat-straff",
+        "min": 0.0,
+        "max": 40.0,
+        "step": 1.0,
+        "help": "Sänker potential i skyddade skogs- och habitatmiljöer.",
+    },
+    "settlement_penalty": {
+        "label": "Bosättningsstraff",
+        "min": 0.0,
+        "max": 35.0,
+        "step": 1.0,
+        "help": "Sänker potential där bebyggelse och tät struktur dominerar.",
+    },
+}
 
 
 def _map_view_reset_token() -> int:
@@ -783,7 +873,7 @@ def _render_region_scenario_panel(panel: Any | None) -> tuple[dict[str, Any], di
 
 def _metric_header(region: dict[str, Any], scenario_state: dict[str, Any], h3_resolution: int | None = None) -> None:
     st.title(PAGE_TITLE)
-    st.caption(f"Regional v0 för scenarier, solpotential, {WIND_LANDSCAPE_POTENTIAL_LABEL} och landskapsanalys.")
+    st.caption(f"Regional v0 för scenarier, {SOLAR_LANDSCAPE_POTENTIAL_LABEL}, {WIND_LANDSCAPE_POTENTIAL_LABEL} och landskapsanalys.")
 
     c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("Region", str(region.get("display_name", region.get("region_id"))))
@@ -1105,15 +1195,23 @@ def _default_solar_frame(
     solar_rules: dict[str, Any],
     resolution: int,
 ) -> pd.DataFrame:
+    display_rules = _solar_rules_with_display_palette(solar_rules)
     source_resolution = landscape_source_resolution(landscape_manifest)
     entry = _solar_rollup_entry(potential_manifest, resolution)
     if entry is not None and int(entry.get("source_resolution", -1)) == source_resolution:
         frame = rollup_frame_for_entry(entry)
+        class_colors = {
+            str(item.get("id")): str(item.get("color", "#999999"))
+            for item in _class_breaks(display_rules)
+        }
+        if "solar_class" in frame.columns:
+            frame = frame.copy()
+            frame["solar_color"] = frame["solar_class"].astype(str).map(class_colors).fillna(frame.get("solar_color", "#999999"))
     else:
         frame = rollup_potential_frame(
-            solar_capacity_frame(landscape_manifest, solar_rules),
+            solar_capacity_frame(landscape_manifest, display_rules),
             resolution,
-            _class_breaks(solar_rules),
+            _class_breaks(display_rules),
             "solar",
             source_resolution=source_resolution,
         )
@@ -1174,7 +1272,7 @@ def _landscape_frame(
 def _solar_legend_items(solar_rules: dict[str, Any]) -> list[dict[str, str]]:
     return [
         {"label": str(item.get("label", item.get("id", "Okänd"))), "color": str(item.get("color", "#999999"))}
-        for item in _class_breaks(solar_rules)
+        for item in _solar_class_breaks_for_display(solar_rules)
     ]
 
 
@@ -1224,7 +1322,23 @@ def _default_solar_params(solar_rules: dict[str, Any]) -> dict[str, float]:
     }
 
 
-def _solar_rules_from_params(solar_rules: dict[str, Any], params: dict[str, float]) -> dict[str, Any]:
+def _solar_class_breaks_for_display(solar_rules: dict[str, Any]) -> list[dict[str, Any]]:
+    breaks = [dict(item) for item in _class_breaks(solar_rules)]
+    palette = {
+        "very_low": "#6b4f3f",
+        "low": "#a46a3f",
+        "medium": "#f3c75f",
+        "high": "#f59e0b",
+        "very_high": "#9a3412",
+    }
+    for item in breaks:
+        class_id = str(item.get("id", ""))
+        if class_id in palette:
+            item["color"] = palette[class_id]
+    return breaks
+
+
+def _solar_rules_with_display_palette(solar_rules: dict[str, Any]) -> dict[str, Any]:
     rules = read_manifest(str(resolve_repo_path(solar_rules.get("_manifest_path")))) if solar_rules.get("_manifest_path") else solar_rules.copy()
     rules = {
         **rules,
@@ -1234,6 +1348,12 @@ def _solar_rules_from_params(solar_rules: dict[str, Any], params: dict[str, floa
             "role_terms": [dict(item) for item in (rules.get("score_model") or {}).get("role_terms") or []],
         },
     }
+    rules["score_model"]["class_breaks"] = _solar_class_breaks_for_display(rules)
+    return rules
+
+
+def _solar_rules_from_params(solar_rules: dict[str, Any], params: dict[str, float]) -> dict[str, Any]:
+    rules = _solar_rules_with_display_palette(solar_rules)
     score_model = rules["score_model"]
     score_model["base_score"] = float(params.get("base_score", 55.0)) + float(params.get("grid_access_bonus", 0.0))
     for term in score_model.get("cluster_terms") or []:
@@ -1249,6 +1369,7 @@ def _solar_rules_from_params(solar_rules: dict[str, Any], params: dict[str, floa
         role = term.get("role")
         if role in role_weight_map:
             term["weight"] = role_weight_map[role]
+    score_model["class_breaks"] = _solar_class_breaks_for_display(rules)
     return rules
 
 
@@ -1337,6 +1458,64 @@ def _prime_solar_builder_state(defaults: dict[str, float], saved_params: dict[st
     for key, value in defaults.items():
         seeded = float(source.get(key, value)) if isinstance(source, dict) else float(value)
         st.session_state.setdefault(f"solar_builder_{key}", seeded)
+    for group in SOLAR_CONTROL_GROUPS:
+        st.session_state.setdefault(_solar_control_key("active", str(group["id"])), True)
+
+
+def _solar_control_key(kind: str, item_id: str) -> str:
+    return f"solar_control__{kind}__{item_id}"
+
+
+def _solar_params_from_control_state(defaults: dict[str, float]) -> dict[str, float]:
+    params = _state_params("solar_builder", defaults)
+    for group in SOLAR_CONTROL_GROUPS:
+        active = bool(st.session_state.get(_solar_control_key("active", str(group["id"])), True))
+        if active:
+            continue
+        for param_key in group.get("params") or []:
+            params[str(param_key)] = 0.0
+    return params
+
+
+def _solar_group_controls(defaults: dict[str, float]) -> tuple[dict[str, float], bool]:
+    st.caption(
+        f"Bygg {SOLAR_LANDSCAPE_POTENTIAL_LABEL} med kriteriegrupper från Sol over land-underlaget. "
+        "Grupper som stängs av får ingen positiv eller negativ effekt i scoremodellen."
+    )
+    with st.form("solar_landscape_potential_controls", clear_on_submit=False):
+        with st.expander("Bas och metod", expanded=True):
+            control = SOLAR_PARAM_CONTROLS["base_score"]
+            st.slider(
+                str(control["label"]),
+                min_value=float(control["min"]),
+                max_value=float(control["max"]),
+                step=float(control["step"]),
+                value=float(st.session_state.get("solar_builder_base_score", defaults["base_score"])),
+                key="solar_builder_base_score",
+                help=str(control["help"]),
+            )
+            st.caption("Hög LP Sol betyder robust landskap med låg konflikt och god teknisk logik, inte bara hög solinstrålning.")
+        for group in SOLAR_CONTROL_GROUPS:
+            group_id = str(group["id"])
+            with st.expander(str(group["label"]), expanded=group_id in {"open_landscape", "grid", "protected"}):
+                st.caption(str(group.get("caption", "")))
+                st.checkbox("Aktiv", key=_solar_control_key("active", group_id))
+                active = bool(st.session_state.get(_solar_control_key("active", group_id), True))
+                for param_key in group.get("params") or []:
+                    param_key = str(param_key)
+                    control = SOLAR_PARAM_CONTROLS[param_key]
+                    st.slider(
+                        str(control["label"]),
+                        min_value=float(control["min"]),
+                        max_value=float(control["max"]),
+                        step=float(control["step"]),
+                        value=float(st.session_state.get(f"solar_builder_{param_key}", defaults[param_key])),
+                        key=f"solar_builder_{param_key}",
+                        disabled=not active,
+                        help=str(control["help"]),
+                    )
+        applied = st.form_submit_button("Använd ändringar", type="primary", width="stretch")
+    return _solar_params_from_control_state(defaults), bool(applied)
 
 
 def _builder_slider(prefix: str, key: str, label: str, min_value: float, max_value: float, step: float, defaults: dict[str, float], help_text: str) -> None:
@@ -1473,7 +1652,7 @@ def _solar_polygon_feature_collection(
     selected_share = (len(selected) / len(frame)) * 100.0
     popup = (
         f"<strong>{label}</strong><br>"
-        f"Hex med hög/ mycket hög solpotential: {len(selected)}<br>"
+        f"Hex med hög/mycket hög LP Sol: {len(selected)}<br>"
         f"Andel av visad yta: {selected_share:.1f}%<br>"
         f"Medelpoäng i polygonlagret: {float(selected['solar_score'].mean()):.1f}"
     )
@@ -3004,6 +3183,8 @@ def _unified_workspace_tab(
     wind_selected_layers = _selected_wind_layers()
     wind_ui_params = _default_wind_params()
     wind_controls_applied = False
+    solar_params = _solar_params_from_control_state(solar_defaults)
+    solar_controls_applied = False
     energy_model_state: dict[str, Any] = {"available": False}
 
     if left_panel is not None:
@@ -3050,22 +3231,26 @@ def _unified_workspace_tab(
                 st.caption("Separat sparning behövs inte längre i den här arbetsvyn.")
                 wind_selected_layers, wind_ui_params, wind_controls_applied = _wind_group_controls("wind_unified", language=WIND_CONTROL_LANGUAGE)
 
-            with st.expander(f"Solpotential ({active_solar_count})", expanded=False):
-                show_user_solar = st.checkbox("Egen solpotential", value=show_user_solar, key="show_user_solar")
-                show_default_solar = st.checkbox("Default solpotential", value=show_default_solar, key="show_default_solar")
-                st.caption("Bygg solpotential direkt i samma vy. Kartan visar alltid både hexlager och ett sammanhängande polygonlager.")
+            with st.expander(f"{SOLAR_LANDSCAPE_POTENTIAL_LABEL} ({active_solar_count})", expanded=False):
+                show_user_solar = st.checkbox(
+                    f"Egen {SOLAR_LANDSCAPE_POTENTIAL_LABEL}",
+                    value=show_user_solar,
+                    key="show_user_solar",
+                )
+                show_default_solar = st.checkbox(
+                    f"Default {SOLAR_LANDSCAPE_POTENTIAL_LABEL}",
+                    value=show_default_solar,
+                    key="show_default_solar",
+                )
+                st.caption("Default är avstängd vid start. Egen LP Sol byggs med kriteriegrupperna nedan.")
                 if st.button("Återställ sol-default", key="reset_solar_builder_unified"):
+                    for group in SOLAR_CONTROL_GROUPS:
+                        st.session_state[_solar_control_key("active", str(group["id"]))] = True
                     _reset_builder("solar_builder", solar_defaults)
-                _builder_slider("solar_builder", "base_score", "Basnivå", 30.0, 75.0, 1.0, solar_defaults, "Startpoäng innan landskapsvillkor läggs till.")
-                _builder_slider("solar_builder", "grid_access_bonus", "Infrastruktur/åtkomst-bonus", 0.0, 20.0, 1.0, solar_defaults, "Proxy för hur mycket närhet till väg/elanslutning ska höja solpotentialen.")
-                _builder_slider("solar_builder", "everyday_matrix_bonus", "Öppet vardagslandskap", 0.0, 30.0, 1.0, solar_defaults, "Bonus för bredare vardags-/produktionslandskap.")
-                _builder_slider("solar_builder", "coastal_penalty", "Kust- och låglandsstraff", 0.0, 35.0, 1.0, solar_defaults, "Sänker potential i kustnära och låglänta landskap.")
-                _builder_slider("solar_builder", "terrain_penalty", "Terräng- och dalstraff", 0.0, 35.0, 1.0, solar_defaults, "Sänker potential där relief och sprickdalar dominerar.")
-                _builder_slider("solar_builder", "protected_penalty", "Skog/habitat-straff", 0.0, 40.0, 1.0, solar_defaults, "Sänker potential i skyddade skogs- och habitatmiljöer.")
-                _builder_slider("solar_builder", "settlement_penalty", "Bosättningsstraff", 0.0, 35.0, 1.0, solar_defaults, "Sänker potential där bebyggelse och tät struktur dominerar.")
-                if st.button("Spara solpotential", type="primary", width="stretch", key="save_solar_unified"):
-                    _save_solar_potential(_state_params("solar_builder", solar_defaults), h3_resolution)
-                    st.success("Solpotential sparad.")
+                solar_params, solar_controls_applied = _solar_group_controls(solar_defaults)
+                if st.button(f"Spara {SOLAR_LANDSCAPE_POTENTIAL_LABEL}", type="primary", width="stretch", key="save_solar_unified"):
+                    _save_solar_potential(solar_params, h3_resolution)
+                    st.success(f"{SOLAR_LANDSCAPE_POTENTIAL_LABEL} sparad.")
 
         with left_panel.expander("Energimodellering", expanded=False):
             st.caption("Levereras av EML")
@@ -3086,7 +3271,6 @@ def _unified_workspace_tab(
 
     display_geometry_path = _h3_display_geometry_path(region, h3_resolution)
     resolution_info = _hex_display_rule(region, h3_resolution, lock_h3_resolution)
-    solar_params = _state_params("solar_builder", solar_defaults)
     st.session_state["solar_builder_params"] = solar_params
     st.session_state["wind_builder_params"] = wind_ui_params
 
@@ -3102,9 +3286,9 @@ def _unified_workspace_tab(
                 h3_resolution,
                 lock_h3_resolution,
                 "default_solar_hex",
-                "Default solpotential",
+                f"Default {SOLAR_LANDSCAPE_POTENTIAL_LABEL}",
                 lambda resolution: _potential_layer(
-                    "Default solpotential",
+                    f"Default {SOLAR_LANDSCAPE_POTENTIAL_LABEL}",
                     _default_solar_frame(region, landscape_manifest, potential_manifest, solar_rules, int(resolution)),
                     "solar",
                     _h3_display_geometry_path(region, int(resolution)),
@@ -3112,12 +3296,12 @@ def _unified_workspace_tab(
                 ),
             )
         )
-        default_solar_polygon = _solar_polygon_layer("Default solyta", default_solar_frame, display_geometry_path, stroke_color="#d97706", fill_color="#d97706")
+        default_solar_polygon = _solar_polygon_layer(f"Default {SOLAR_LANDSCAPE_POTENTIAL_LABEL} polygon", default_solar_frame, display_geometry_path, stroke_color="#d97706", fill_color="#d97706")
         if default_solar_polygon is not None:
             layers.append(default_solar_polygon)
         potential_frames.append(
             {
-                "label": "Default solpotential",
+                "label": f"Default {SOLAR_LANDSCAPE_POTENTIAL_LABEL}",
                 "technology": "solar",
                 "frame": default_solar_frame,
                 "resolution": h3_resolution,
@@ -3133,9 +3317,9 @@ def _unified_workspace_tab(
                 h3_resolution,
                 lock_h3_resolution,
                 "user_solar_hex",
-                "Egen solpotential",
+                f"Egen {SOLAR_LANDSCAPE_POTENTIAL_LABEL}",
                 lambda resolution: _potential_layer(
-                    "Egen solpotential",
+                    f"Egen {SOLAR_LANDSCAPE_POTENTIAL_LABEL}",
                     _custom_solar_frame(region, landscape_manifest, solar_rules, int(resolution), solar_params),
                     "solar",
                     _h3_display_geometry_path(region, int(resolution)),
@@ -3143,19 +3327,21 @@ def _unified_workspace_tab(
                 ),
             )
         )
-        user_solar_polygon = _solar_polygon_layer("Egen solyta", user_solar_frame, display_geometry_path, stroke_color="#b45309", fill_color="#b45309")
+        user_solar_polygon = _solar_polygon_layer(f"Egen {SOLAR_LANDSCAPE_POTENTIAL_LABEL} polygon", user_solar_frame, display_geometry_path, stroke_color="#b45309", fill_color="#b45309")
         if user_solar_polygon is not None:
             layers.append(user_solar_polygon)
         potential_frames.append(
             {
-                "label": "Egen solpotential",
+                "label": f"Egen {SOLAR_LANDSCAPE_POTENTIAL_LABEL}",
                 "technology": "solar",
                 "frame": user_solar_frame,
                 "resolution": h3_resolution,
                 "resolution_note": resolution_info["item_note"],
             }
         )
-        unified_notes.append("Solpolygonlagret byggs från de hex som klassas som hög eller mycket hög solpotential i aktuell H3-upplösning.")
+        unified_notes.append(f"{SOLAR_LANDSCAPE_POTENTIAL_LABEL} polygon byggs från de hex som klassas som hög eller mycket hög LP Sol i aktuell H3-upplösning.")
+        if solar_controls_applied:
+            unified_notes.append(f"{SOLAR_LANDSCAPE_POTENTIAL_LABEL}: ändringar tillämpade.")
 
     if show_default_wind:
         default_wind_params = _reference_default_wind_params()
@@ -3382,8 +3568,8 @@ def _unified_workspace_tab(
         _render_energy_model_summary(energy_model_state)
         with st.expander("Byggstatus", expanded=False):
             if show_user_solar:
-                st.metric("Aktiv solförhandsvisning", "På")
-                st.caption("Solbygget visas som hexlager plus ett polygonlager som summerar hög och mycket hög solpotential.")
+                st.metric(f"Aktiv {SOLAR_LANDSCAPE_POTENTIAL_LABEL}", "På")
+                st.caption(f"{SOLAR_LANDSCAPE_POTENTIAL_LABEL} visas som hexlager plus ett polygonlager som summerar hög och mycket hög LP Sol.")
             if show_user_wind and custom_wind_preview_state is not None:
                 left_metric, right_metric = st.columns(2)
                 left_metric.metric("LP Vind: aktiva källager", int(custom_wind_preview_state["active_source_count"]))

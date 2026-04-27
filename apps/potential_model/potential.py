@@ -319,7 +319,7 @@ def build_potential_feature_collection_with_geometries(
     cols = _potential_columns(technology)
     display_geometries = load_h3_display_geometries(display_geometry_path) if display_geometry_path else None
     features: list[dict[str, Any]] = []
-    technology_label = {"solar": "Solpotential", "wind": "Vindpotential"}.get(technology, "Potential")
+    technology_label = {"solar": "Landskapspotential Sol", "wind": "Landskapspotential Vind"}.get(technology, "Potential")
     for row in frame.itertuples(index=False):
         hex_id = str(row.hex_id)
         geometry = geometry_for_hex(hex_id, display_geometries)
@@ -398,7 +398,7 @@ def build_solar_capacity_feature_collection_with_geometries(
             continue
         popup = (
             f"<strong>{hex_id}</strong><br>"
-            f"Solpotential: {row.solar_class_label} ({float(row.solar_score):.1f})<br>"
+            f"Landskapspotential Sol: {row.solar_class_label} ({float(row.solar_score):.1f})<br>"
             f"Landskapstyp: {int(row.class_km)} - {row.landscape_type}"
         )
         features.append(
