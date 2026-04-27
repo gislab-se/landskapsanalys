@@ -1,6 +1,12 @@
 # Heavy geodata is excluded from git by default.
 # We can add selected H3 hex outputs later when needed.
-data/
+data/*
+
+# Small app runtime inputs that must be present on Streamlit Cloud.
+!data/raw/
+!data/raw/AreaDemand.xlsx
+!data/processed/
+!data/processed/speedlocal_times.duckdb
 
 # R session artifacts
 .Rhistory
