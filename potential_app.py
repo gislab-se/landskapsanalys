@@ -1265,6 +1265,35 @@ def _default_wind_params() -> dict[str, float]:
     }
 
 
+def _reference_default_wind_params() -> dict[str, float]:
+    params = _default_wind_params()
+    params.update(
+        {
+            "settlement_distance_m": 200.0,
+            "road_distance_m": 200.0,
+            "grid_max_distance_m": 1000.0,
+            "protected_buffer_m": 0.0,
+        }
+    )
+    return params
+
+
+def _reference_default_wind_layer_selection() -> dict[str, list[str]]:
+    return normalize_group_layer_map(
+        {
+            "settlement": ["population_points"],
+            "transport": ["roads_large"],
+            "electrical": ["power_substations"],
+            "protected": list(WIND_GROUP_LAYER_DEFAULTS.get("protected", [])),
+            "coastal": [],
+            "culture": [],
+            "aviation_approach": [],
+            "aviation_bird": [],
+            "military": [],
+        }
+    )
+
+
 def _wind_score_params_from_ui(ui_params: dict[str, float]) -> dict[str, float]:
     return {
         "base_score": 55.0,
@@ -2903,6 +2932,10 @@ def _unified_workspace_tab(
                 show_user_wind = st.checkbox("Egen vindpotential", value=show_user_wind, key="show_user_wind")
                 show_default_wind = st.checkbox("Default vindpotential", value=show_default_wind, key="show_default_wind")
                 st.caption(
+                    "Default vindpotential är avstängd vid start. När den slås på används bebyggelsepunkter 200 m, "
+                    "stora vägar 200 m, transformatorstationer 1000 m och alla skyddade områden."
+                )
+                st.caption(
                     f"Bygg vindpotential direkt i samma vy. Potentialandelen beräknas alltid i R{WIND_RUNTIME_BASE_RESOLUTION} "
                     f"och visas här som polygon plus hexagoner med R{h3_resolution} som vald detaljnivå."
                 )
@@ -3021,8 +3054,8 @@ def _unified_workspace_tab(
         unified_notes.append("Solpolygonlagret byggs från de hex som klassas som hög eller mycket hög solpotential i aktuell H3-upplösning.")
 
     if show_default_wind:
-        default_wind_params = _default_wind_params()
-        default_layer_selection = normalize_group_layer_map(_default_wind_layer_selection())
+        default_wind_params = _reference_default_wind_params()
+        default_layer_selection = _reference_default_wind_layer_selection()
         default_wind_source_frame = _wind_source_frame(
             landscape_manifest,
             solar_rules,
