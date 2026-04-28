@@ -645,6 +645,49 @@ def _energy_key_label(energy_key: str) -> str:
     return {"wind": "Vind", "solar": "Sol"}.get(str(energy_key), str(energy_key))
 
 
+def _energy_mix_share(mix: pd.DataFrame, energy_key: str) -> float:
+    if mix.empty or "energy_key" not in mix.columns or "value_twh" not in mix.columns:
+        return 0.0
+    values = pd.to_numeric(
+        mix.loc[mix["energy_key"].astype(str) == str(energy_key), "value_twh"],
+        errors="coerce",
+    ).fillna(0.0)
+    return float(values.sum())
+
+
+def _balance_wind_solar_mix(mix: pd.DataFrame, solar_share_pct: float) -> pd.DataFrame:
+    adjusted = mix.copy()
+    if adjusted.empty or "energy_key" not in adjusted.columns or "value_twh" not in adjusted.columns:
+        return adjusted
+
+    solar_share = max(0.0, min(100.0, float(solar_share_pct))) / 100.0
+    wind_twh = _energy_mix_share(adjusted, "wind")
+    solar_twh = _energy_mix_share(adjusted, "solar")
+    total_twh = wind_twh + solar_twh
+    if total_twh <= 0:
+        return adjusted
+
+    targets = {"solar": total_twh * solar_share, "wind": total_twh * (1.0 - solar_share)}
+    for energy_key, target_twh in targets.items():
+        mask = adjusted["energy_key"].astype(str) == energy_key
+        current_twh = float(pd.to_numeric(adjusted.loc[mask, "value_twh"], errors="coerce").fillna(0.0).sum())
+        if not mask.any():
+            new_row = {
+                "scenario": adjusted["scenario"].iloc[0] if "scenario" in adjusted.columns and not adjusted.empty else "",
+                "year": adjusted["year"].iloc[0] if "year" in adjusted.columns and not adjusted.empty else "",
+                "energy_key": energy_key,
+                "value_twh": target_twh,
+            }
+            adjusted = pd.concat([adjusted, pd.DataFrame([new_row])], ignore_index=True, sort=False)
+        elif current_twh > 0:
+            adjusted.loc[mask, "value_twh"] = pd.to_numeric(adjusted.loc[mask, "value_twh"], errors="coerce").fillna(0.0) * (target_twh / current_twh)
+        else:
+            first_idx = adjusted.index[mask][0]
+            adjusted.loc[mask, "value_twh"] = 0.0
+            adjusted.loc[first_idx, "value_twh"] = target_twh
+    return adjusted.reset_index(drop=True)
+
+
 def _render_hex_area_card(
     area_by_scenario: dict[str, float],
     hex_area: float,
@@ -766,6 +809,33 @@ def _render_energy_modeling_panel(
         )
         return state
 
+    native_wind_twh = _energy_mix_share(selected_mix, "wind")
+    native_solar_twh = _energy_mix_share(selected_mix, "solar")
+    native_total_twh = native_wind_twh + native_solar_twh
+    native_solar_share_pct = (native_solar_twh / native_total_twh * 100.0) if native_total_twh > 0 else 50.0
+    mix_key = f"energy_model_mix_solar_share_{region.get('region_id', 'region')}"
+    st.session_state.setdefault(mix_key, int(round(native_solar_share_pct / 5.0) * 5))
+    solar_share_pct = float(
+        panel.slider(
+            "Energimix",
+            min_value=0,
+            max_value=100,
+            step=5,
+            key=mix_key,
+            format="%d%% sol",
+            help=(
+                "Balans mellan sol och vind i valt framtidsscenario. "
+                "När solandelen ökar minskar vindandelen med samma totalenergi, och tvärtom."
+            ),
+        )
+    )
+    wind_share_pct = 100.0 - solar_share_pct
+    selected_mix = _balance_wind_solar_mix(selected_mix, solar_share_pct)
+    panel.caption(
+        f"Energimix: {wind_share_pct:.0f}% vind / {solar_share_pct:.0f}% sol. "
+        f"Ursprunglig TIMES-mix: {100.0 - native_solar_share_pct:.0f}% vind / {native_solar_share_pct:.0f}% sol."
+    )
+
     technology_to_times = _technology_to_times_map(scenario_manifest)
     area_bundle_obj = type(
         "AreaBundleShim",
@@ -782,16 +852,23 @@ def _render_energy_modeling_panel(
     primary_area_need = float(primary_row["area_need_km2"].fillna(0.0).sum()) if not primary_row.empty else 0.0
     primary_twh = float(primary_row["twh"].fillna(0.0).sum()) if not primary_row.empty else 0.0
     primary_factor = float(primary_row["km2_per_twh"].dropna().iloc[0]) if not primary_row["km2_per_twh"].dropna().empty else math.nan
+    solar_row = area_demand[area_demand["energy_key"].astype(str) == "solar"]
+    wind_row = area_demand[area_demand["energy_key"].astype(str) == "wind"]
+    solar_area_need = float(solar_row["area_need_km2"].fillna(0.0).sum()) if not solar_row.empty else 0.0
+    solar_twh = float(solar_row["twh"].fillna(0.0).sum()) if not solar_row.empty else 0.0
+    wind_area_need = float(wind_row["area_need_km2"].fillna(0.0).sum()) if not wind_row.empty else 0.0
+    wind_twh = float(wind_row["twh"].fillna(0.0).sum()) if not wind_row.empty else 0.0
 
-    metric_cols = panel.columns(3)
-    metric_cols[0].metric("Vind från EML", f"{primary_twh:.2f} TWh")
-    metric_cols[1].metric("Markanspråk", f"{primary_area_need:.2f} km²")
-    metric_cols[2].metric("Hexbehov", str(int(math.ceil(primary_area_need / max(hex_area, 1e-9))) if primary_area_need > 0 else 0))
+    metric_cols = panel.columns(4)
+    metric_cols[0].metric("Vind", f"{wind_twh:.2f} TWh")
+    metric_cols[1].metric("Sol", f"{solar_twh:.2f} TWh")
+    metric_cols[2].metric("Vindyta", f"{wind_area_need:.2f} km²")
+    metric_cols[3].metric("Solyta", f"{solar_area_need:.2f} km²")
 
     planning_area_by_scenario: dict[str, float] = {}
     for scenario_option in planning_options:
         option_id = str(scenario_option.get("id"))
-        option_mix = select_planning_mix(mix, scenario_option)
+        option_mix = _balance_wind_solar_mix(select_planning_mix(mix, scenario_option), solar_share_pct)
         option_area_scenario = str(scenario_option.get("area_demand_scenario", "mid") or "mid")
         if option_area_scenario not in AREA_SCENARIO_ORDER:
             option_area_scenario = "mid"
@@ -850,6 +927,14 @@ def _render_energy_modeling_panel(
             "primary_area_need_km2": primary_area_need,
             "primary_twh": primary_twh,
             "primary_km2_per_twh": primary_factor,
+            "wind_share_pct": wind_share_pct,
+            "solar_share_pct": solar_share_pct,
+            "native_wind_share_pct": 100.0 - native_solar_share_pct,
+            "native_solar_share_pct": native_solar_share_pct,
+            "wind_area_need_km2": wind_area_need,
+            "solar_area_need_km2": solar_area_need,
+            "wind_twh": wind_twh,
+            "solar_twh": solar_twh,
             "hex_area_km2": hex_area,
             "auto_min_potential_share_pct": float(planning.get("auto_min_potential_share_pct", 65.0)),
             "source_status": source_status,
@@ -2397,21 +2482,13 @@ def _energy_area_proposal_fill(
     expansion_ring: int,
 ) -> str:
     if outside_et:
-        ring = max(1, int(expansion_ring or 1))
-        if ring <= 1:
-            return "#ef4444"
-        if ring == 2:
-            return "#b91c1c"
-        if ring == 3:
-            return "#7f1d1d"
-        return "#2f0606"
+        return "#fca5a5" if int(expansion_ring or 1) <= 1 else "#991b1b"
 
-    share_value = max(0.0, min(100.0, float(potential_area_share_pct or 0.0))) / 100.0
+    share_value = max(0.0, min(100.0, float(potential_area_share_pct or 0.0)))
     core_value = max(0.0, min(1.0, float(core_score or 0.0)))
-    zone_factor = min(1.0, max(0.0, float(max(0, int(zone_size or 0)) - 1)) / 32.0)
-    base = _mix_hex_colors("#dbeafe", "#2563eb", share_value ** 0.62)
-    core_intensity = (core_value ** 0.86) * min(1.0, 0.55 + zone_factor)
-    return _mix_hex_colors(base, "#061a4f", core_intensity)
+    zone_size_value = max(0, int(zone_size or 0))
+    is_core = share_value >= 65.0 and (core_value >= 0.36 or zone_size_value >= 6)
+    return "#1d4ed8" if is_core else "#93c5fd"
 
 
 def _energy_area_proposal_layer(
@@ -2481,11 +2558,10 @@ def _energy_area_proposal_layer(
         "fill_property": "fill",
         "stroke_property": "stroke",
         "legend_items": [
-            {"label": "Inom LP: låg potential / kant", "color": "#dbeafe"},
-            {"label": "Inom LP: hög potential", "color": "#2563eb"},
-            {"label": "Inom LP: kärnområde", "color": "#061a4f"},
-            {"label": "Utanför LP: nära kanten", "color": "#ef4444"},
-            {"label": "Utanför LP: längre ut", "color": "#2f0606"},
+            {"label": "Inom LP: kärnområde / hög potential", "color": "#1d4ed8"},
+            {"label": "Inom LP: kantzon / lägre marginal", "color": "#93c5fd"},
+            {"label": "Utanför LP: nära LP-kanten", "color": "#fca5a5"},
+            {"label": "Utanför LP: längre ut / högre konflikt", "color": "#991b1b"},
         ],
         "legend_id": "energy_area_proposal",
         "legend_title": ENERGY_PROPOSAL_LAYER_LABEL,
@@ -3056,16 +3132,20 @@ def _render_energy_model_summary(energy_model_state: dict[str, Any]) -> None:
     with st.expander("Energimodellering", expanded=True):
         st.caption(
             f"{energy_model_state.get('scenario_label', energy_model_state.get('scenario', '-'))} · "
+            f"mix {float(energy_model_state.get('wind_share_pct', 0.0) or 0.0):.0f}% vind / "
+            f"{float(energy_model_state.get('solar_share_pct', 0.0) or 0.0):.0f}% sol · "
             f"markintensitet {energy_model_state.get('area_scenario_label', '-')} · "
             f"källa {energy_model_state.get('source_scenario_label', '-')} "
             f"{energy_model_state.get('source_year', '-')}, skala {float(energy_model_state.get('energy_scale', 1.0) or 1.0):g}x"
         )
-        c1, c2 = st.columns(2)
-        c1.metric("Vind från EML", f"{float(energy_model_state.get('primary_twh', 0.0) or 0.0):.2f} TWh")
-        c2.metric("Markanspråk", f"{float(energy_model_state.get('primary_area_need_km2', 0.0) or 0.0):.2f} km²")
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Vind", f"{float(energy_model_state.get('wind_twh', 0.0) or 0.0):.2f} TWh")
+        c2.metric("Sol", f"{float(energy_model_state.get('solar_twh', 0.0) or 0.0):.2f} TWh")
+        c3.metric("Vindyta", f"{float(energy_model_state.get('wind_area_need_km2', 0.0) or 0.0):.2f} km²")
+        c4.metric("Solyta", f"{float(energy_model_state.get('solar_area_need_km2', 0.0) or 0.0):.2f} km²")
         st.caption(
             f"{WIND_LANDSCAPE_POTENTIAL_LABEL} är den möjliga ytan i landskapsmodellen. "
-            f"{ENERGY_PROPOSAL_LAYER_LABEL} är det automatiska urvalet som försöker möta scenario och area demand."
+            f"{ENERGY_PROPOSAL_LAYER_LABEL} är det automatiska vindurvalet som försöker möta vald mix och area demand."
         )
         proposal_stats = energy_model_state.get("proposal_stats") or {}
         if proposal_stats:
