@@ -74,6 +74,12 @@ Möjliga befintliga Bornholm-lager:
 - kust-/strandsskydd och kystnærhedszonen
 - jordart/markblock kan senare användas för jordbruks- och markanvändningslogik
 
+### Jordbruksmark och jordkvalitet
+
+Nuvarande appunderlag har `markblokke_2026_bornholm_area_share`, som visar jordbruks-/markblockandel per hex. Det finns också jordarts- och prekvartärgeologiska lager, till exempel moränlera, moränsand, flygsand och berggrundstyper. Dessa beskriver material/geologi, men är inte samma sak som bonitet, jordklass eller jordbruksmarkens produktionskvalitet.
+
+I nuläget finns därför ingen tydlig bonitets- eller jordklassvariabel i solunderlaget. Om en sådan källa läggs till senare bör den hanteras som ett eget lager, separerat från `Markblokke`, så att appen kan skilja på "är jordbruksmark" och "är högklassig jordbruksjord".
+
 ## Första app-version
 
 En praktisk första implementation kan göras som ett H3-baserat scorelager:

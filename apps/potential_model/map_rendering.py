@@ -323,8 +323,10 @@ def build_layered_hex_map_html(
       return spec.stroke_color || '#555555';
     }}
 
-    function layerStrokeWeight(spec, isPointLayer) {{
-      const parsed = Number(spec.weight);
+    function layerStrokeWeight(spec, feature, isPointLayer) {{
+      const props = (feature && feature.properties) || {{}};
+      const featureValue = spec.stroke_weight_property ? Number(props[spec.stroke_weight_property]) : NaN;
+      const parsed = Number.isFinite(featureValue) ? featureValue : Number(spec.weight);
       if (Number.isFinite(parsed)) {{
         return isPointLayer ? Math.max(parsed, 1.0) : parsed;
       }}
@@ -352,6 +354,19 @@ def build_layered_hex_map_html(
       return strokeWeight > 0.01 && strokeOpacity > 0.01;
     }}
 
+    function layerPointRadiusMeters(spec, feature) {{
+      const props = (feature && feature.properties) || {{}};
+      const featureRadius = props.point_radius_m != null ? Number(props.point_radius_m) : NaN;
+      if (Number.isFinite(featureRadius) && featureRadius > 0) {{
+        return featureRadius;
+      }}
+      const specRadius = spec.point_radius_m != null ? Number(spec.point_radius_m) : NaN;
+      if (Number.isFinite(specRadius) && specRadius > 0) {{
+        return specRadius;
+      }}
+      return null;
+    }}
+
     function popupHtml(spec, feature) {{
       const props = (feature && feature.properties) || {{}};
       if (props.popup) {{
@@ -377,7 +392,7 @@ def build_layered_hex_map_html(
         pane: paneName,
         style: function(feature) {{
           const fillOpacity = layerFillOpacity(spec, feature);
-          const strokeWeight = layerStrokeWeight(spec, false);
+          const strokeWeight = layerStrokeWeight(spec, feature, false);
           const strokeOpacity = layerStrokeOpacity(spec, fillOpacity);
           const strokeEnabled = layerStrokeEnabled(spec, strokeWeight, strokeOpacity);
           return {{
@@ -392,11 +407,11 @@ def build_layered_hex_map_html(
         }},
         pointToLayer: function(feature, latlng) {{
           const fillOpacity = layerFillOpacity(spec, feature);
-          const strokeWeight = layerStrokeWeight(spec, true);
+          const strokeWeight = layerStrokeWeight(spec, feature, true);
           const strokeOpacity = layerStrokeOpacity(spec, fillOpacity);
           const strokeEnabled = layerStrokeEnabled(spec, strokeWeight, strokeOpacity);
-          return L.circleMarker(latlng, {{
-            radius: Number.isFinite(Number(spec.point_radius)) ? Number(spec.point_radius) : 4.0,
+          const radiusMeters = layerPointRadiusMeters(spec, feature);
+          const pointOptions = {{
             pane: paneName,
             stroke: strokeEnabled,
             color: layerStrokeColor(spec, feature),
@@ -405,7 +420,13 @@ def build_layered_hex_map_html(
             dashArray: spec.dash_array || null,
             fillColor: layerFillColor(spec, feature),
             fillOpacity: Math.max(fillOpacity, 0.22)
-          }});
+          }};
+          if (radiusMeters !== null) {{
+            pointOptions.radius = radiusMeters;
+            return L.circle(latlng, pointOptions);
+          }}
+          pointOptions.radius = Number.isFinite(Number(spec.point_radius)) ? Number(spec.point_radius) : 4.0;
+          return L.circleMarker(latlng, pointOptions);
         }},
         onEachFeature: function(feature, itemLayer) {{
           const props = (feature && feature.properties) || {{}};

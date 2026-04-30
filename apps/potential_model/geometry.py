@@ -6,6 +6,26 @@ from typing import Any
 
 import streamlit as st
 
+try:
+    import h3
+except Exception:  # pragma: no cover
+    h3 = None
+
+
+def _full_h3_geometry(hex_id: str) -> dict[str, Any] | None:
+    if h3 is None:
+        return None
+    try:
+        boundary = h3.cell_to_boundary(str(hex_id))
+    except Exception:
+        return None
+    ring = [[float(lng), float(lat)] for lat, lng in boundary]
+    if ring and ring[0] != ring[-1]:
+        ring.append(ring[0])
+    if not ring:
+        return None
+    return {"type": "Polygon", "coordinates": [ring]}
+
 
 @st.cache_data(show_spinner=False)
 def load_h3_display_geometries(path_str: str) -> dict[str, dict[str, Any]]:
@@ -17,7 +37,7 @@ def load_h3_display_geometries(path_str: str) -> dict[str, dict[str, Any]]:
         hex_id = properties.get("hex_id") or properties.get("h3_address")
         geometry = feature.get("geometry")
         if hex_id and geometry and geometry.get("coordinates"):
-            geometries[str(hex_id)] = geometry
+            geometries[str(hex_id)] = _full_h3_geometry(str(hex_id)) or geometry
     return geometries
 
 
