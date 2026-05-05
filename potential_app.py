@@ -1355,7 +1355,7 @@ def _solar_draft_config_from_session() -> dict[str, Any]:
 def _map_panel_controls(region: dict[str, Any], key_prefix: str, panel: Any | None = None) -> tuple[int, bool, float, bool, int]:
     available = _available_h3_resolutions(region)
     state_key = f"{key_prefix}_h3_resolution"
-    lock_state_key = f"{key_prefix}_lock_h3_resolution"
+    display_mode_key = f"{key_prefix}_h3_display_mode"
     preferred = _preferred_h3_resolution(region, 10)
     try:
         current_value = int(st.session_state.get(state_key, preferred))
@@ -1364,10 +1364,15 @@ def _map_panel_controls(region: dict[str, Any], key_prefix: str, panel: Any | No
     if current_value not in available:
         current_value = preferred
     st.session_state[state_key] = current_value
-    st.session_state.setdefault(lock_state_key, False)
+
+    display_modes = ["selected", "zoom_family"]
+    current_display_mode = str(st.session_state.get(display_mode_key, "selected"))
+    if current_display_mode not in display_modes:
+        current_display_mode = "selected"
+    st.session_state[display_mode_key] = current_display_mode
 
     if panel is not None:
-        with panel.expander("H3 resolution", expanded=False):
+        with panel.expander("H3-upplösning", expanded=False):
             h3_resolution = st.radio(
                 "H3-rollup",
                 options=available,
@@ -1376,21 +1381,33 @@ def _map_panel_controls(region: dict[str, Any], key_prefix: str, panel: Any | No
                 horizontal=False,
                 key=state_key,
             )
-            lock_resolution = st.checkbox(
-                "Lås vald upplösning",
-                value=bool(st.session_state.get(lock_state_key, False)),
-                key=lock_state_key,
-                help="När avstängd får kartan visa grövre aggregat vid utzoomning. När påslagen visas alltid exakt vald upplösning.",
+            zoom_family_min_resolution = min(_display_family_resolutions(region, int(h3_resolution)))
+            zoom_family_label = f"Utforska: zoomanpassad R{int(h3_resolution)}-R{int(zoom_family_min_resolution)}"
+            display_mode = st.radio(
+                "Hexvisning",
+                options=display_modes,
+                index=display_modes.index(current_display_mode),
+                format_func=lambda value: {
+                    "selected": "Snabb visning: vald upplösning",
+                    "zoom_family": zoom_family_label,
+                }.get(str(value), str(value)),
+                horizontal=False,
+                key=display_mode_key,
             )
-            st.markdown("[Learn more about H3 resolutions](https://h3geo.org/).")
+            zoom_family_enabled = display_mode == "zoom_family"
+            if zoom_family_enabled:
+                st.caption("Bygger flera H3-upplösningar och växlar lager efter zoomnivå. Användbart för granskning, men långsammare.")
+            else:
+                st.caption("Bygger bara vald H3-upplösning. Snabbast efter ändringar i vind- och solpotential.")
+            st.markdown("[Läs mer om H3-upplösningar](https://h3geo.org/).")
             if st.button("Återställ kartvy", key=f"{key_prefix}_reset_map_view"):
                 _request_browser_map_view_reset()
                 st.rerun()
     else:
         h3_resolution = current_value
-        lock_resolution = bool(st.session_state.get(lock_state_key, False))
+        zoom_family_enabled = current_display_mode == "zoom_family"
 
-    return int(h3_resolution), bool(lock_resolution), _current_opacity(key_prefix), True, _map_view_reset_token()
+    return int(h3_resolution), bool(zoom_family_enabled), _current_opacity(key_prefix), True, _map_view_reset_token()
 
 
 def _filter_frame_to_display_geometries(frame: pd.DataFrame, display_geometry_path: str | None) -> pd.DataFrame:
@@ -1406,17 +1423,17 @@ def _display_family_resolutions(region: dict[str, Any], preferred_resolution: in
     return available or [preferred]
 
 
-def _hex_display_rule(region: dict[str, Any], selected_resolution: int, lock_resolution: bool) -> dict[str, str]:
+def _hex_display_rule(region: dict[str, Any], selected_resolution: int, zoom_family_enabled: bool) -> dict[str, str]:
     selected = int(selected_resolution)
     family_resolutions = _display_family_resolutions(region, selected)
     min_resolution = min(int(value) for value in family_resolutions) if family_resolutions else selected
-    if bool(lock_resolution):
+    if not bool(zoom_family_enabled):
         return {
             "selected_label": f"R{selected}",
             "display_label": f"R{selected}",
-            "mode_label": "Låst",
-            "caption": f"Alla aktiva hexlager visas låsta i R{selected}.",
-            "item_note": f"Hexvisning låst till R{selected}.",
+            "mode_label": "Snabb",
+            "caption": f"Snabb visning: aktiva hexlager byggs bara i R{selected}.",
+            "item_note": f"Snabb hexvisning i R{selected}.",
         }
     if min_resolution == selected:
         return {
@@ -1440,13 +1457,23 @@ def _hex_display_rule(region: dict[str, Any], selected_resolution: int, lock_res
 def _hex_family_layers(
     region: dict[str, Any],
     selected_resolution: int,
-    lock_resolution: bool,
+    zoom_family_enabled: bool,
     family_key: str,
     control_name: str,
     build_layer: Any,
+    family_resolutions: list[int] | None = None,
 ) -> list[dict[str, Any]]:
     layers: list[dict[str, Any]] = []
-    for resolution in _display_family_resolutions(region, int(selected_resolution)):
+    resolutions = (
+        [int(value) for value in family_resolutions]
+        if family_resolutions is not None
+        else (
+            _display_family_resolutions(region, int(selected_resolution))
+            if bool(zoom_family_enabled)
+            else [int(selected_resolution)]
+        )
+    )
+    for resolution in resolutions:
         layer = build_layer(int(resolution))
         if layer is None:
             continue
@@ -1455,7 +1482,7 @@ def _hex_family_layers(
         layer["auto_resolution_group"] = str(family_key)
         layer["auto_resolution"] = int(resolution)
         layer["selected_resolution"] = int(selected_resolution)
-        layer["lock_selected_resolution"] = bool(lock_resolution)
+        layer["lock_selected_resolution"] = not bool(zoom_family_enabled)
         layers.append(layer)
     return layers
 
@@ -4344,14 +4371,14 @@ def _outside_lp_need_family_layers(
     wind_selected: pd.DataFrame,
     solar_selected: pd.DataFrame,
     selected_resolution: int,
-    lock_resolution: bool,
+    zoom_family_enabled: bool,
 ) -> list[dict[str, Any]]:
     if wind_selected.empty and solar_selected.empty:
         return []
     return _hex_family_layers(
         region,
         int(selected_resolution),
-        bool(lock_resolution),
+        bool(zoom_family_enabled),
         "outside_lp_need",
         OUTSIDE_LP_NEED_LAYER_LABEL,
         lambda resolution: _outside_lp_need_layer(
@@ -4475,14 +4502,14 @@ def _combined_establishment_family_layers(
     wind_selected: pd.DataFrame,
     solar_selected: pd.DataFrame,
     selected_resolution: int,
-    lock_resolution: bool,
+    zoom_family_enabled: bool,
 ) -> list[dict[str, Any]]:
     if wind_selected.empty and solar_selected.empty:
         return []
     return _hex_family_layers(
         region,
         int(selected_resolution),
-        bool(lock_resolution),
+        bool(zoom_family_enabled),
         "combined_establishment",
         COMBINED_ESTABLISHMENT_LAYER_LABEL,
         lambda resolution: _combined_establishment_layer(
@@ -4607,7 +4634,7 @@ def _wind_runtime_hex_layers(
     region: dict[str, Any],
     runtime_result: dict[str, Any],
     preferred_resolution: int,
-    lock_resolution: bool,
+    zoom_family_enabled: bool,
     family_key: str = "wind_runtime_share",
     control_name: str = WIND_POTENTIAL_HEX_LABEL,
 ) -> list[dict[str, Any]]:
@@ -4615,7 +4642,7 @@ def _wind_runtime_hex_layers(
     return _hex_family_layers(
         region,
         preferred,
-        bool(lock_resolution),
+        bool(zoom_family_enabled),
         family_key,
         control_name,
         lambda resolution: _wind_runtime_hex_layer(region, runtime_result, int(resolution), control_name),
@@ -4627,7 +4654,7 @@ def _wind_polygon_preview_state(
     ui_params: dict[str, float],
     layer_selection: dict[str, list[str]],
     target_resolution: int,
-    lock_resolution: bool,
+    zoom_family_enabled: bool,
     family_key: str = "wind_runtime_share",
     control_name: str = WIND_POTENTIAL_HEX_LABEL,
 ) -> dict[str, Any]:
@@ -5145,7 +5172,7 @@ def _unified_workspace_tab(
     _prime_solar_builder_state(solar_defaults, saved_solar_params)
     _prime_wind_builder_state(_default_wind_params(), _selected_wind_layers())
     h3_resolution = int(st.session_state.get("combined_h3_resolution", _preferred_h3_resolution(region, 10)))
-    lock_h3_resolution = bool(st.session_state.get("combined_lock_h3_resolution", False))
+    zoom_family_enabled = str(st.session_state.get("combined_h3_display_mode", "selected")) == "zoom_family"
     opacity = _current_opacity("combined")
     preserve_map_view = True
     map_reset_token = _map_view_reset_token()
@@ -5213,17 +5240,17 @@ def _unified_workspace_tab(
                     key="combined_landscape_factor",
                 )
 
-            h3_resolution, lock_h3_resolution, opacity, preserve_map_view, map_reset_token = _map_panel_controls(region, "combined", st)
+            h3_resolution, zoom_family_enabled, opacity, preserve_map_view, map_reset_token = _map_panel_controls(region, "combined", st)
 
             with st.expander(f"{WIND_LANDSCAPE_POTENTIAL_LABEL} ({active_wind_count})", expanded=False):
                 st.caption(
                     f"Bygg {WIND_LANDSCAPE_POTENTIAL_LABEL} direkt i samma vy. Potentialandelen beräknas alltid i R{WIND_RUNTIME_BASE_RESOLUTION} "
                     "och används här för vindpolygonen och den gemensamma etableringsytan."
                 )
-                if lock_h3_resolution:
-                    st.caption("Vald upplösning är låst. Kartan visar exakt den upplösningen även om den blir brusigare vid utzoomning.")
+                if zoom_family_enabled:
+                    st.caption("Utforskningsläge är aktivt. Hexlager kan växla till grövre H3-upplösningar när du zoomar ut.")
                 else:
-                    st.caption("Zoomanpassning är aktiv. Kartan kan visa grövre aggregat när du zoomar ut långt.")
+                    st.caption("Snabb visning är aktiv. Hexlager byggs bara i vald H3-upplösning.")
                 st.caption("Separat sparning behövs inte längre i den här arbetsvyn.")
                 wind_selected_layers, wind_ui_params, wind_controls_applied = _wind_group_controls("wind_unified", language=WIND_CONTROL_LANGUAGE)
                 show_user_wind = any(len(layer_ids) > 0 for layer_ids in normalize_group_layer_map(wind_selected_layers).values())
@@ -5350,7 +5377,7 @@ def _unified_workspace_tab(
             st.markdown(f"[IVL Svenska Miljöinstitutet]({IVL_PROVIDER_URL})")
 
     display_geometry_path = _h3_display_geometry_path(region, h3_resolution)
-    resolution_info = _hex_display_rule(region, h3_resolution, lock_h3_resolution)
+    resolution_info = _hex_display_rule(region, h3_resolution, zoom_family_enabled)
     st.session_state["solar_builder_params"] = solar_params
     st.session_state["wind_builder_params"] = wind_ui_params
 
@@ -5504,7 +5531,7 @@ def _unified_workspace_tab(
             wind_ui_params,
             wind_selected_layers,
             h3_resolution,
-            lock_h3_resolution,
+            zoom_family_enabled,
             family_key="user_wind_landscape_potential",
             control_name=WIND_POTENTIAL_POLYGON_LABEL,
         )
@@ -5532,13 +5559,13 @@ def _unified_workspace_tab(
                     "resolution_note": resolution_info["item_note"],
                 }
             )
-            if lock_h3_resolution:
+            if zoom_family_enabled:
                 unified_notes.append(
-                    f"{WIND_LANDSCAPE_POTENTIAL_LABEL} beräknas i R{WIND_RUNTIME_BASE_RESOLUTION}. Kartan visar polygonen och den gemensamma etableringsytan."
+                    f"{WIND_LANDSCAPE_POTENTIAL_LABEL} beräknas i R{WIND_RUNTIME_BASE_RESOLUTION}. Hexvisningen är zoomanpassad för granskning."
                 )
             else:
                 unified_notes.append(
-                    f"{WIND_LANDSCAPE_POTENTIAL_LABEL} beräknas i R{WIND_RUNTIME_BASE_RESOLUTION}. Kartan visar polygonen, medan hexberäkningen används internt för statistik och etableringsyta."
+                    f"{WIND_LANDSCAPE_POTENTIAL_LABEL} beräknas i R{WIND_RUNTIME_BASE_RESOLUTION}. Kartan visar snabb vald upplösning."
                 )
             unified_notes.append(
                 "Vindens interna hexberäkning används för att prioritera kärnområden i den gemensamma etableringsytan."
@@ -5606,7 +5633,7 @@ def _unified_workspace_tab(
             energy_model_state.get("proposal_frame", pd.DataFrame()),
             energy_model_state.get("solar_proposal_frame", pd.DataFrame()),
             h3_resolution,
-            lock_h3_resolution,
+            zoom_family_enabled,
         )
         if combined_establishment_layers:
             layers.extend(combined_establishment_layers)
@@ -5618,7 +5645,7 @@ def _unified_workspace_tab(
             energy_model_state.get("proposal_frame", pd.DataFrame()),
             energy_model_state.get("solar_proposal_frame", pd.DataFrame()),
             h3_resolution,
-            lock_h3_resolution,
+            zoom_family_enabled,
         )
         if outside_lp_need_layers:
             layers.extend(outside_lp_need_layers)
@@ -5636,7 +5663,7 @@ def _unified_workspace_tab(
                 _hex_family_layers(
                     region,
                     h3_resolution,
-                    lock_h3_resolution,
+                    zoom_family_enabled,
                     "landscape_types_hex",
                     "Landskapstyper",
                     lambda resolution: _landscape_type_layer(
@@ -5652,7 +5679,7 @@ def _unified_workspace_tab(
                 _hex_family_layers(
                     region,
                     h3_resolution,
-                    lock_h3_resolution,
+                    zoom_family_enabled,
                     "landscape_structures_hex",
                     "Landskapstrukturer",
                     lambda resolution: _landscape_layer(
@@ -5670,7 +5697,7 @@ def _unified_workspace_tab(
                 _hex_family_layers(
                     region,
                     h3_resolution,
-                    lock_h3_resolution,
+                    zoom_family_enabled,
                     f"landscape_factor_{selected_factor}",
                     "Landskapsfaktorer",
                     lambda resolution: _landscape_layer(
