@@ -150,6 +150,8 @@ SOLAR_PROTECTED_BUFFER_LABEL = f"Buffert: {PROTECTED_NATURE_LABEL}"
 WIND_SETTLEMENT_GROUP_ID = "settlement"
 WIND_SETTLEMENT_GROUP_LABEL = "Befolkning och bebyggelse"
 WIND_POPULATION_SOURCE_LAYER_ID = "population_points"
+WIND_CULTURE_GROUP_ID = "culture"
+WIND_CULTURE_GROUP_LABEL = "kulturmiljöer"
 SOLAR_PROTECTED_GROUP_ID = "protected"
 SOLAR_PROTECTED_LAYER_IDS = tuple(WIND_GROUP_LAYER_DEFAULTS.get(SOLAR_PROTECTED_GROUP_ID, []))
 DEFAULT_WIND_ESTABLISHMENT_LAYER_SELECTION = {
@@ -495,12 +497,22 @@ def _panel_shell() -> tuple[Any | None, Any | None]:
     left_col, left_toggle_col, right_toggle_col, right_col = st.columns([1, 0.05, 0.05, 1], gap="small")
     with left_toggle_col:
         st.markdown('<span id="left-panel-toggle-anchor"></span>', unsafe_allow_html=True)
-        if st.button("<" if left_open else ">", key="left_panel_edge_toggle", help="Visa/dölj kartlager"):
-            _toggle_panel(LEFT_PANEL_OPEN_KEY)
+        st.button(
+            "<" if left_open else ">",
+            key="left_panel_edge_toggle",
+            help="Visa/dölj kartlager",
+            on_click=_toggle_panel,
+            args=(LEFT_PANEL_OPEN_KEY,),
+        )
     with right_toggle_col:
         st.markdown('<span id="right-panel-toggle-anchor"></span>', unsafe_allow_html=True)
-        if st.button(">" if right_open else "<", key="right_panel_edge_toggle", help="Visa/dölj kontext"):
-            _toggle_panel(RIGHT_PANEL_OPEN_KEY)
+        st.button(
+            ">" if right_open else "<",
+            key="right_panel_edge_toggle",
+            help="Visa/dölj kontext",
+            on_click=_toggle_panel,
+            args=(RIGHT_PANEL_OPEN_KEY,),
+        )
 
     left_panel = None
     right_panel = None
@@ -577,8 +589,13 @@ def _workspace_shell() -> tuple[Any | None, Any, Any | None]:
     right_panel = None
     with right_col:
         st.markdown('<span id="right-panel-toggle-anchor"></span>', unsafe_allow_html=True)
-        if st.button(">" if right_open else "<", key="right_panel_edge_toggle", help="Visa/dolj kontext"):
-            _toggle_panel(RIGHT_PANEL_OPEN_KEY)
+        st.button(
+            ">" if right_open else "<",
+            key="right_panel_edge_toggle",
+            help="Visa/dölj kontext",
+            on_click=_toggle_panel,
+            args=(RIGHT_PANEL_OPEN_KEY,),
+        )
         if right_open:
             right_panel = st.container(border=True)
             with right_panel:
@@ -1226,6 +1243,8 @@ def _apply_layer_opacity_state(layers: list[dict[str, Any]], key_prefix: str) ->
         if str(spec.get("layer_kind", "")) == "hex":
             family_key = str(spec.get("opacity_family") or spec.get("control_name") or spec.get("name"))
             spec["fill_opacity"] = _hex_opacity_value(key_prefix, family_key, float(spec.get("fill_opacity", 0.78) or 0.78))
+            if str(spec.get("fill_opacity_property", "")) == "fill_opacity":
+                spec.pop("fill_opacity_property", None)
         adjusted_layers.append(spec)
     return adjusted_layers
 
@@ -1294,6 +1313,9 @@ def _apply_wind_layer_selection_state(layer_selection: dict[str, list[str]]) -> 
         st.session_state[_wind_control_key("layer", layer.id)] = bool(layer.id in selected.get(layer.group_id, []))
     st.session_state[_wind_control_key("group", WIND_SETTLEMENT_GROUP_ID)] = bool(
         selected.get(WIND_SETTLEMENT_GROUP_ID)
+    )
+    st.session_state[_wind_control_key("group", WIND_CULTURE_GROUP_ID)] = bool(
+        selected.get(WIND_CULTURE_GROUP_ID)
     )
     st.session_state[_wind_control_key("group", SOLAR_PROTECTED_GROUP_ID)] = bool(
         selected.get(SOLAR_PROTECTED_GROUP_ID)
@@ -3253,7 +3275,7 @@ def _apply_reference_default_wind_to_controls() -> None:
         selected_ids = set(selected.get(group_id, []))
         for layer_id in layer_ids:
             st.session_state[_wind_control_key("layer", layer_id)] = layer_id in selected_ids
-    for group_id in (WIND_SETTLEMENT_GROUP_ID, SOLAR_PROTECTED_GROUP_ID):
+    for group_id in (WIND_SETTLEMENT_GROUP_ID, WIND_CULTURE_GROUP_ID, SOLAR_PROTECTED_GROUP_ID):
         st.session_state[_wind_control_key("group", group_id)] = bool(selected.get(group_id))
 
 
@@ -3658,6 +3680,7 @@ def _wind_group_controls(
         for group in ordered_groups():
             is_protected_group = group.id == SOLAR_PROTECTED_GROUP_ID
             is_settlement_group = group.id == WIND_SETTLEMENT_GROUP_ID
+            is_culture_group = group.id == WIND_CULTURE_GROUP_ID
             if is_protected_group:
                 display_group_label = _protected_group_label()
             elif is_settlement_group:
@@ -3676,7 +3699,7 @@ def _wind_group_controls(
                 )
                 group_enabled = True
                 group_layers = [item for item in ordered_layers() if item.group_id == group.id]
-                if is_protected_group or is_settlement_group:
+                if is_protected_group or is_settlement_group or is_culture_group:
                     group_layer_keys = [
                         _wind_control_key("layer", layer.id)
                         for layer in group_layers
@@ -3688,21 +3711,25 @@ def _wind_group_controls(
                     group_help = (
                         "Befolkningspunkter används som standard. Övriga bebyggelselager kan slås på under avancerade inställningar."
                         if is_settlement_group
+                        else "Samlar valda kulturmiljölager till en gemensam restriktion i vindpotentialen."
+                        if is_culture_group
                         else "Samlar valda naturskyddslager till en gemensam restriktion i vindpotentialen."
                     )
+                    group_checkbox_label = (
+                        f"Använd {WIND_CULTURE_GROUP_LABEL}"
+                        if is_culture_group
+                        else f"Använd {display_group_label}"
+                    )
                     group_enabled = st.checkbox(
-                        f"Använd {display_group_label}",
+                        group_checkbox_label,
                         key=_wind_control_key("group", group.id),
                         help=group_help,
                     )
                 main_layers = group_layers
                 advanced_layers: list[Any] = []
-                if is_protected_group:
+                if is_protected_group or is_settlement_group or is_culture_group:
                     main_layers = []
                     advanced_layers = group_layers
-                elif is_settlement_group:
-                    main_layers = [layer for layer in group_layers if layer.id == WIND_POPULATION_SOURCE_LAYER_ID]
-                    advanced_layers = [layer for layer in group_layers if layer.id != WIND_POPULATION_SOURCE_LAYER_ID]
 
                 def render_layer_checkbox(layer: Any) -> None:
                     status = availability.get(layer.id, {})
@@ -3716,7 +3743,9 @@ def _wind_group_controls(
                     checked = st.checkbox(
                         layer_label(layer, language, layer.label),
                         key=_wind_control_key("layer", layer.id),
-                        disabled=(not ready) or ((is_protected_group or is_settlement_group) and not group_enabled),
+                        disabled=(not ready) or (
+                            (is_protected_group or is_settlement_group or is_culture_group) and not group_enabled
+                        ),
                         help=message,
                     )
                     if checked and ready and group_enabled:
@@ -3736,7 +3765,9 @@ def _wind_group_controls(
                     )
                     st.caption("Påverkar bara hur källager och grupplager visas i kartkontrollen, inte själva beräkningen.")
                     if is_settlement_group:
-                        st.caption("Välj fler bebyggelseproxyer om befolkningspunkter inte räcker för analysen.")
+                        st.caption("Befolkningspunkter är standard. Välj fler bebyggelseproxyer om de behövs för analysen.")
+                    elif is_culture_group:
+                        st.caption("Välj vilka kulturmiljölager som ska ingå i gruppen.")
                     elif is_protected_group:
                         st.caption(f"Välj vilka del-lager som ingår i {PROTECTED_NATURE_LABEL}.")
                     for layer in advanced_layers:
@@ -5194,6 +5225,19 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
     except Exception:
         h3_resolution = None
 
+    wind_twh = float(energy_model_state.get("wind_twh", 0.0) or 0.0)
+    solar_twh = float(energy_model_state.get("solar_twh", 0.0) or 0.0)
+    wind_share_pct = float(energy_model_state.get("wind_share_pct", 0.0) or 0.0)
+    solar_share_pct = float(energy_model_state.get("solar_share_pct", 0.0) or 0.0)
+    scenario_label = str(energy_model_state.get("scenario_label", energy_model_state.get("scenario", "-")) or "-")
+    source_label = str(energy_model_state.get("source_scenario_label", "-") or "-")
+    source_year = str(energy_model_state.get("source_year", "-") or "-")
+    energy_scale = float(energy_model_state.get("energy_scale", 1.0) or 1.0)
+    st.caption(
+        f"{scenario_label} · mix {wind_share_pct:.0f}% vind / {solar_share_pct:.0f}% sol · "
+        f"markintensitet {energy_model_state.get('area_scenario_label', '-')} · "
+        f"källa {source_label} {source_year}, skala {energy_scale:g}x"
+    )
     unit = st.radio(
         "Enhet",
         options=AREA_DISPLAY_UNITS,
@@ -5211,6 +5255,33 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
     left, right = st.columns(2)
     left.metric("Inom landskapets potential", _format_area_with_context(inside_total, unit, hex_area))
     right.metric("Ytbehov utanför", _format_area_with_context(outside_total, unit, hex_area))
+
+    wind_coverage_pct = (min(wind_selected, wind_need) / wind_need * 100.0) if wind_need > 0 else 0.0
+    solar_coverage_pct = (min(solar_selected, solar_need) / solar_need * 100.0) if solar_need > 0 else 0.0
+    energy_rows = [
+        {
+            "teknik": "Vind",
+            "energi": f"{wind_twh:.2f} TWh",
+            "ytbehov": _format_area_primary(wind_need, unit, hex_area),
+            "inom potential": _format_area_primary(wind_inside, unit, hex_area),
+            "utanför": _format_area_primary(wind_outside, unit, hex_area),
+            "kvar": _format_area_primary(wind_unmet, unit, hex_area),
+            "täckning": f"{wind_coverage_pct:.1f}%",
+        },
+        {
+            "teknik": "Sol",
+            "energi": f"{solar_twh:.2f} TWh",
+            "ytbehov": _format_area_primary(solar_need, unit, hex_area),
+            "inom potential": _format_area_primary(solar_inside, unit, hex_area),
+            "utanför": _format_area_primary(solar_outside, unit, hex_area),
+            "kvar": _format_area_primary(solar_unmet, unit, hex_area),
+            "täckning": f"{solar_coverage_pct:.1f}%",
+        },
+    ]
+    st.dataframe(pd.DataFrame(energy_rows), width="stretch", hide_index=True, height=112)
+    st.caption(
+        f"Ytbalansen bygger på samma vind- och solurval som {COMBINED_ESTABLISHMENT_LAYER_LABEL} i kartan."
+    )
     if outside_total > 1e-6:
         st.warning(f"{OUTSIDE_LP_NEED_LAYER_LABEL}: ca {_format_area_with_context(outside_total, unit, hex_area)} behöver placeras utanför landskapets potential.")
     elif total_need > 0:
@@ -5247,24 +5318,55 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
     if isinstance(shortage_stats, dict) and outside_total > 1e-6:
         _render_shortage_hex_stack_card(shortage_stats, unit)
 
-    with st.expander("Detaljer etableringsyta", expanded=False):
-        detail_rows = [
-            {
-                "teknik": "Vind",
-                "behov": _format_area_with_context(wind_need, unit, hex_area),
-                "inom landskapets potential": _format_area_with_context(wind_inside, unit, hex_area),
-                "utanför": _format_area_with_context(wind_outside, unit, hex_area),
-                "kvar": _format_area_with_context(wind_unmet, unit, hex_area),
-            },
-            {
-                "teknik": "Sol",
-                "behov": _format_area_with_context(solar_need, unit, hex_area),
-                "inom landskapets potential": _format_area_with_context(solar_inside, unit, hex_area),
-                "utanför": _format_area_with_context(solar_outside, unit, hex_area),
-                "kvar": _format_area_with_context(solar_unmet, unit, hex_area),
-            },
-        ]
-        st.dataframe(pd.DataFrame(detail_rows), width="stretch", hide_index=True)
+    with st.expander("Urval och ytdetaljer", expanded=False):
+        solar_v1_stats = energy_model_state.get("solar_v1_stats")
+        if isinstance(solar_v1_stats, dict):
+            small_cols = st.columns(3)
+            small_cols[0].metric(f"{SOLAR_SMALL_SCALE_LABEL}: yta", f"{float(solar_v1_stats.get('total_area_km2', 0.0) or 0.0):.2f} km²")
+            small_cols[1].metric("Täcker solbehov", f"{float(solar_v1_stats.get('covered_share_pct', 0.0) or 0.0):.1f}%")
+            small_cols[2].metric("Kvar solbehov", f"{float(solar_v1_stats.get('remaining_area_km2', 0.0) or 0.0):.2f} km²")
+        if proposal_stats:
+            selected_twh = float(proposal_stats.get("selected_twh", 0.0) or 0.0)
+            if selected_twh > 0:
+                st.metric("Fördelad vindproduktion", f"{selected_twh:.2f} TWh")
+            needed_hex = int(proposal_stats.get("needed_hex", 0) or 0)
+            selected_count = int(proposal_stats.get("selected_hex_count", 0) or 0)
+            if selected_count <= 0:
+                selected_count = len(energy_model_state.get("proposal_frame", pd.DataFrame()))
+            detail_cols = st.columns(3)
+            detail_cols[0].metric("Area per hex", f"{hex_area:.4f} km²")
+            detail_cols[1].metric("Hela hex behövs", f"{needed_hex:,}".replace(",", " "))
+            detail_cols[2].metric("Valda vindhex", f"{selected_count:,}".replace(",", " "))
+            available_hex = int(proposal_stats.get("available_candidate_hex", 0) or 0)
+            available_area = float(proposal_stats.get("available_candidate_area_km2", 0.0) or 0.0)
+            primary_candidates = int(proposal_stats.get("primary_candidate_hex", 0) or 0)
+            extension_candidates = int(proposal_stats.get("extension_candidate_hex", 0) or 0)
+            selected_primary = int(proposal_stats.get("selected_primary_hex", 0) or 0)
+            selected_extension = int(proposal_stats.get("selected_extension_hex", 0) or 0)
+            min_share = float(proposal_stats.get("min_share_pct", energy_model_state.get("auto_min_potential_share_pct", 65.0)) or 65.0)
+            mean_share = float(proposal_stats.get("mean_selected_share_pct", 0.0) or 0.0)
+            selected_potential_area = float(proposal_stats.get("selected_potential_area_km2", 0.0) or 0.0)
+            selected_hex_footprint = float(proposal_stats.get("selected_hex_footprint_km2", 0.0) or 0.0)
+            st.caption(
+                f"Vindurvalet innehåller {selected_potential_area:.2f} km² potentiell yta inom "
+                f"{selected_hex_footprint:.2f} km² hexavtryck. Valbara LP-hex: "
+                f"{available_hex:,} med {available_area:.2f} km² potentiell yta; medelandel i urvalet {mean_share:.1f}%.".replace(",", " ")
+            )
+            st.caption(
+                f"Urvalsordning: först kärn-LP med LP ≥ {min_share:.0f}% "
+                f"({selected_primary:,}/{primary_candidates:,} valda), sedan kompletterande LP "
+                f"({selected_extension:,}/{extension_candidates:,} valda).".replace(",", " ")
+            )
+            if selected_count > needed_hex:
+                st.caption("Area-share gör att fler hex behövs än den teoretiska jämförelsen med helt fyllda hex.")
+            if float(proposal_stats.get("unmet_area_km2", 0.0) or 0.0) > 0:
+                st.warning(
+                    "Lämplig kärnyta räcker inte. Planeringsval behövs: sänk potentialkrav, släpp in kantzoner, "
+                    "ändra restriktioner, välj ett lägre framtidsscenario eller minska area demand."
+                )
+        warning_table = energy_model_state.get("area_warnings")
+        if isinstance(warning_table, pd.DataFrame) and not warning_table.empty:
+            st.caption("AreaDemand har datakvalitetsvarningar. Se Energimodellering-panelen för detaljer.")
         st.caption(
             f"{COMBINED_ESTABLISHMENT_LAYER_LABEL} visar vind och sol tillsammans. "
             f"{OUTSIDE_LP_NEED_LAYER_LABEL} visar den extra etableringsyta som krävs när scenariot inte ryms."
@@ -6218,7 +6320,6 @@ def _unified_workspace_tab(
             },
             scenario_state,
         )
-        _render_energy_model_summary(energy_model_state)
         _render_performance_log(performance_log)
         with st.expander("Aktiva beräkningar", expanded=False):
             if show_user_solar:
