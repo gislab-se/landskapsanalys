@@ -119,7 +119,7 @@ def landscape_type_display_colors(manifest: dict[str, Any] | None = None) -> dic
 
 PAGE_TITLE = "Sol- och vindpotential"
 MAP_VIEW_RESET_TOKEN_KEY = "potential_map_view_reset_token"
-MAP_STATE_VERSION = "establishment-start-v3"
+MAP_STATE_VERSION = "establishment-start-v4"
 LEFT_PANEL_OPEN_KEY = "potential_left_panel_open"
 RIGHT_PANEL_OPEN_KEY = "potential_right_panel_open"
 REGION_SELECT_KEY = "potential_selected_region_id"
@@ -127,7 +127,7 @@ WIND_LAYER_SELECTION_KEY = "wind_builder_selected_layers"
 WIND_RUNTIME_OVERLAY_KEY = "wind_builder_runtime_overlay_enabled"
 SOLAR_APPLIED_CONFIG_KEY = "solar_applied_config"
 START_DEFAULT_VERSION_KEY = "potential_start_default_version"
-START_DEFAULT_VERSION = "establishment_area_default_v3"
+START_DEFAULT_VERSION = "establishment_area_default_v4"
 WIND_CONTROL_LANGUAGE = "sv"
 WIND_RUNTIME_BASE_RESOLUTION = 10
 WIND_LANDSCAPE_POTENTIAL_LABEL = "Landskapspotential Vind"
@@ -147,6 +147,8 @@ SOLAR_POPULATION_BUFFER_LABEL = "Buffert: Befolkningspunkter"
 PROTECTED_NATURE_LABEL = "Skyddad natur"
 SOLAR_PROTECTED_SOURCE_LABEL = f"Källa: {PROTECTED_NATURE_LABEL}"
 SOLAR_PROTECTED_BUFFER_LABEL = f"Buffert: {PROTECTED_NATURE_LABEL}"
+WIND_SETTLEMENT_GROUP_ID = "settlement"
+WIND_SETTLEMENT_GROUP_LABEL = "Befolkning och bebyggelse"
 WIND_POPULATION_SOURCE_LAYER_ID = "population_points"
 SOLAR_PROTECTED_GROUP_ID = "protected"
 SOLAR_PROTECTED_LAYER_IDS = tuple(WIND_GROUP_LAYER_DEFAULTS.get(SOLAR_PROTECTED_GROUP_ID, []))
@@ -155,7 +157,7 @@ DEFAULT_WIND_ESTABLISHMENT_LAYER_SELECTION = {
 }
 DEFAULT_WIND_ESTABLISHMENT_LAYER_SELECTION.update(
     {
-        "settlement": ["population_points"],
+        WIND_SETTLEMENT_GROUP_ID: [WIND_POPULATION_SOURCE_LAYER_ID],
         "transport": ["roads_large"],
         "protected": list(SOLAR_PROTECTED_LAYER_IDS),
         "aviation_approach": ["aviation_approach_zones"],
@@ -495,12 +497,10 @@ def _panel_shell() -> tuple[Any | None, Any | None]:
         st.markdown('<span id="left-panel-toggle-anchor"></span>', unsafe_allow_html=True)
         if st.button("<" if left_open else ">", key="left_panel_edge_toggle", help="Visa/dölj kartlager"):
             _toggle_panel(LEFT_PANEL_OPEN_KEY)
-            st.rerun()
     with right_toggle_col:
         st.markdown('<span id="right-panel-toggle-anchor"></span>', unsafe_allow_html=True)
         if st.button(">" if right_open else "<", key="right_panel_edge_toggle", help="Visa/dölj kontext"):
             _toggle_panel(RIGHT_PANEL_OPEN_KEY)
-            st.rerun()
 
     left_panel = None
     right_panel = None
@@ -579,7 +579,6 @@ def _workspace_shell() -> tuple[Any | None, Any, Any | None]:
         st.markdown('<span id="right-panel-toggle-anchor"></span>', unsafe_allow_html=True)
         if st.button(">" if right_open else "<", key="right_panel_edge_toggle", help="Visa/dolj kontext"):
             _toggle_panel(RIGHT_PANEL_OPEN_KEY)
-            st.rerun()
         if right_open:
             right_panel = st.container(border=True)
             with right_panel:
@@ -1156,7 +1155,7 @@ def _current_opacity(key_prefix: str) -> float:
         opacity = float(st.session_state.get(_opacity_key(key_prefix), 0.78))
     except Exception:
         opacity = 0.78
-    return max(0.15, min(1.0, opacity))
+    return max(0.1, min(0.9, opacity))
 
 
 def _hex_opacity_key(key_prefix: str, opacity_key: str) -> str:
@@ -1169,20 +1168,20 @@ def _hex_opacity_value(key_prefix: str, opacity_key: str, default: float = 0.78)
         opacity = float(st.session_state.get(_hex_opacity_key(key_prefix, opacity_key), default))
     except Exception:
         opacity = default
-    return max(0.15, min(1.0, opacity))
+    return max(0.1, min(0.9, opacity))
 
 
 def _render_opacity_control(key_prefix: str) -> None:
+    st.session_state[_opacity_key(key_prefix)] = _current_opacity(key_prefix)
     control_left, control_center, control_right = st.columns([0.22, 0.56, 0.22], gap="small")
     with control_center:
         st.slider(
             "Opacitet polygoner och linjer",
-            min_value=0.15,
-            max_value=1.0,
-            value=0.78,
+            min_value=0.1,
+            max_value=0.9,
             step=0.05,
             key=_opacity_key(key_prefix),
-            help="Styr genomskinligheten för aktiva polygon- och linjelager i kartan.",
+            help="0.1 är nästan genomskinligt. 0.9 är nästan helt fyllt.",
         )
 
 
@@ -1207,14 +1206,15 @@ def _hex_opacity_controls(layers: list[dict[str, Any]], key_prefix: str) -> list
 
     st.caption("Opacitet hexlager")
     for family in families.values():
+        control_key = _hex_opacity_key(key_prefix, family["key"])
+        st.session_state[control_key] = _hex_opacity_value(key_prefix, family["key"], family["default"])
         st.slider(
             family["label"],
-            min_value=0.15,
-            max_value=1.0,
-            value=max(0.15, min(1.0, family["default"])),
+            min_value=0.1,
+            max_value=0.9,
             step=0.05,
-            key=_hex_opacity_key(key_prefix, family["key"]),
-            help=f"Styr opaciteten för hexlagret {family['label']}.",
+            key=control_key,
+            help=f"Styr opaciteten för hexlagret {family['label']}. 0.1 är nästan genomskinligt, 0.9 nästan helt fyllt.",
         )
     return list(families.values())
 
@@ -1283,22 +1283,30 @@ def _protected_group_label() -> str:
     return PROTECTED_NATURE_LABEL
 
 
+def _settlement_group_label() -> str:
+    return WIND_SETTLEMENT_GROUP_LABEL
+
+
 def _apply_wind_layer_selection_state(layer_selection: dict[str, list[str]]) -> dict[str, list[str]]:
     selected = normalize_group_layer_map(layer_selection)
     st.session_state[WIND_LAYER_SELECTION_KEY] = selected
     for layer in ordered_layers():
         st.session_state[_wind_control_key("layer", layer.id)] = bool(layer.id in selected.get(layer.group_id, []))
+    st.session_state[_wind_control_key("group", WIND_SETTLEMENT_GROUP_ID)] = bool(
+        selected.get(WIND_SETTLEMENT_GROUP_ID)
+    )
     st.session_state[_wind_control_key("group", SOLAR_PROTECTED_GROUP_ID)] = bool(
         selected.get(SOLAR_PROTECTED_GROUP_ID)
     )
     return selected
 
 
-def _ensure_default_start_state() -> None:
+def _ensure_default_start_state(region: dict[str, Any]) -> None:
     if st.session_state.get(START_DEFAULT_VERSION_KEY) == START_DEFAULT_VERSION:
         return
     _apply_wind_layer_selection_state(_default_wind_layer_selection())
     st.session_state[SOLAR_APPLIED_CONFIG_KEY] = dict(DEFAULT_SOLAR_APPLIED_CONFIG)
+    st.session_state["combined_h3_resolution"] = _preferred_h3_resolution(region, 9)
     st.session_state["show_landscape_v10"] = False
     st.session_state["show_landscape_cluster"] = False
     st.session_state["show_landscape_factor"] = False
@@ -1452,7 +1460,7 @@ def _map_panel_controls(region: dict[str, Any], key_prefix: str, panel: Any | No
     available = _available_h3_resolutions(region)
     state_key = f"{key_prefix}_h3_resolution"
     display_mode_key = f"{key_prefix}_h3_display_mode"
-    preferred = _preferred_h3_resolution(region, 10)
+    preferred = _preferred_h3_resolution(region, 9)
     try:
         current_value = int(st.session_state.get(state_key, preferred))
     except Exception:
@@ -3245,6 +3253,8 @@ def _apply_reference_default_wind_to_controls() -> None:
         selected_ids = set(selected.get(group_id, []))
         for layer_id in layer_ids:
             st.session_state[_wind_control_key("layer", layer_id)] = layer_id in selected_ids
+    for group_id in (WIND_SETTLEMENT_GROUP_ID, SOLAR_PROTECTED_GROUP_ID):
+        st.session_state[_wind_control_key("group", group_id)] = bool(selected.get(group_id))
 
 
 def _wind_score_params_from_ui(ui_params: dict[str, float]) -> dict[str, float]:
@@ -3646,7 +3656,14 @@ def _wind_group_controls(
     with st.form(f"{widget_prefix}_group_controls", clear_on_submit=False):
         st.caption(ui_text("apply_hint", language))
         for group in ordered_groups():
-            display_group_label = _protected_group_label() if group.id == SOLAR_PROTECTED_GROUP_ID else group_label(group, language, group.label)
+            is_protected_group = group.id == SOLAR_PROTECTED_GROUP_ID
+            is_settlement_group = group.id == WIND_SETTLEMENT_GROUP_ID
+            if is_protected_group:
+                display_group_label = _protected_group_label()
+            elif is_settlement_group:
+                display_group_label = _settlement_group_label()
+            else:
+                display_group_label = group_label(group, language, group.label)
             with st.expander(display_group_label, expanded=group.id in {"settlement", "transport", "electrical"}):
                 st.caption(group_interpretation(group, language, group.interpretation))
                 st.slider(
@@ -3657,53 +3674,74 @@ def _wind_group_controls(
                     key=_wind_control_key("analysis", group.id),
                     help=ui_text("analysis_slider_help", language),
                 )
-                st.slider(
-                    ui_text("display_blend", language),
-                    min_value=0,
-                    max_value=100,
-                    step=5,
-                    key=_wind_control_key("blend", group.id),
-                    help=ui_text("display_blend_help", language),
-                )
                 group_enabled = True
-                if group.id == SOLAR_PROTECTED_GROUP_ID:
+                group_layers = [item for item in ordered_layers() if item.group_id == group.id]
+                if is_protected_group or is_settlement_group:
                     group_layer_keys = [
                         _wind_control_key("layer", layer.id)
-                        for layer in ordered_layers()
-                        if layer.group_id == group.id
+                        for layer in group_layers
                     ]
                     st.session_state.setdefault(
                         _wind_control_key("group", group.id),
                         any(bool(st.session_state.get(key, False)) for key in group_layer_keys),
                     )
-                    group_enabled = st.checkbox(
-                        f"Använd {PROTECTED_NATURE_LABEL}",
-                        key=_wind_control_key("group", group.id),
-                        help="Samlar valda naturskyddslager till en gemensam restriktion i vindpotentialen.",
+                    group_help = (
+                        "Befolkningspunkter används som standard. Övriga bebyggelselager kan slås på under avancerade inställningar."
+                        if is_settlement_group
+                        else "Samlar valda naturskyddslager till en gemensam restriktion i vindpotentialen."
                     )
-                    layer_container = st.expander("Avancerade inställningar", expanded=False)
-                else:
-                    layer_container = st.container()
-                with layer_container:
-                    if group.id == SOLAR_PROTECTED_GROUP_ID:
+                    group_enabled = st.checkbox(
+                        f"Använd {display_group_label}",
+                        key=_wind_control_key("group", group.id),
+                        help=group_help,
+                    )
+                main_layers = group_layers
+                advanced_layers: list[Any] = []
+                if is_protected_group:
+                    main_layers = []
+                    advanced_layers = group_layers
+                elif is_settlement_group:
+                    main_layers = [layer for layer in group_layers if layer.id == WIND_POPULATION_SOURCE_LAYER_ID]
+                    advanced_layers = [layer for layer in group_layers if layer.id != WIND_POPULATION_SOURCE_LAYER_ID]
+
+                def render_layer_checkbox(layer: Any) -> None:
+                    status = availability.get(layer.id, {})
+                    ready = (
+                        bool(status.get("geojson_ready"))
+                        and bool(status.get("source_exists"))
+                        and int(status.get("feature_count", 0) or 0) > 0
+                        and str(status.get("status", "")) == "ok"
+                    )
+                    message = str(status.get("message", "") or layer_note(layer, language, layer.note) or "")
+                    checked = st.checkbox(
+                        layer_label(layer, language, layer.label),
+                        key=_wind_control_key("layer", layer.id),
+                        disabled=(not ready) or ((is_protected_group or is_settlement_group) and not group_enabled),
+                        help=message,
+                    )
+                    if checked and ready and group_enabled:
+                        selected[group.id].append(layer.id)
+
+                for layer in main_layers:
+                    render_layer_checkbox(layer)
+
+                with st.expander("Avancerade inställningar", expanded=False):
+                    st.slider(
+                        ui_text("display_blend", language),
+                        min_value=0,
+                        max_value=100,
+                        step=5,
+                        key=_wind_control_key("blend", group.id),
+                        help=ui_text("display_blend_help", language),
+                    )
+                    st.caption("Påverkar bara hur källager och grupplager visas i kartkontrollen, inte själva beräkningen.")
+                    if is_settlement_group:
+                        st.caption("Välj fler bebyggelseproxyer om befolkningspunkter inte räcker för analysen.")
+                    elif is_protected_group:
                         st.caption(f"Välj vilka del-lager som ingår i {PROTECTED_NATURE_LABEL}.")
-                    for layer in [item for item in ordered_layers() if item.group_id == group.id]:
-                        status = availability.get(layer.id, {})
-                        ready = (
-                            bool(status.get("geojson_ready"))
-                            and bool(status.get("source_exists"))
-                            and int(status.get("feature_count", 0) or 0) > 0
-                            and str(status.get("status", "")) == "ok"
-                        )
-                        message = str(status.get("message", "") or layer_note(layer, language, layer.note) or "")
-                        checked = st.checkbox(
-                            layer_label(layer, language, layer.label),
-                            key=_wind_control_key("layer", layer.id),
-                            disabled=(not ready) or (group.id == SOLAR_PROTECTED_GROUP_ID and not group_enabled),
-                            help=message,
-                        )
-                        if checked and ready and group_enabled:
-                            selected[group.id].append(layer.id)
+                    for layer in advanced_layers:
+                        render_layer_checkbox(layer)
+
                 if not selected[group.id]:
                     st.caption(ui_text("group_inactive", language))
         applied = st.form_submit_button(ui_text("apply_changes", language), type="primary", width="stretch")
@@ -3857,6 +3895,8 @@ def _wind_polygon_source_layers(
         translated_group_label = GROUP_LABELS.get(group_id, group_meta.label if group_meta is not None else group_id)
         if group_meta is not None:
             translated_group_label = group_label(group_meta, WIND_CONTROL_LANGUAGE, group_meta.label)
+        if group_id == WIND_SETTLEMENT_GROUP_ID:
+            translated_group_label = WIND_SETTLEMENT_GROUP_LABEL
         if group_id == SOLAR_PROTECTED_GROUP_ID:
             translated_group_label = PROTECTED_NATURE_LABEL
             protected_features: list[dict[str, Any]] = []
@@ -3946,12 +3986,18 @@ def _wind_polygon_group_layers(runtime_result: dict[str, Any]) -> list[dict[str,
         analysis_value = int(round(float(runtime_group.get("analysis_value_m", 0.0) or 0.0)))
         buffer_layer_id = (
             f"{WIND_POPULATION_SOURCE_LAYER_ID}:buffer:{analysis_value}"
-            if group.id == "settlement" and selected_sources.strip().lower() == "population points"
+            if group.id == WIND_SETTLEMENT_GROUP_ID and selected_sources.strip().lower() == "population points"
             else f"{group.id}:buffer:{analysis_value}"
         )
         map_layers.append(
             {
-                "name": f"Buffert: {_protected_group_label() if group.id == SOLAR_PROTECTED_GROUP_ID else group_label(groups[group.id], WIND_CONTROL_LANGUAGE, groups[group.id].label)}",
+                "name": (
+                    f"Buffert: {_protected_group_label()}"
+                    if group.id == SOLAR_PROTECTED_GROUP_ID
+                    else f"Buffert: {_settlement_group_label()}"
+                    if group.id == WIND_SETTLEMENT_GROUP_ID
+                    else f"Buffert: {group_label(groups[group.id], WIND_CONTROL_LANGUAGE, groups[group.id].label)}"
+                ),
                 "buffer_layer_id": buffer_layer_id,
                 "feature_collection": runtime_group["geojson"],
                 "fill_property": "fill",
@@ -5528,13 +5574,13 @@ def _unified_workspace_tab(
     potential_manifest = context["potential_manifest"]
     solar_rules = context["solar_rules"]
     factors = factor_columns(landscape_manifest, load_factor_scores(landscape_manifest))
-    _ensure_default_start_state()
+    _ensure_default_start_state(region)
 
     saved_solar_params = _saved_solar_params()
     solar_defaults = _default_solar_params(solar_rules)
     _prime_solar_builder_state(solar_defaults, saved_solar_params)
     _prime_wind_builder_state(_default_wind_params(), _selected_wind_layers())
-    h3_resolution = int(st.session_state.get("combined_h3_resolution", _preferred_h3_resolution(region, 10)))
+    h3_resolution = int(st.session_state.get("combined_h3_resolution", _preferred_h3_resolution(region, 9)))
     zoom_family_enabled = str(st.session_state.get("combined_h3_display_mode", "selected")) == "zoom_family"
     opacity = _current_opacity("combined")
     preserve_map_view = True
@@ -6219,8 +6265,8 @@ def main() -> None:
     scenario_state = _scenario_state(region, None)
     context = _load_context(region)
 
-    st.session_state.setdefault("combined_h3_resolution", _preferred_h3_resolution(region, 10))
-    h3_resolution = int(st.session_state.get("combined_h3_resolution", _preferred_h3_resolution(region, 10)))
+    st.session_state.setdefault("combined_h3_resolution", _preferred_h3_resolution(region, 9))
+    h3_resolution = int(st.session_state.get("combined_h3_resolution", _preferred_h3_resolution(region, 9)))
     with main_panel:
         _workspace_header(region, scenario_state, h3_resolution)
         _unified_workspace_tab(region, scenario_state, context, left_panel, right_panel)
