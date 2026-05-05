@@ -37,6 +37,7 @@ def build_landscape_map_html(
     .map-legend-title {{ font-weight: 700; margin-bottom: 6px; }}
     .map-legend-row {{ display: flex; align-items: center; gap: 6px; margin: 4px 0; }}
     .map-legend-swatch {{ width: 14px; height: 14px; border: 1px solid rgba(0,0,0,0.22); flex: 0 0 auto; }}
+    .map-legend-swatch.circle {{ width: 10px; height: 10px; border-radius: 999px; margin: 2px; }}
   </style>
 </head>
 <body>
@@ -102,7 +103,8 @@ def build_landscape_map_html(
         const div = L.DomUtil.create('div', 'map-legend');
         div.innerHTML = '<div class="map-legend-title">' + mapTitle + '</div>' +
           legendItems.map(function(item) {{
-            return '<div class="map-legend-row"><span class="map-legend-swatch" style="background:' + item.color + '"></span><span>' + item.label + '</span></div>';
+            const shapeClass = item.shape === 'circle' ? ' circle' : '';
+            return '<div class="map-legend-row"><span class="map-legend-swatch' + shapeClass + '" style="background:' + item.color + '"></span><span>' + item.label + '</span></div>';
           }}).join('');
         L.DomEvent.disableClickPropagation(div);
         return div;
@@ -164,6 +166,7 @@ def build_layered_hex_map_html(
     .map-legend-section {{ font-weight: 700; margin: 7px 0 4px; }}
     .map-legend-row {{ display: flex; align-items: center; gap: 6px; margin: 4px 0; }}
     .map-legend-swatch {{ width: 14px; height: 14px; border: 1px solid rgba(0,0,0,0.22); flex: 0 0 auto; }}
+    .map-legend-swatch.circle {{ width: 10px; height: 10px; border-radius: 999px; margin: 2px; }}
   </style>
 </head>
 <body>
@@ -294,6 +297,16 @@ def build_layered_hex_map_html(
       return Math.max(0.0, Math.min(1.0, parsed));
     }}
 
+    function firstFiniteNumber(values, fallbackValue) {{
+      for (const value of values) {{
+        const parsed = Number(value);
+        if (Number.isFinite(parsed)) {{
+          return parsed;
+        }}
+      }}
+      return fallbackValue;
+    }}
+
     function layerFillOpacity(spec, feature) {{
       const props = (feature && feature.properties) || {{}};
       const defaultOpacity = spec.layer_kind === 'vector' ? 1.0 : 0.78;
@@ -354,17 +367,25 @@ def build_layered_hex_map_html(
       return strokeWeight > 0.01 && strokeOpacity > 0.01;
     }}
 
-    function layerPointRadiusMeters(spec, feature) {{
+    function layerPointRadiusMetersAtScale(spec, feature) {{
       const props = (feature && feature.properties) || {{}};
-      const featureRadius = props.point_radius_m != null ? Number(props.point_radius_m) : NaN;
-      if (Number.isFinite(featureRadius) && featureRadius > 0) {{
-        return featureRadius;
+      const radius = firstFiniteNumber([props.point_radius_m_at_scale, spec.point_radius_m_at_scale], NaN);
+      return Number.isFinite(radius) && radius > 0 ? radius : null;
+    }}
+
+    function layerPointRadiusPixels(spec, feature, latlng) {{
+      const props = (feature && feature.properties) || {{}};
+      const fallbackRadius = firstFiniteNumber([props.point_radius, spec.point_radius], 4.0);
+      const radiusMeters = layerPointRadiusMetersAtScale(spec, feature);
+      if (radiusMeters === null) {{
+        return fallbackRadius;
       }}
-      const specRadius = spec.point_radius_m != null ? Number(spec.point_radius_m) : NaN;
-      if (Number.isFinite(specRadius) && specRadius > 0) {{
-        return specRadius;
-      }}
-      return null;
+      const lat = Number.isFinite(Number(latlng && latlng.lat)) ? Number(latlng.lat) : Number(map.getCenter().lat);
+      const cosLat = Math.max(0.05, Math.cos(lat * Math.PI / 180.0));
+      const metersPerPixel = Math.max(0.0001, (40075016.686 * cosLat) / Math.pow(2, map.getZoom() + 8));
+      const minRadius = Math.max(0.5, firstFiniteNumber([props.point_min_radius, spec.point_min_radius], 2.2));
+      const maxRadius = Math.max(minRadius, firstFiniteNumber([props.point_max_radius, spec.point_max_radius], 4.6));
+      return Math.max(minRadius, Math.min(maxRadius, radiusMeters / metersPerPixel));
     }}
 
     function popupHtml(spec, feature) {{
@@ -380,6 +401,8 @@ def build_layered_hex_map_html(
     const overlays = {{}};
     const renderedLayers = [];
     const layerRecords = [];
+    const legendSourceRecords = [];
+    const scalablePointMarkers = [];
     const autoFamilies = {{}};
 
     function buildGeoJsonLayer(spec, index) {{
@@ -410,8 +433,8 @@ def build_layered_hex_map_html(
           const strokeWeight = layerStrokeWeight(spec, feature, true);
           const strokeOpacity = layerStrokeOpacity(spec, fillOpacity);
           const strokeEnabled = layerStrokeEnabled(spec, strokeWeight, strokeOpacity);
-          const radiusMeters = layerPointRadiusMeters(spec, feature);
-          const pointOptions = {{
+          const marker = L.circleMarker(latlng, {{
+            radius: layerPointRadiusPixels(spec, feature, latlng),
             pane: paneName,
             stroke: strokeEnabled,
             color: layerStrokeColor(spec, feature),
@@ -420,13 +443,11 @@ def build_layered_hex_map_html(
             dashArray: spec.dash_array || null,
             fillColor: layerFillColor(spec, feature),
             fillOpacity: Math.max(fillOpacity, 0.22)
-          }};
-          if (radiusMeters !== null) {{
-            pointOptions.radius = radiusMeters;
-            return L.circle(latlng, pointOptions);
+          }});
+          if (layerPointRadiusMetersAtScale(spec, feature) !== null) {{
+            scalablePointMarkers.push({{ marker, spec, feature, latlng }});
           }}
-          pointOptions.radius = Number.isFinite(Number(spec.point_radius)) ? Number(spec.point_radius) : 4.0;
-          return L.circleMarker(latlng, pointOptions);
+          return marker;
         }},
         onEachFeature: function(feature, itemLayer) {{
           const props = (feature && feature.properties) || {{}};
@@ -443,9 +464,18 @@ def build_layered_hex_map_html(
       }});
     }}
 
+    function refreshScalablePointMarkers() {{
+      scalablePointMarkers.forEach(function(record) {{
+        record.marker.setRadius(layerPointRadiusPixels(record.spec, record.feature, record.latlng));
+      }});
+    }}
+
     layerSpecs.forEach(function(spec, index) {{
       const layer = buildGeoJsonLayer(spec, index);
       renderedLayers.push(layer);
+      if (spec.legend_items && spec.legend_items.length > 0) {{
+        legendSourceRecords.push({{ spec, layer }});
+      }}
 
       const autoGroupId = spec.auto_resolution_group || '';
       if (autoGroupId) {{
@@ -603,6 +633,7 @@ def build_layered_hex_map_html(
         }}
       }});
       storeOverlayVisibility();
+      updateLegendContent();
     }});
     map.on('overlayremove', function(event) {{
       autoFamilyRecords.forEach(function(family) {{
@@ -611,10 +642,12 @@ def build_layered_hex_map_html(
         }}
       }});
       storeOverlayVisibility();
+      updateLegendContent();
     }});
     map.on('moveend', storeMapView);
     map.on('zoomend', function() {{
       autoFamilyRecords.forEach(syncAutoFamily);
+      refreshScalablePointMarkers();
       storeMapView();
     }});
     storeOverlayVisibility();
@@ -628,8 +661,17 @@ def build_layered_hex_map_html(
     }};
     note.addTo(map);
 
+    let legendDiv = null;
     const legendById = {{}};
-    layerSpecs.forEach(function(spec) {{
+    legendSourceRecords.forEach(function(record) {{
+      const spec = record.spec || {{}};
+      const autoGroupId = spec.auto_resolution_group || '';
+      const visible = autoGroupId && autoFamilies[autoGroupId]
+        ? map.hasLayer(autoFamilies[autoGroupId].controller)
+        : map.hasLayer(record.layer);
+      if (!visible) {{
+        return;
+      }}
       if (!(spec.legend_items && spec.legend_items.length > 0)) {{
         return;
       }}
@@ -642,22 +684,66 @@ def build_layered_hex_map_html(
       }}
     }});
     const legendSections = Object.values(legendById);
-    if (legendSections.length > 0) {{
+    if (legendSourceRecords.length > 0) {{
       const legend = L.control({{ position: 'bottomright' }});
       legend.onAdd = function() {{
         const div = L.DomUtil.create('div', 'map-legend');
+        legendDiv = div;
         let html = '<div class="map-legend-title">Teckenförklaring</div>';
         legendSections.forEach(function(section) {{
           html += '<div class="map-legend-section">' + section.title + '</div>';
           html += section.items.map(function(item) {{
-            return '<div class="map-legend-row"><span class="map-legend-swatch" style="background:' + item.color + '"></span><span>' + item.label + '</span></div>';
+            const shapeClass = item.shape === 'circle' ? ' circle' : '';
+            return '<div class="map-legend-row"><span class="map-legend-swatch' + shapeClass + '" style="background:' + item.color + '"></span><span>' + item.label + '</span></div>';
           }}).join('');
         }});
         div.innerHTML = html;
         L.DomEvent.disableClickPropagation(div);
+        updateLegendContent();
         return div;
       }};
       legend.addTo(map);
+      updateLegendContent();
+    }}
+
+    function updateLegendContent() {{
+      if (!legendDiv) {{
+        return;
+      }}
+      const activeLegendById = {{}};
+      legendSourceRecords.forEach(function(record) {{
+        const spec = record.spec || {{}};
+        const autoGroupId = spec.auto_resolution_group || '';
+        const visible = autoGroupId && autoFamilies[autoGroupId]
+          ? map.hasLayer(autoFamilies[autoGroupId].controller)
+          : map.hasLayer(record.layer);
+        if (!visible || !(spec.legend_items && spec.legend_items.length > 0)) {{
+          return;
+        }}
+        const legendId = spec.legend_id || spec.control_name || spec.name;
+        if (!activeLegendById[legendId]) {{
+          activeLegendById[legendId] = {{
+            title: spec.legend_title || spec.control_name || spec.name,
+            items: spec.legend_items
+          }};
+        }}
+      }});
+      const activeLegendSections = Object.values(activeLegendById);
+      if (activeLegendSections.length === 0) {{
+        legendDiv.style.display = 'none';
+        legendDiv.innerHTML = '';
+        return;
+      }}
+      legendDiv.style.display = '';
+      let html = '<div class="map-legend-title">Teckenförklaring</div>';
+      activeLegendSections.forEach(function(section) {{
+        html += '<div class="map-legend-section">' + section.title + '</div>';
+        html += section.items.map(function(item) {{
+          const shapeClass = item.shape === 'circle' ? ' circle' : '';
+          return '<div class="map-legend-row"><span class="map-legend-swatch' + shapeClass + '" style="background:' + item.color + '"></span><span>' + item.label + '</span></div>';
+        }}).join('');
+      }});
+      legendDiv.innerHTML = html;
     }}
 
     function fitInitialBounds() {{
@@ -678,7 +764,10 @@ def build_layered_hex_map_html(
       }}
       storeMapView();
     }}
-    setTimeout(fitInitialBounds, 80);
+    setTimeout(function() {{
+      fitInitialBounds();
+      refreshScalablePointMarkers();
+    }}, 80);
   </script>
 </body>
 </html>
@@ -716,6 +805,7 @@ def build_potential_map_html(
     .map-legend-title {{ font-weight: 700; margin-bottom: 6px; }}
     .map-legend-row {{ display: flex; align-items: center; gap: 6px; margin: 4px 0; }}
     .map-legend-swatch {{ width: 14px; height: 14px; border: 1px solid rgba(0,0,0,0.22); flex: 0 0 auto; }}
+    .map-legend-swatch.circle {{ width: 10px; height: 10px; border-radius: 999px; margin: 2px; }}
   </style>
 </head>
 <body>
@@ -779,7 +869,8 @@ def build_potential_map_html(
         const div = L.DomUtil.create('div', 'map-legend');
         div.innerHTML = '<div class="map-legend-title">' + mapTitle + '</div>' +
           legendItems.map(function(item) {{
-            return '<div class="map-legend-row"><span class="map-legend-swatch" style="background:' + item.color + '"></span><span>' + item.label + '</span></div>';
+            const shapeClass = item.shape === 'circle' ? ' circle' : '';
+            return '<div class="map-legend-row"><span class="map-legend-swatch' + shapeClass + '" style="background:' + item.color + '"></span><span>' + item.label + '</span></div>';
           }}).join('');
         L.DomEvent.disableClickPropagation(div);
         return div;
