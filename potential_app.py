@@ -120,7 +120,7 @@ def landscape_type_display_colors(manifest: dict[str, Any] | None = None) -> dic
 
 PAGE_TITLE = "Sol- och vindpotential"
 MAP_VIEW_RESET_TOKEN_KEY = "potential_map_view_reset_token"
-MAP_STATE_VERSION = "establishment-start-v5"
+MAP_STATE_VERSION = "establishment-start-v6"
 LEFT_PANEL_OPEN_KEY = "potential_left_panel_open"
 RIGHT_PANEL_OPEN_KEY = "potential_right_panel_open"
 REGION_SELECT_KEY = "potential_selected_region_id"
@@ -3132,9 +3132,8 @@ def _render_impact_change_table(rows: list[dict[str, str]]) -> None:
         "potential efter filter",
         "inom potential",
         "outnyttjad potential",
-        "utanför",
-        "kvar",
-        "täckning",
+        "ytbehov utanför potential",
+        "andel inom potential",
     ]
     header_html = "".join(f"<th>{html.escape(header)}</th>" for header in headers)
     row_html = ""
@@ -3167,17 +3166,41 @@ def _format_hex_size_caption(h3_resolution: int | None, hex_area_km2: float) -> 
     )
 
 
+def _lp_selected_area_from_stats(
+    stats: dict[str, Any] | None,
+    selected_area_fallback: float = 0.0,
+    outside_area_fallback: float = 0.0,
+) -> float:
+    if not isinstance(stats, dict):
+        return max(0.0, float(selected_area_fallback or 0.0) - float(outside_area_fallback or 0.0))
+    raw_lp = stats.get("lp_selected_area_km2")
+    if raw_lp is not None:
+        try:
+            return max(0.0, float(raw_lp or 0.0))
+        except Exception:
+            return 0.0
+    selected_area = float(stats.get("selected_area_km2", selected_area_fallback) or 0.0)
+    outside_area = float(stats.get("outside_selected_area_km2", outside_area_fallback) or 0.0)
+    return max(0.0, selected_area - outside_area)
+
+
 def _combined_outside_lp_shortage_stats(frame: pd.DataFrame, hex_area_km2: float) -> dict[str, float]:
-    if frame.empty:
+    def _stats_from_area(wind_area_value: float, solar_area_value: float) -> dict[str, float]:
+        hex_area = max(float(hex_area_km2 or 0.0), 1e-9)
+        wind_count = int(math.ceil(max(0.0, float(wind_area_value or 0.0)) / hex_area))
+        solar_count = int(math.ceil(max(0.0, float(solar_area_value or 0.0)) / hex_area))
         return {
-            "wind_hex_count": 0,
-            "solar_hex_count": 0,
+            "wind_hex_count": wind_count,
+            "solar_hex_count": solar_count,
             "both_hex_count": 0,
-            "total_shortage_hex_count": 0,
-            "wind_area_km2": 0.0,
-            "solar_area_km2": 0.0,
+            "total_shortage_hex_count": wind_count + solar_count,
+            "wind_area_km2": max(0.0, float(wind_area_value or 0.0)),
+            "solar_area_km2": max(0.0, float(solar_area_value or 0.0)),
             "hex_area_km2": float(hex_area_km2 or 0.0),
         }
+
+    if frame.empty:
+        return _stats_from_area(0.0, 0.0)
     wind_area = pd.to_numeric(frame.get("wind_outside_lp_area_km2", pd.Series(0.0, index=frame.index)), errors="coerce").fillna(0.0).clip(lower=0.0)
     solar_area = pd.to_numeric(frame.get("solar_outside_lp_area_km2", pd.Series(0.0, index=frame.index)), errors="coerce").fillna(0.0).clip(lower=0.0)
     wind_mask = wind_area.gt(0.0)
@@ -3190,6 +3213,23 @@ def _combined_outside_lp_shortage_stats(frame: pd.DataFrame, hex_area_km2: float
         "total_shortage_hex_count": int(total_mask.sum()),
         "wind_area_km2": float(wind_area.sum()),
         "solar_area_km2": float(solar_area.sum()),
+        "hex_area_km2": float(hex_area_km2 or 0.0),
+    }
+
+
+def _outside_need_stats_from_areas(wind_area_km2: float, solar_area_km2: float, hex_area_km2: float) -> dict[str, float]:
+    hex_area = max(float(hex_area_km2 or 0.0), 1e-9)
+    wind_area = max(0.0, float(wind_area_km2 or 0.0))
+    solar_area = max(0.0, float(solar_area_km2 or 0.0))
+    wind_count = int(math.ceil(wind_area / hex_area)) if wind_area > 0 else 0
+    solar_count = int(math.ceil(solar_area / hex_area)) if solar_area > 0 else 0
+    return {
+        "wind_hex_count": wind_count,
+        "solar_hex_count": solar_count,
+        "both_hex_count": 0,
+        "total_shortage_hex_count": wind_count + solar_count,
+        "wind_area_km2": wind_area,
+        "solar_area_km2": solar_area,
         "hex_area_km2": float(hex_area_km2 or 0.0),
     }
 
@@ -5025,7 +5065,14 @@ def _cell_sort_key(cell: str, anchor: str, fallback_lat: float, fallback_lng: fl
             return 999999.0, str(cell)
 
 
-def _schematic_zone_cells(
+def _nearest_candidate_cell(candidates: set[str], anchor_lat: float, anchor_lng: float) -> str | None:
+    if not candidates:
+        return None
+    ordered = sorted(candidates, key=lambda cell: _cell_sort_key(cell, "", float(anchor_lat), float(anchor_lng)))
+    return ordered[0] if ordered else None
+
+
+def _radial_schematic_zone_cells(
     candidates: set[str],
     anchor_lat: float,
     anchor_lng: float,
@@ -5033,12 +5080,75 @@ def _schematic_zone_cells(
 ) -> list[str]:
     if count <= 0 or not candidates:
         return []
+    resolution = int(h3.get_resolution(next(iter(candidates))))
     try:
-        anchor = str(h3.latlng_to_cell(float(anchor_lat), float(anchor_lng), h3.get_resolution(next(iter(candidates)))))
+        anchor = str(h3.latlng_to_cell(float(anchor_lat), float(anchor_lng), resolution))
     except Exception:
         anchor = ""
-    ordered = sorted(candidates, key=lambda cell: _cell_sort_key(cell, anchor, float(anchor_lat), float(anchor_lng)))
-    return ordered[: int(count)]
+    if anchor not in candidates:
+        anchor = _nearest_candidate_cell(candidates, float(anchor_lat), float(anchor_lng)) or anchor
+    if not anchor:
+        ordered = sorted(candidates, key=lambda cell: _cell_sort_key(cell, "", float(anchor_lat), float(anchor_lng)))
+        return ordered[: int(count)]
+
+    selected: list[str] = []
+    seen: set[str] = set()
+    max_ring = max(8, int(math.ceil(math.sqrt(max(1, int(count))) * 2.6)))
+    ring = 0
+    while len(selected) < int(count) and ring <= max_ring:
+        try:
+            disk = {str(cell) for cell in h3.grid_disk(anchor, ring)}
+        except Exception:
+            break
+        ring_cells = sorted(
+            (disk - seen) & candidates,
+            key=lambda cell: _cell_sort_key(cell, anchor, float(anchor_lat), float(anchor_lng)),
+        )
+        selected.extend(ring_cells)
+        seen = disk
+        ring += 1
+
+    if len(selected) < int(count):
+        remaining = sorted(
+            candidates - set(selected),
+            key=lambda cell: _cell_sort_key(cell, anchor, float(anchor_lat), float(anchor_lng)),
+        )
+        selected.extend(remaining)
+    return selected[: int(count)]
+
+
+def _radial_schematic_disk_cells(
+    anchor_lat: float,
+    anchor_lng: float,
+    count: int,
+    target_resolution: int,
+    excluded_cells: set[str] | None = None,
+) -> list[str]:
+    if count <= 0:
+        return []
+    excluded = set(str(cell) for cell in (excluded_cells or set()))
+    try:
+        anchor = str(h3.latlng_to_cell(float(anchor_lat), float(anchor_lng), int(target_resolution)))
+    except Exception:
+        return []
+
+    selected: list[str] = []
+    seen: set[str] = set()
+    max_ring = max(10, int(math.ceil(math.sqrt(max(1, int(count)) / 3.0))) + 18)
+    ring = 0
+    while len(selected) < int(count) and ring <= max_ring:
+        try:
+            disk = {str(cell) for cell in h3.grid_disk(anchor, ring)}
+        except Exception:
+            break
+        ring_cells = sorted(
+            (disk - seen) - excluded,
+            key=lambda cell: _cell_sort_key(cell, anchor, float(anchor_lat), float(anchor_lng)),
+        )
+        selected.extend(ring_cells)
+        seen = disk
+        ring += 1
+    return selected[: int(count)]
 
 
 def _compacted_schematic_features(
@@ -5047,13 +5157,19 @@ def _compacted_schematic_features(
     target_resolution: int,
     base_hex_area_km2: float,
     total_area_km2: float,
+    anchor_lat: float | None = None,
+    anchor_lng: float | None = None,
 ) -> list[dict[str, Any]]:
     if not cells:
         return []
-    try:
-        display_cells = sorted(str(cell) for cell in h3.compact_cells(cells))
-    except Exception:
-        display_cells = sorted(str(cell) for cell in cells)
+    display_cells = [str(cell) for cell in cells]
+    if anchor_lat is not None and anchor_lng is not None:
+        display_cells = sorted(
+            display_cells,
+            key=lambda cell: _cell_sort_key(cell, "", float(anchor_lat), float(anchor_lng)),
+        )
+    else:
+        display_cells = sorted(display_cells)
     label = "Vind" if technology == "wind" else "Sol"
     fill = "#2563eb" if technology == "wind" else "#facc15"
     stroke = "#dbeafe"
@@ -5111,14 +5227,24 @@ def _outside_lp_need_feature_collection(
     region: dict[str, Any],
     frame: pd.DataFrame,
     target_resolution: int,
+    wind_area_override_km2: float | None = None,
+    solar_area_override_km2: float | None = None,
 ) -> dict[str, Any]:
     features: list[dict[str, Any]] = []
     if frame.empty or "outside_lp_shortage" not in frame.columns:
-        return {"type": "FeatureCollection", "features": features}
-
-    selected = frame[frame["outside_lp_shortage"].fillna(False).astype(bool)].copy()
-    wind_area = float(pd.to_numeric(selected.get("wind_outside_lp_area_km2", pd.Series(dtype=float)), errors="coerce").fillna(0.0).clip(lower=0.0).sum())
-    solar_area = float(pd.to_numeric(selected.get("solar_outside_lp_area_km2", pd.Series(dtype=float)), errors="coerce").fillna(0.0).clip(lower=0.0).sum())
+        if wind_area_override_km2 is None and solar_area_override_km2 is None:
+            return {"type": "FeatureCollection", "features": features}
+        selected = pd.DataFrame()
+    else:
+        selected = frame[frame["outside_lp_shortage"].fillna(False).astype(bool)].copy()
+    if wind_area_override_km2 is None:
+        wind_area = float(pd.to_numeric(selected.get("wind_outside_lp_area_km2", pd.Series(dtype=float)), errors="coerce").fillna(0.0).clip(lower=0.0).sum())
+    else:
+        wind_area = max(0.0, float(wind_area_override_km2 or 0.0))
+    if solar_area_override_km2 is None:
+        solar_area = float(pd.to_numeric(selected.get("solar_outside_lp_area_km2", pd.Series(dtype=float)), errors="coerce").fillna(0.0).clip(lower=0.0).sum())
+    else:
+        solar_area = max(0.0, float(solar_area_override_km2 or 0.0))
     if wind_area <= 0 and solar_area <= 0:
         return {"type": "FeatureCollection", "features": features}
 
@@ -5130,47 +5256,85 @@ def _outside_lp_need_feature_collection(
     if map_bounds is None or land_bbox is None:
         return {"type": "FeatureCollection", "features": features}
 
-    all_map_cells = _h3_cells_in_bounds(map_bounds, int(target_resolution))
-    water_cells = all_map_cells - land_cells
-    if not water_cells:
-        return {"type": "FeatureCollection", "features": features}
-
     land_west, land_south, land_east, land_north = land_bbox
     map_west, map_south, map_east, map_north = map_bounds
     gap_lon = max(0.012, (land_east - land_west) * 0.035)
     center_lat = (land_south + land_north) / 2.0
-
-    west_candidates = {
-        cell
-        for cell in water_cells
-        if h3.cell_to_latlng(cell)[1] <= land_west - gap_lon
-    }
-    east_candidates = {
-        cell
-        for cell in water_cells
-        if h3.cell_to_latlng(cell)[1] >= land_east + gap_lon
-    }
+    land_width = max(0.001, land_east - land_west)
+    west_space = max(0.001, land_west - map_west)
+    east_space = max(0.001, map_east - land_east)
+    desired_offset = max(gap_lon * 6.0, land_width * 0.42)
+    wind_anchor_lng = land_west - min(desired_offset, max(west_space * 0.86, desired_offset))
+    solar_anchor_lng = land_east + min(desired_offset, max(east_space * 0.86, desired_offset))
     wind_count = int(math.ceil(wind_area / max(float(h3_hex_area_km2(int(target_resolution))), 1e-9))) if wind_area > 0 else 0
     solar_count = int(math.ceil(solar_area / max(float(h3_hex_area_km2(int(target_resolution))), 1e-9))) if solar_area > 0 else 0
     base_hex_area = float(h3_hex_area_km2(int(target_resolution)))
 
-    wind_cells = _schematic_zone_cells(
-        west_candidates or water_cells,
+    wind_cells = _radial_schematic_disk_cells(
         center_lat,
-        max(map_west + 0.03, min(land_west - gap_lon, map_east)),
+        wind_anchor_lng,
         wind_count,
+        int(target_resolution),
+        land_cells,
     )
-    remaining_cells = water_cells - set(wind_cells)
-    solar_pool = east_candidates - set(wind_cells)
-    solar_cells = _schematic_zone_cells(
-        solar_pool or remaining_cells,
+    solar_cells = _radial_schematic_disk_cells(
         center_lat,
-        min(map_east - 0.03, max(land_east + gap_lon, map_west)),
+        solar_anchor_lng,
         solar_count,
+        int(target_resolution),
+        land_cells | set(wind_cells),
     )
+    if not wind_cells and wind_count > 0:
+        all_map_cells = _h3_cells_in_bounds(map_bounds, int(target_resolution))
+        water_cells = all_map_cells - land_cells
+        west_candidates = {
+            cell
+            for cell in water_cells
+            if h3.cell_to_latlng(cell)[1] <= land_west - gap_lon
+        }
+        wind_cells = _radial_schematic_zone_cells(
+            west_candidates or water_cells,
+            center_lat,
+            wind_anchor_lng,
+            wind_count,
+        )
+    if not solar_cells and solar_count > 0:
+        all_map_cells = _h3_cells_in_bounds(map_bounds, int(target_resolution))
+        water_cells = all_map_cells - land_cells - set(wind_cells)
+        east_candidates = {
+            cell
+            for cell in water_cells
+            if h3.cell_to_latlng(cell)[1] >= land_east + gap_lon
+        }
+        solar_cells = _radial_schematic_zone_cells(
+            east_candidates or water_cells,
+            center_lat,
+            solar_anchor_lng,
+            solar_count,
+        )
 
-    features.extend(_compacted_schematic_features(wind_cells, "wind", int(target_resolution), base_hex_area, wind_area))
-    features.extend(_compacted_schematic_features(solar_cells, "solar", int(target_resolution), base_hex_area, solar_area))
+    features.extend(
+        _compacted_schematic_features(
+            wind_cells,
+            "wind",
+            int(target_resolution),
+            base_hex_area,
+            wind_area,
+            center_lat,
+            wind_anchor_lng,
+        )
+    )
+    features.extend(
+        _compacted_schematic_features(
+            solar_cells,
+            "solar",
+            int(target_resolution),
+            base_hex_area,
+            solar_area,
+            center_lat,
+            solar_anchor_lng,
+        )
+    )
     return {"type": "FeatureCollection", "features": features}
 
 
@@ -5178,10 +5342,12 @@ def _outside_lp_need_layer(
     region: dict[str, Any],
     frame: pd.DataFrame,
     target_resolution: int,
+    wind_area_km2: float | None = None,
+    solar_area_km2: float | None = None,
 ) -> dict[str, Any] | None:
-    if frame.empty:
+    if frame.empty and wind_area_km2 is None and solar_area_km2 is None:
         return None
-    feature_collection = _outside_lp_need_feature_collection(region, frame, int(target_resolution))
+    feature_collection = _outside_lp_need_feature_collection(region, frame, int(target_resolution), wind_area_km2, solar_area_km2)
     if not feature_collection.get("features"):
         return None
     return {
@@ -5216,8 +5382,10 @@ def _outside_lp_need_family_layers(
     selected_resolution: int,
     zoom_family_enabled: bool,
     source_resolution: int | None = None,
+    wind_area_km2: float | None = None,
+    solar_area_km2: float | None = None,
 ) -> list[dict[str, Any]]:
-    if wind_selected.empty and solar_selected.empty:
+    if wind_selected.empty and solar_selected.empty and wind_area_km2 is None and solar_area_km2 is None:
         return []
     source_resolution = int(source_resolution or selected_resolution)
     source_frame = _combined_establishment_frame(
@@ -5227,7 +5395,7 @@ def _outside_lp_need_family_layers(
         int(source_resolution),
         int(source_resolution),
     )
-    if source_frame.empty:
+    if source_frame.empty and wind_area_km2 is None and solar_area_km2 is None:
         return []
     return _hex_family_layers(
         region,
@@ -5239,6 +5407,8 @@ def _outside_lp_need_family_layers(
             region,
             source_frame,
             int(resolution),
+            wind_area_km2,
+            solar_area_km2,
         ),
         family_resolutions=[int(selected_resolution)],
     )
@@ -5968,17 +6138,16 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
     solar_selected = float(solar_stats.get("selected_area_km2", combined.get("solar_v1_covered_area_km2", 0.0)) or 0.0)
     wind_outside = float(proposal_stats.get("outside_selected_area_km2", 0.0) or 0.0)
     solar_outside = float(solar_stats.get("outside_selected_area_km2", 0.0) or 0.0)
-    wind_inside = float(proposal_stats.get("lp_selected_area_km2", max(0.0, wind_selected - wind_outside)) or 0.0)
-    solar_inside = float(solar_stats.get("lp_selected_area_km2", max(0.0, solar_selected - solar_outside)) or 0.0)
-    wind_unmet = float(proposal_stats.get("unmet_area_km2", combined.get("wind_unmet_area_km2", 0.0)) or 0.0)
-    solar_unmet = float(solar_stats.get("unmet_area_km2", combined.get("solar_unmet_area_km2", 0.0)) or 0.0)
+    wind_inside = _lp_selected_area_from_stats(proposal_stats, wind_selected, wind_outside)
+    solar_inside = _lp_selected_area_from_stats(solar_stats, solar_selected, solar_outside)
+    wind_outside_need = max(0.0, wind_need - wind_inside)
+    solar_outside_need = max(0.0, solar_need - solar_inside)
 
     total_need = float(combined.get("total_need_area_km2", wind_need + solar_need) or 0.0)
-    total_covered = float(combined.get("total_covered_area_km2", min(wind_selected, wind_need) + min(solar_selected, solar_need)) or 0.0)
-    covered_share = float(combined.get("total_covered_share_pct", 0.0) or 0.0)
     inside_total = wind_inside + solar_inside
-    outside_total = wind_outside + solar_outside
-    unmet_total = max(0.0, wind_unmet + solar_unmet)
+    outside_total = wind_outside_need + solar_outside_need
+    total_covered = inside_total
+    covered_share = (inside_total / total_need * 100.0) if total_need > 0 else 0.0
     hex_area = float(energy_model_state.get("hex_area_km2", 0.0) or 0.0)
     h3_resolution = energy_model_state.get("h3_resolution")
     try:
@@ -6003,15 +6172,14 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
     wind_unused_potential = max(0.0, wind_available_area - wind_inside)
     solar_unused_potential = max(0.0, solar_available_area - solar_inside)
     total_unused_potential = wind_unused_potential + solar_unused_potential
-    wind_coverage_pct = (min(wind_selected, wind_need) / wind_need * 100.0) if wind_need > 0 else 0.0
-    solar_coverage_pct = (min(solar_selected, solar_need) / solar_need * 100.0) if solar_need > 0 else 0.0
+    wind_coverage_pct = (wind_inside / wind_need * 100.0) if wind_need > 0 else 0.0
+    solar_coverage_pct = (solar_inside / solar_need * 100.0) if solar_need > 0 else 0.0
     snapshot_key = _establishment_change_snapshot_key(energy_model_state)
     current_snapshot = {
         "total_covered_area_km2": total_covered,
         "total_need_area_km2": total_need,
         "inside_total_km2": inside_total,
         "outside_total_km2": outside_total,
-        "unmet_total_km2": unmet_total,
         "wind_twh": wind_twh,
         "solar_twh": solar_twh,
         "total_twh": wind_twh + solar_twh,
@@ -6025,10 +6193,8 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
         "wind_unused_potential_km2": wind_unused_potential,
         "solar_unused_potential_km2": solar_unused_potential,
         "total_unused_potential_km2": total_unused_potential,
-        "wind_outside_km2": wind_outside,
-        "solar_outside_km2": solar_outside,
-        "wind_unmet_km2": wind_unmet,
-        "solar_unmet_km2": solar_unmet,
+        "wind_outside_km2": wind_outside_need,
+        "solar_outside_km2": solar_outside_need,
         "wind_coverage_pct": wind_coverage_pct,
         "solar_coverage_pct": solar_coverage_pct,
         "total_coverage_pct": covered_share,
@@ -6064,30 +6230,21 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
             f"Kartan visas som R{display_h3_resolution}. Ytbalans, täckning och scenarioallokering beräknas i R{h3_resolution}."
         )
 
-    if unmet_total > 1e-6:
-        if outside_total > 1e-6:
-            st.error(
-                "Vald energimix ryms inte helt. "
-                f"{_format_area_with_context(outside_total, unit, hex_area)} behöver placeras utanför landskapets potential "
-                f"och {_format_area_with_context(unmet_total, unit, hex_area)} återstår att lösa."
-            )
-        else:
-            st.error(f"Vald energimix ryms inte helt. {_format_area_with_context(unmet_total, unit, hex_area)} återstår att lösa.")
-    elif outside_total > 1e-6:
+    if outside_total > 1e-6:
         st.warning(
-            "Vald energimix täcks, men "
-            f"{_format_area_with_context(outside_total, unit, hex_area)} behöver placeras utanför landskapets potential."
+            "Vald energimix ryms inte helt inom landskapets potential. "
+            f"{_format_area_with_context(outside_total, unit, hex_area)} behöver lösas utanför landskapets potential."
         )
     elif total_need > 0:
         st.success("Vald energimix ryms inom landskapets potential med nuvarande urval.")
 
     st.metric(
-        "Hanterat ytbehov",
+        "Ryms inom potential",
         f"{_format_area_primary(total_covered, unit, hex_area)} av {_format_area_primary(total_need, unit, hex_area)}",
         _change_delta_text(total_covered, _previous_snapshot_value(previous_snapshot, "total_covered_area_km2")),
         delta_color=_change_delta_color(total_covered, _previous_snapshot_value(previous_snapshot, "total_covered_area_km2")),
     )
-    place_cols = st.columns(3)
+    place_cols = st.columns(2)
     place_cols[0].metric(
         "Inom potential",
         _format_area_with_context(inside_total, unit, hex_area),
@@ -6095,16 +6252,10 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
         delta_color=_change_delta_color(inside_total, _previous_snapshot_value(previous_snapshot, "inside_total_km2")),
     )
     place_cols[1].metric(
-        "Utanför potential",
+        "Ytbehov utanför potential",
         _format_area_with_context(outside_total, unit, hex_area),
         _change_delta_text(outside_total, _previous_snapshot_value(previous_snapshot, "outside_total_km2")),
         delta_color=_change_delta_color(outside_total, _previous_snapshot_value(previous_snapshot, "outside_total_km2")),
-    )
-    place_cols[2].metric(
-        "Kvar att lösa",
-        _format_area_with_context(unmet_total, unit, hex_area),
-        _change_delta_text(unmet_total, _previous_snapshot_value(previous_snapshot, "unmet_total_km2")),
-        delta_color=_change_delta_color(unmet_total, _previous_snapshot_value(previous_snapshot, "unmet_total_km2")),
     )
     impact_rows = [
         {
@@ -6122,9 +6273,12 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
                 wind_unused_potential,
                 _previous_snapshot_value(previous_snapshot, "wind_unused_potential_km2"),
             ),
-            "utanför": _value_with_change_html(_format_area_primary(wind_outside, unit, hex_area), wind_outside, _previous_snapshot_value(previous_snapshot, "wind_outside_km2")),
-            "kvar": _value_with_change_html(_format_area_primary(wind_unmet, unit, hex_area), wind_unmet, _previous_snapshot_value(previous_snapshot, "wind_unmet_km2")),
-            "täckning": _value_with_change_html(f"{wind_coverage_pct:.1f}%", wind_coverage_pct, _previous_snapshot_value(previous_snapshot, "wind_coverage_pct")),
+            "ytbehov utanför potential": _value_with_change_html(
+                _format_area_primary(wind_outside_need, unit, hex_area),
+                wind_outside_need,
+                _previous_snapshot_value(previous_snapshot, "wind_outside_km2"),
+            ),
+            "andel inom potential": _value_with_change_html(f"{wind_coverage_pct:.1f}%", wind_coverage_pct, _previous_snapshot_value(previous_snapshot, "wind_coverage_pct")),
         },
         {
             "teknik": "Sol",
@@ -6141,9 +6295,12 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
                 solar_unused_potential,
                 _previous_snapshot_value(previous_snapshot, "solar_unused_potential_km2"),
             ),
-            "utanför": _value_with_change_html(_format_area_primary(solar_outside, unit, hex_area), solar_outside, _previous_snapshot_value(previous_snapshot, "solar_outside_km2")),
-            "kvar": _value_with_change_html(_format_area_primary(solar_unmet, unit, hex_area), solar_unmet, _previous_snapshot_value(previous_snapshot, "solar_unmet_km2")),
-            "täckning": _value_with_change_html(f"{solar_coverage_pct:.1f}%", solar_coverage_pct, _previous_snapshot_value(previous_snapshot, "solar_coverage_pct")),
+            "ytbehov utanför potential": _value_with_change_html(
+                _format_area_primary(solar_outside_need, unit, hex_area),
+                solar_outside_need,
+                _previous_snapshot_value(previous_snapshot, "solar_outside_km2"),
+            ),
+            "andel inom potential": _value_with_change_html(f"{solar_coverage_pct:.1f}%", solar_coverage_pct, _previous_snapshot_value(previous_snapshot, "solar_coverage_pct")),
         },
         {
             "teknik": "Totalt",
@@ -6160,15 +6317,19 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
                 total_unused_potential,
                 _previous_snapshot_value(previous_snapshot, "total_unused_potential_km2"),
             ),
-            "utanför": _value_with_change_html(_format_area_primary(outside_total, unit, hex_area), outside_total, _previous_snapshot_value(previous_snapshot, "outside_total_km2")),
-            "kvar": _value_with_change_html(_format_area_primary(unmet_total, unit, hex_area), unmet_total, _previous_snapshot_value(previous_snapshot, "unmet_total_km2")),
-            "täckning": _value_with_change_html(f"{covered_share:.1f}%", covered_share, _previous_snapshot_value(previous_snapshot, "total_coverage_pct")),
+            "ytbehov utanför potential": _value_with_change_html(
+                _format_area_primary(outside_total, unit, hex_area),
+                outside_total,
+                _previous_snapshot_value(previous_snapshot, "outside_total_km2"),
+            ),
+            "andel inom potential": _value_with_change_html(f"{covered_share:.1f}%", covered_share, _previous_snapshot_value(previous_snapshot, "total_coverage_pct")),
         },
     ]
     st.markdown("**Vind/sol och landskapspåverkan**")
     st.caption(
         "Potential efter filter är tillgänglig yta före urval. Inom potential är den del av scenariot som ryms i landskapet. "
-        "Outnyttjad potential är kvarvarande lämplig yta som scenariot inte använder."
+        "Ytbehov utanför potential är hela bristen: ytbehov minus den del som ryms inom potentialen. "
+        "Outnyttjad potential är lämplig yta som scenariot inte använder."
     )
     _render_impact_change_table(impact_rows)
     st.caption(
@@ -6243,7 +6404,7 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
                 {
                     "kategori": "Child-hex scenario: båda",
                     "antal hex": _count_text(wind_and_solar_hex),
-            "motsvarar": "samma större hex",
+                    "motsvarar": "samma större hex",
                 },
             ]
             st.dataframe(pd.DataFrame(hex_rows), width="stretch", hide_index=True, height=246)
@@ -6263,7 +6424,7 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
             small_cols = st.columns(3)
             small_cols[0].metric(f"{SOLAR_SMALL_SCALE_LABEL}: yta", f"{float(solar_v1_stats.get('total_area_km2', 0.0) or 0.0):.2f} km²")
             small_cols[1].metric("Täcker solbehov", f"{float(solar_v1_stats.get('covered_share_pct', 0.0) or 0.0):.1f}%")
-            small_cols[2].metric("Kvar solbehov", f"{float(solar_v1_stats.get('remaining_area_km2', 0.0) or 0.0):.2f} km²")
+            small_cols[2].metric("Solbehov efter tak", f"{float(solar_v1_stats.get('remaining_area_km2', 0.0) or 0.0):.2f} km²")
         if proposal_stats:
             selected_twh = float(proposal_stats.get("selected_twh", 0.0) or 0.0)
             if selected_twh > 0:
@@ -6298,10 +6459,10 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
             )
             if selected_count > needed_hex:
                 st.caption("Area-share gör att fler hex behövs än den teoretiska jämförelsen med helt fyllda hex.")
-            if float(proposal_stats.get("unmet_area_km2", 0.0) or 0.0) > 0:
+            if wind_outside_need > 1e-6:
                 st.warning(
-                    "Lämplig kärnyta räcker inte. Planeringsval behövs: sänk potentialkrav, släpp in kantzoner, "
-                    "ändra restriktioner, välj ett lägre framtidsscenario eller minska area demand."
+                    "Vindbehovet ryms inte helt inom landskapets potential. Planeringsval behövs: sänk potentialkrav, "
+                    "släpp in kantzoner, ändra restriktioner, välj ett lägre framtidsscenario eller minska ytbehovet."
                 )
         warning_table = energy_model_state.get("area_warnings")
         if isinstance(warning_table, pd.DataFrame) and not warning_table.empty:
@@ -7069,8 +7230,21 @@ def _unified_workspace_tab(
             analysis_h3_resolution,
             analysis_h3_resolution,
         )
-        energy_model_state["outside_lp_shortage_stats"] = _combined_outside_lp_shortage_stats(
-            selected_establishment_frame,
+        wind_stats_for_outside = energy_model_state.get("proposal_stats") if isinstance(energy_model_state.get("proposal_stats"), dict) else {}
+        solar_stats_for_outside = energy_model_state.get("solar_proposal_stats") if isinstance(energy_model_state.get("solar_proposal_stats"), dict) else {}
+        wind_outside_need_area = max(
+            0.0,
+            float(energy_model_state.get("wind_area_need_km2", 0.0) or 0.0)
+            - _lp_selected_area_from_stats(wind_stats_for_outside),
+        )
+        solar_outside_need_area = max(
+            0.0,
+            float(energy_model_state.get("solar_area_need_km2", 0.0) or 0.0)
+            - _lp_selected_area_from_stats(solar_stats_for_outside),
+        )
+        energy_model_state["outside_lp_shortage_stats"] = _outside_need_stats_from_areas(
+            wind_outside_need_area,
+            solar_outside_need_area,
             analysis_hex_area_km2,
         )
         class_counts = selected_establishment_frame.get("establishment_class", pd.Series(dtype=str)).astype(str).value_counts()
@@ -7132,6 +7306,8 @@ def _unified_workspace_tab(
             h3_resolution,
             zoom_family_enabled,
             analysis_h3_resolution,
+            wind_outside_need_area,
+            solar_outside_need_area,
         )
         if outside_lp_need_layers:
             layers.extend(outside_lp_need_layers)
@@ -7216,38 +7392,30 @@ def _unified_workspace_tab(
     proposal_stats_for_note = energy_model_state.get("proposal_stats") if isinstance(energy_model_state, dict) else None
     solar_stats_for_note = energy_model_state.get("solar_proposal_stats") if isinstance(energy_model_state, dict) else None
     outside_parts: list[str] = []
-    unresolved_parts: list[str] = []
     wind_outside_for_note = 0.0
     solar_outside_for_note = 0.0
-    wind_unresolved_for_note = 0.0
-    solar_unresolved_for_note = 0.0
     if isinstance(proposal_stats_for_note, dict):
-        wind_outside_for_note = float(proposal_stats_for_note.get("outside_selected_area_km2", 0.0) or 0.0)
-        wind_unresolved_for_note = float(proposal_stats_for_note.get("unmet_area_km2", 0.0) or 0.0)
+        wind_outside_for_note = max(
+            0.0,
+            float(energy_model_state.get("wind_area_need_km2", 0.0) or 0.0)
+            - _lp_selected_area_from_stats(proposal_stats_for_note),
+        )
     if isinstance(solar_stats_for_note, dict):
-        solar_outside_for_note = float(solar_stats_for_note.get("outside_selected_area_km2", 0.0) or 0.0)
-        solar_unresolved_for_note = float(solar_stats_for_note.get("unmet_area_km2", 0.0) or 0.0)
+        solar_outside_for_note = max(
+            0.0,
+            float(energy_model_state.get("solar_area_need_km2", 0.0) or 0.0)
+            - _lp_selected_area_from_stats(solar_stats_for_note),
+        )
     if wind_outside_for_note > 1e-6:
         outside_parts.append(f"vind {wind_outside_for_note:.0f} km²")
     if solar_outside_for_note > 1e-6:
         outside_parts.append(f"sol {solar_outside_for_note:.0f} km²")
-    if wind_unresolved_for_note > 1e-6:
-        unresolved_parts.append(f"vind {wind_unresolved_for_note:.0f} km²")
-    if solar_unresolved_for_note > 1e-6:
-        unresolved_parts.append(f"sol {solar_unresolved_for_note:.0f} km²")
-    if outside_parts or unresolved_parts:
-        warning_sections: list[str] = []
+    if outside_parts:
         outside_total_for_note = wind_outside_for_note + solar_outside_for_note
-        unresolved_total_for_note = wind_unresolved_for_note + solar_unresolved_for_note
-        if outside_parts:
-            warning_sections.append(f"utanför potential ca {outside_total_for_note:.0f} km² ({', '.join(outside_parts)})")
-        if unresolved_parts:
-            warning_sections.append(f"kvar att lösa ca {unresolved_total_for_note:.0f} km² ({', '.join(unresolved_parts)})")
         note_body = (
             "<strong style='color:#be123c;'>Varning:</strong> "
-            "Vald energimix ryms inte helt inom landskapets potential: "
-            + "; ".join(warning_sections)
-            + "."
+            f"Vald energimix ryms inte helt: ytbehov utanför potential ca {outside_total_for_note:.0f} km² "
+            f"({', '.join(outside_parts)})."
         )
     perf_started = _perf_start()
     _render_layers(
@@ -7292,7 +7460,7 @@ def _unified_workspace_tab(
                 if isinstance(stats, dict):
                     st.caption(
                         f"Total småskalig solyta: {float(stats.get('total_area_km2', 0.0) or 0.0):.2f} km²; "
-                        f"kvarvarande solbehov: {float(stats.get('remaining_area_km2', 0.0) or 0.0):.2f} km²."
+                        f"solbehov efter tak: {float(stats.get('remaining_area_km2', 0.0) or 0.0):.2f} km²."
                     )
             if show_user_solar:
                 if solar_large_population_active:
