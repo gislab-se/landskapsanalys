@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 from collections import deque
+import html
 from io import StringIO
 import h3
 import json
@@ -748,6 +749,17 @@ def _area_scenario_label(scenario_id: str) -> str:
     return labels.get(str(scenario_id), AREA_SCENARIO_LABELS.get(str(scenario_id), str(scenario_id)))
 
 
+def _planning_scenario_option_label(option: dict[str, Any] | None) -> str:
+    option = option or {}
+    label = planning_scenario_label(option)
+    try:
+        energy_scale = float(option.get("energy_scale", 1.0) or 1.0)
+    except Exception:
+        energy_scale = 1.0
+    area_scenario_id = str(option.get("area_demand_scenario", "mid") or "mid")
+    return f"{label} · {energy_scale:g}x energi · markintensitet {_area_scenario_label(area_scenario_id)}"
+
+
 def _energy_key_label(energy_key: str) -> str:
     return {"wind": "Vind", "solar": "Sol"}.get(str(energy_key), str(energy_key))
 
@@ -831,7 +843,7 @@ def _render_hex_area_card(
             "</div>"
         )
     st.markdown(
-        "<div style='font-size:0.82rem;font-weight:650;margin-bottom:0.25rem;'>Area demand som hex</div>"
+        "<div style='font-size:0.82rem;font-weight:650;margin-bottom:0.25rem;'>Ytbehov som hex</div>"
         + "".join(rows)
         + f"<div style='font-size:0.74rem;color:#6b7280;margin-top:0.3rem;'>1 symbol ≈ {symbol_scale} hex i vald H3-upplösning.</div>",
         unsafe_allow_html=True,
@@ -887,10 +899,10 @@ def _render_energy_modeling_panel(
     if st.session_state.get(scenario_key) not in planning_ids:
         st.session_state[scenario_key] = default_planning_id
     planning_id = panel.selectbox(
-        "Framtidsscenario",
+        "Energiscenario och markintensitet",
         options=planning_ids,
         key=scenario_key,
-        format_func=lambda value: planning_scenario_label(planning_by_id.get(str(value), {"id": value})),
+        format_func=lambda value: _planning_scenario_option_label(planning_by_id.get(str(value), {"id": value})),
     )
     scenario_levels = scenario_manifest.get("scenario_levels") or []
     if str(planning_id) in scenario_levels:
@@ -906,8 +918,12 @@ def _render_energy_modeling_panel(
     source_label = scenario_display_label(source_scenario, scenario_descriptions) if source_scenario else "-"
 
     panel.caption(
-        f"Markintensitet: {_area_scenario_label(area_scenario_id)} · "
-        f"modellkälla: {source_label}, {planning_year}, skala {energy_scale:g}x"
+        "Dummy/prototypdata: valet är ett paket med energiskala och markintensitet. "
+        "Markintensitet styr ytbehov i km²/TWh och är separat från landskapets potential i kartan."
+    )
+    panel.caption(
+        f"Valt paket: {_planning_scenario_option_label(selected_planning)} · "
+        f"modellkälla: {source_label}, {planning_year}"
     )
 
     placement_key = f"energy_model_placement_{region.get('region_id', 'region')}"
@@ -1005,7 +1021,7 @@ def _render_energy_modeling_panel(
             hex_area,
             str(planning_id),
             scenario_order=planning_ids,
-            label_func=lambda value: planning_scenario_label(planning_by_id.get(str(value), {"id": value})),
+            label_func=lambda value: _planning_scenario_option_label(planning_by_id.get(str(value), {"id": value})),
         )
 
     show_key = f"energy_model_show_proposal_{region.get('region_id', 'region')}"
@@ -1323,8 +1339,14 @@ def _apply_wind_layer_selection_state(layer_selection: dict[str, list[str]]) -> 
     return selected
 
 
+def _region_start_default_key(region: dict[str, Any]) -> str:
+    region_id = str(region.get("region_id", "region") or "region")
+    return f"{START_DEFAULT_VERSION_KEY}_{region_id}"
+
+
 def _ensure_default_start_state(region: dict[str, Any]) -> None:
-    if st.session_state.get(START_DEFAULT_VERSION_KEY) == START_DEFAULT_VERSION:
+    start_default_key = _region_start_default_key(region)
+    if st.session_state.get(start_default_key) == START_DEFAULT_VERSION:
         return
     _apply_wind_layer_selection_state(_default_wind_layer_selection())
     st.session_state[SOLAR_APPLIED_CONFIG_KEY] = dict(DEFAULT_SOLAR_APPLIED_CONFIG)
@@ -1340,7 +1362,7 @@ def _ensure_default_start_state(region: dict[str, Any]) -> None:
     st.session_state["solar_draft_protected_active"] = False
     for layer_id in SOLAR_PROTECTED_LAYER_IDS:
         st.session_state[_solar_protected_layer_control_key(layer_id)] = True
-    st.session_state[START_DEFAULT_VERSION_KEY] = START_DEFAULT_VERSION
+    st.session_state[start_default_key] = START_DEFAULT_VERSION
 
 
 def _solar_control_selected_protected_layer_ids(config: dict[str, Any]) -> list[str]:
@@ -2985,6 +3007,111 @@ def _format_area_with_context(area_km2: float, unit: str, hex_area_km2: float = 
     primary = _format_area_primary(area_km2, unit, hex_area_km2)
     context = _format_area_context(area_km2, unit, hex_area_km2)
     return f"{primary} ({context})" if context else primary
+
+
+def _percent_change(current: float, previous: float | None) -> float | None:
+    if previous is None:
+        return None
+    current_value = float(current or 0.0)
+    previous_value = float(previous or 0.0)
+    if abs(previous_value) < 1e-9:
+        return 0.0 if abs(current_value) < 1e-9 else None
+    return (current_value - previous_value) / abs(previous_value) * 100.0
+
+
+def _change_delta_text(current: float, previous: float | None) -> str | None:
+    change = _percent_change(current, previous)
+    if change is None:
+        return None
+    if abs(change) < 0.05:
+        return "0.0%"
+    return f"{change:+.1f}%"
+
+
+def _change_delta_color(current: float, previous: float | None) -> str:
+    change = _percent_change(current, previous)
+    if change is None or abs(change) < 0.05:
+        return "off"
+    return "normal"
+
+
+def _change_badge_html(current: float, previous: float | None) -> str:
+    change = _percent_change(current, previous)
+    if change is None:
+        return ""
+    if abs(change) < 0.05:
+        arrow = "→"
+        text = "0.0%"
+        color = "#92400e"
+        background = "#fef3c7"
+    elif change > 0:
+        arrow = "↑"
+        text = f"{change:.1f}%"
+        color = "#15803d"
+        background = "#dcfce7"
+    else:
+        arrow = "↓"
+        text = f"{abs(change):.1f}%"
+        color = "#b91c1c"
+        background = "#fee2e2"
+    return (
+        f"<span style='display:inline-block;margin-top:0.12rem;padding:0.08rem 0.32rem;"
+        f"border-radius:999px;background:{background};color:{color};font-size:0.72rem;font-weight:650;"
+        f"white-space:nowrap;'>{arrow} {text}</span>"
+    )
+
+
+def _value_with_change_html(value: str, current: float, previous: float | None) -> str:
+    return (
+        "<div style='display:flex;flex-direction:column;align-items:flex-start;gap:0.04rem;'>"
+        f"<span>{html.escape(str(value))}</span>"
+        f"{_change_badge_html(current, previous)}"
+        "</div>"
+    )
+
+
+def _establishment_change_snapshot_key(energy_model_state: dict[str, Any]) -> str:
+    region_id = str(energy_model_state.get("region_id", "region") or "region")
+    return f"establishment_change_snapshot_{region_id}"
+
+
+def _snapshot_fingerprint(snapshot: dict[str, float]) -> tuple[tuple[str, float], ...]:
+    return tuple((str(key), round(float(value or 0.0), 9)) for key, value in sorted(snapshot.items()))
+
+
+def _previous_snapshot_value(snapshot: dict[str, Any], key: str) -> float | None:
+    if key not in snapshot:
+        return None
+    try:
+        return float(snapshot.get(key))
+    except Exception:
+        return None
+
+
+def _render_impact_change_table(rows: list[dict[str, str]]) -> None:
+    if not rows:
+        return
+    headers = ["teknik", "energi", "ytbehov", "potential efter filter", "inom potential", "utanför", "kvar", "täckning"]
+    header_html = "".join(f"<th>{html.escape(header)}</th>" for header in headers)
+    row_html = ""
+    for row in rows:
+        row_html += "<tr>" + "".join(f"<td>{row.get(header, '')}</td>" for header in headers) + "</tr>"
+    st.markdown(
+        "<div class='change-table-wrap'>"
+        "<table class='change-table'>"
+        "<thead><tr>"
+        f"{header_html}"
+        "</tr></thead><tbody>"
+        f"{row_html}"
+        "</tbody></table></div>"
+        "<style>"
+        ".change-table-wrap{overflow-x:auto;border:1px solid rgba(49,51,63,0.14);border-radius:6px;margin-top:0.35rem;}"
+        ".change-table{width:100%;border-collapse:collapse;font-size:0.78rem;}"
+        ".change-table th{background:#f8fafc;color:#475569;text-align:left;font-weight:600;padding:0.42rem 0.5rem;border-bottom:1px solid rgba(49,51,63,0.12);}"
+        ".change-table td{padding:0.42rem 0.5rem;border-top:1px solid rgba(49,51,63,0.08);vertical-align:top;white-space:nowrap;}"
+        "</style>",
+        unsafe_allow_html=True,
+    )
 
 
 def _format_hex_size_caption(h3_resolution: int | None, hex_area_km2: float) -> str:
@@ -5191,6 +5318,15 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
     if not energy_model_state.get("available"):
         st.caption("Etableringsytan visas när energimodelleringen är aktiv.")
         return
+    if not bool(energy_model_state.get("show_proposal", False)):
+        st.info("Föreslagen etableringsyta är avstängd i energimodelleringen. Kartan visar därför inget etableringslager.")
+        return
+    if str(energy_model_state.get("placement_mode", "auto")) != "auto":
+        st.info("Självplacering är valt. Etableringsytan summeras när automatisk placering är aktiv eller när ett manuellt urval finns.")
+        return
+    if not bool(energy_model_state.get("establishment_layer_visible", False)):
+        st.caption("Etableringsytan visas när vind- och/eller solpotential finns aktiv i kartan.")
+        return
 
     combined = energy_model_state.get("combined_establishment_stats")
     if not isinstance(combined, dict):
@@ -5218,6 +5354,7 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
     covered_share = float(combined.get("total_covered_share_pct", 0.0) or 0.0)
     inside_total = wind_inside + solar_inside
     outside_total = wind_outside + solar_outside
+    unmet_total = max(0.0, wind_unmet + solar_unmet)
     hex_area = float(energy_model_state.get("hex_area_km2", 0.0) or 0.0)
     h3_resolution = energy_model_state.get("h3_resolution")
     try:
@@ -5229,14 +5366,55 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
     solar_twh = float(energy_model_state.get("solar_twh", 0.0) or 0.0)
     wind_share_pct = float(energy_model_state.get("wind_share_pct", 0.0) or 0.0)
     solar_share_pct = float(energy_model_state.get("solar_share_pct", 0.0) or 0.0)
+    wind_available_area = float(proposal_stats.get("available_candidate_area_km2", 0.0) or 0.0)
+    wind_available_hex = int(proposal_stats.get("available_candidate_hex", 0) or 0)
+    solar_available_area = float(solar_stats.get("available_candidate_area_km2", 0.0) or 0.0)
+    solar_available_hex = int(solar_stats.get("available_candidate_hex", 0) or 0)
+    total_available_area = wind_available_area + solar_available_area
+    wind_coverage_pct = (min(wind_selected, wind_need) / wind_need * 100.0) if wind_need > 0 else 0.0
+    solar_coverage_pct = (min(solar_selected, solar_need) / solar_need * 100.0) if solar_need > 0 else 0.0
+    snapshot_key = _establishment_change_snapshot_key(energy_model_state)
+    current_snapshot = {
+        "total_covered_area_km2": total_covered,
+        "total_need_area_km2": total_need,
+        "inside_total_km2": inside_total,
+        "outside_total_km2": outside_total,
+        "unmet_total_km2": unmet_total,
+        "wind_twh": wind_twh,
+        "solar_twh": solar_twh,
+        "total_twh": wind_twh + solar_twh,
+        "wind_need_km2": wind_need,
+        "solar_need_km2": solar_need,
+        "wind_available_km2": wind_available_area,
+        "solar_available_km2": solar_available_area,
+        "total_available_km2": total_available_area,
+        "wind_inside_km2": wind_inside,
+        "solar_inside_km2": solar_inside,
+        "wind_outside_km2": wind_outside,
+        "solar_outside_km2": solar_outside,
+        "wind_unmet_km2": wind_unmet,
+        "solar_unmet_km2": solar_unmet,
+        "wind_coverage_pct": wind_coverage_pct,
+        "solar_coverage_pct": solar_coverage_pct,
+        "total_coverage_pct": covered_share,
+    }
+    current_fingerprint = _snapshot_fingerprint(current_snapshot)
+    snapshot_state_raw = st.session_state.get(snapshot_key)
+    snapshot_state = snapshot_state_raw if isinstance(snapshot_state_raw, dict) else {}
+    stored_current = snapshot_state.get("current") if isinstance(snapshot_state.get("current"), dict) else {}
+    stored_previous = snapshot_state.get("previous") if isinstance(snapshot_state.get("previous"), dict) else {}
+    if stored_current and snapshot_state.get("fingerprint") != current_fingerprint:
+        previous_snapshot = stored_current
+    else:
+        previous_snapshot = stored_previous
     scenario_label = str(energy_model_state.get("scenario_label", energy_model_state.get("scenario", "-")) or "-")
     source_label = str(energy_model_state.get("source_scenario_label", "-") or "-")
     source_year = str(energy_model_state.get("source_year", "-") or "-")
     energy_scale = float(energy_model_state.get("energy_scale", 1.0) or 1.0)
     st.caption(
-        f"{scenario_label} · mix {wind_share_pct:.0f}% vind / {solar_share_pct:.0f}% sol · "
+        f"Dummy/prototypdata · {scenario_label}: {energy_scale:g}x energi · "
         f"markintensitet {energy_model_state.get('area_scenario_label', '-')} · "
-        f"källa {source_label} {source_year}, skala {energy_scale:g}x"
+        f"mix {wind_share_pct:.0f}% vind / {solar_share_pct:.0f}% sol · källa {source_label} {source_year}"
     )
     unit = st.radio(
         "Enhet",
@@ -5247,76 +5425,150 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
     )
     st.caption(_format_hex_size_caption(h3_resolution, hex_area))
 
-    st.metric(
-        "Täckt etableringsbehov",
-        f"{_format_area_primary(total_covered, unit, hex_area)} av {_format_area_primary(total_need, unit, hex_area)}",
-        f"{covered_share:.1f}%",
-    )
-    left, right = st.columns(2)
-    left.metric("Inom landskapets potential", _format_area_with_context(inside_total, unit, hex_area))
-    right.metric("Ytbehov utanför", _format_area_with_context(outside_total, unit, hex_area))
+    if unmet_total > 1e-6:
+        if outside_total > 1e-6:
+            st.error(
+                "Vald energimix ryms inte helt. "
+                f"{_format_area_with_context(outside_total, unit, hex_area)} behöver placeras utanför landskapets potential "
+                f"och {_format_area_with_context(unmet_total, unit, hex_area)} återstår att lösa."
+            )
+        else:
+            st.error(f"Vald energimix ryms inte helt. {_format_area_with_context(unmet_total, unit, hex_area)} återstår att lösa.")
+    elif outside_total > 1e-6:
+        st.warning(
+            "Vald energimix täcks, men "
+            f"{_format_area_with_context(outside_total, unit, hex_area)} behöver placeras utanför landskapets potential."
+        )
+    elif total_need > 0:
+        st.success("Vald energimix ryms inom landskapets potential med nuvarande urval.")
 
-    wind_coverage_pct = (min(wind_selected, wind_need) / wind_need * 100.0) if wind_need > 0 else 0.0
-    solar_coverage_pct = (min(solar_selected, solar_need) / solar_need * 100.0) if solar_need > 0 else 0.0
-    energy_rows = [
+    st.metric(
+        "Hanterat ytbehov",
+        f"{_format_area_primary(total_covered, unit, hex_area)} av {_format_area_primary(total_need, unit, hex_area)}",
+        _change_delta_text(total_covered, _previous_snapshot_value(previous_snapshot, "total_covered_area_km2")),
+        delta_color=_change_delta_color(total_covered, _previous_snapshot_value(previous_snapshot, "total_covered_area_km2")),
+    )
+    place_cols = st.columns(3)
+    place_cols[0].metric(
+        "Inom potential",
+        _format_area_with_context(inside_total, unit, hex_area),
+        _change_delta_text(inside_total, _previous_snapshot_value(previous_snapshot, "inside_total_km2")),
+        delta_color=_change_delta_color(inside_total, _previous_snapshot_value(previous_snapshot, "inside_total_km2")),
+    )
+    place_cols[1].metric(
+        "Utanför potential",
+        _format_area_with_context(outside_total, unit, hex_area),
+        _change_delta_text(outside_total, _previous_snapshot_value(previous_snapshot, "outside_total_km2")),
+        delta_color=_change_delta_color(outside_total, _previous_snapshot_value(previous_snapshot, "outside_total_km2")),
+    )
+    place_cols[2].metric(
+        "Kvar att lösa",
+        _format_area_with_context(unmet_total, unit, hex_area),
+        _change_delta_text(unmet_total, _previous_snapshot_value(previous_snapshot, "unmet_total_km2")),
+        delta_color=_change_delta_color(unmet_total, _previous_snapshot_value(previous_snapshot, "unmet_total_km2")),
+    )
+    impact_rows = [
         {
             "teknik": "Vind",
-            "energi": f"{wind_twh:.2f} TWh",
-            "ytbehov": _format_area_primary(wind_need, unit, hex_area),
-            "inom potential": _format_area_primary(wind_inside, unit, hex_area),
-            "utanför": _format_area_primary(wind_outside, unit, hex_area),
-            "kvar": _format_area_primary(wind_unmet, unit, hex_area),
-            "täckning": f"{wind_coverage_pct:.1f}%",
+            "energi": _value_with_change_html(f"{wind_twh:.2f} TWh", wind_twh, _previous_snapshot_value(previous_snapshot, "wind_twh")),
+            "ytbehov": _value_with_change_html(_format_area_primary(wind_need, unit, hex_area), wind_need, _previous_snapshot_value(previous_snapshot, "wind_need_km2")),
+            "potential efter filter": _value_with_change_html(
+                _format_area_primary(wind_available_area, unit, hex_area),
+                wind_available_area,
+                _previous_snapshot_value(previous_snapshot, "wind_available_km2"),
+            ),
+            "inom potential": _value_with_change_html(_format_area_primary(wind_inside, unit, hex_area), wind_inside, _previous_snapshot_value(previous_snapshot, "wind_inside_km2")),
+            "utanför": _value_with_change_html(_format_area_primary(wind_outside, unit, hex_area), wind_outside, _previous_snapshot_value(previous_snapshot, "wind_outside_km2")),
+            "kvar": _value_with_change_html(_format_area_primary(wind_unmet, unit, hex_area), wind_unmet, _previous_snapshot_value(previous_snapshot, "wind_unmet_km2")),
+            "täckning": _value_with_change_html(f"{wind_coverage_pct:.1f}%", wind_coverage_pct, _previous_snapshot_value(previous_snapshot, "wind_coverage_pct")),
         },
         {
             "teknik": "Sol",
-            "energi": f"{solar_twh:.2f} TWh",
-            "ytbehov": _format_area_primary(solar_need, unit, hex_area),
-            "inom potential": _format_area_primary(solar_inside, unit, hex_area),
-            "utanför": _format_area_primary(solar_outside, unit, hex_area),
-            "kvar": _format_area_primary(solar_unmet, unit, hex_area),
-            "täckning": f"{solar_coverage_pct:.1f}%",
+            "energi": _value_with_change_html(f"{solar_twh:.2f} TWh", solar_twh, _previous_snapshot_value(previous_snapshot, "solar_twh")),
+            "ytbehov": _value_with_change_html(_format_area_primary(solar_need, unit, hex_area), solar_need, _previous_snapshot_value(previous_snapshot, "solar_need_km2")),
+            "potential efter filter": _value_with_change_html(
+                _format_area_primary(solar_available_area, unit, hex_area),
+                solar_available_area,
+                _previous_snapshot_value(previous_snapshot, "solar_available_km2"),
+            ),
+            "inom potential": _value_with_change_html(_format_area_primary(solar_inside, unit, hex_area), solar_inside, _previous_snapshot_value(previous_snapshot, "solar_inside_km2")),
+            "utanför": _value_with_change_html(_format_area_primary(solar_outside, unit, hex_area), solar_outside, _previous_snapshot_value(previous_snapshot, "solar_outside_km2")),
+            "kvar": _value_with_change_html(_format_area_primary(solar_unmet, unit, hex_area), solar_unmet, _previous_snapshot_value(previous_snapshot, "solar_unmet_km2")),
+            "täckning": _value_with_change_html(f"{solar_coverage_pct:.1f}%", solar_coverage_pct, _previous_snapshot_value(previous_snapshot, "solar_coverage_pct")),
+        },
+        {
+            "teknik": "Totalt",
+            "energi": _value_with_change_html(f"{wind_twh + solar_twh:.2f} TWh", wind_twh + solar_twh, _previous_snapshot_value(previous_snapshot, "total_twh")),
+            "ytbehov": _value_with_change_html(_format_area_primary(total_need, unit, hex_area), total_need, _previous_snapshot_value(previous_snapshot, "total_need_area_km2")),
+            "potential efter filter": _value_with_change_html(
+                _format_area_primary(total_available_area, unit, hex_area),
+                total_available_area,
+                _previous_snapshot_value(previous_snapshot, "total_available_km2"),
+            ),
+            "inom potential": _value_with_change_html(_format_area_primary(inside_total, unit, hex_area), inside_total, _previous_snapshot_value(previous_snapshot, "inside_total_km2")),
+            "utanför": _value_with_change_html(_format_area_primary(outside_total, unit, hex_area), outside_total, _previous_snapshot_value(previous_snapshot, "outside_total_km2")),
+            "kvar": _value_with_change_html(_format_area_primary(unmet_total, unit, hex_area), unmet_total, _previous_snapshot_value(previous_snapshot, "unmet_total_km2")),
+            "täckning": _value_with_change_html(f"{covered_share:.1f}%", covered_share, _previous_snapshot_value(previous_snapshot, "total_coverage_pct")),
         },
     ]
-    st.dataframe(pd.DataFrame(energy_rows), width="stretch", hide_index=True, height=112)
+    st.markdown("**Vind/sol och landskapspåverkan**")
+    st.caption("Potential efter filter är tillgänglig yta före urval. Inom/utanför/kvar visar hur valt ytbehov placeras i kartan.")
+    _render_impact_change_table(impact_rows)
+    st.caption("Totalraden summerar teknikerna. Samma hex kan därför räknas i både vind och sol om båda passar där.")
+    st.caption("Pilarna visar procentuell förändring sedan föregående beräknade läge: grön upp = ökat, röd ner = minskat, gul/grå = oförändrat.")
+
+    active_filter_notes: list[str] = []
+    wind_params = energy_model_state.get("wind_ui_params") if isinstance(energy_model_state, dict) else None
+    if isinstance(wind_params, dict) and wind_available_hex > 0:
+        settlement_distance = float(wind_params.get("settlement_distance_m", 0.0) or 0.0)
+        road_distance = float(wind_params.get("road_distance_m", 0.0) or 0.0)
+        active_filter_notes.append(f"vind: befolkning {settlement_distance:.0f} m, vägar {road_distance:.0f} m")
+    solar_params = energy_model_state.get("solar_params") if isinstance(energy_model_state, dict) else None
+    if isinstance(solar_params, dict) and solar_available_hex > 0:
+        if bool(energy_model_state.get("solar_large_population_active", False)):
+            active_filter_notes.append(f"sol: befolkning {float(solar_params.get('population_buffer_m', 0.0) or 0.0):.0f} m")
+        if bool(energy_model_state.get("solar_large_protected_active", False)):
+            active_filter_notes.append(f"sol: skyddad natur {float(solar_params.get('protected_buffer_m', 0.0) or 0.0):.0f} m")
+    if active_filter_notes:
+        st.caption("Beräknat med " + "; ".join(active_filter_notes) + ".")
     st.caption(
         f"Ytbalansen bygger på samma vind- och solurval som {COMBINED_ESTABLISHMENT_LAYER_LABEL} i kartan."
     )
-    if outside_total > 1e-6:
-        st.warning(f"{OUTSIDE_LP_NEED_LAYER_LABEL}: ca {_format_area_with_context(outside_total, unit, hex_area)} behöver placeras utanför landskapets potential.")
-    elif total_need > 0:
-        st.success("Energiscenariot ryms inom landskapets potential med nuvarande urval.")
 
-    hex_stats = energy_model_state.get("establishment_hex_stats")
-    if isinstance(hex_stats, dict):
-        total_hex = int(hex_stats.get("total_hex_count", 0) or 0)
-        black_hex = int(hex_stats.get("black_hex_count", 0) or 0)
-        red_hex = int(hex_stats.get("red_hex_count", 0) or 0)
-        hex_rows = [
-            {
-                "kategori": f"Totalt antal R{h3_resolution}-hex" if h3_resolution is not None else "Totalt antal H3-hex",
-                "antal hex": _count_text(total_hex),
-                "motsvarar": _format_area_with_context(total_hex * hex_area, unit, hex_area),
-            },
-            {
-                "kategori": "Svarta hexmarkörer",
-                "antal hex": _count_text(black_hex),
-                "motsvarar": f"{_format_area_with_context(outside_total, unit, hex_area)} ytbehov",
-            },
-            {
-                "kategori": "Röda hex i etableringslagret",
-                "antal hex": _count_text(red_hex),
-                "motsvarar": _format_area_with_context(red_hex * hex_area, unit, hex_area),
-            },
-        ]
-        st.dataframe(pd.DataFrame(hex_rows), width="stretch", hide_index=True, height=144)
-        st.caption(
-            "Svarta hexmarkörer visar var extra ytbehov placeras. Röda hex är celler som klassas som inte lämpliga i etableringslagret."
-        )
+    with st.expander("Hexdetaljer och kartmarkörer", expanded=False):
+        st.caption("Tekniska kartmått för granskning av hexmarkörer och färgklasser.")
+        hex_stats = energy_model_state.get("establishment_hex_stats")
+        if isinstance(hex_stats, dict):
+            total_hex = int(hex_stats.get("total_hex_count", 0) or 0)
+            black_hex = int(hex_stats.get("black_hex_count", 0) or 0)
+            red_hex = int(hex_stats.get("red_hex_count", 0) or 0)
+            hex_rows = [
+                {
+                    "kategori": f"Totalt antal R{h3_resolution}-hex" if h3_resolution is not None else "Totalt antal H3-hex",
+                    "antal hex": _count_text(total_hex),
+                    "motsvarar": _format_area_with_context(total_hex * hex_area, unit, hex_area),
+                },
+                {
+                    "kategori": "Svarta hexmarkörer",
+                    "antal hex": _count_text(black_hex),
+                    "motsvarar": f"{_format_area_with_context(outside_total, unit, hex_area)} ytbehov",
+                },
+                {
+                    "kategori": "Röda hex i etableringslagret",
+                    "antal hex": _count_text(red_hex),
+                    "motsvarar": _format_area_with_context(red_hex * hex_area, unit, hex_area),
+                },
+            ]
+            st.dataframe(pd.DataFrame(hex_rows), width="stretch", hide_index=True, height=144)
+            st.caption(
+                "Svarta hexmarkörer visar var extra ytbehov placeras. Röda hex är celler som klassas som inte lämpliga i etableringslagret."
+            )
+        else:
+            st.caption("Hexstatistik saknas för denna vy.")
 
-    shortage_stats = energy_model_state.get("outside_lp_shortage_stats")
-    if isinstance(shortage_stats, dict) and outside_total > 1e-6:
-        _render_shortage_hex_stack_card(shortage_stats, unit)
+        shortage_stats = energy_model_state.get("outside_lp_shortage_stats")
+        if isinstance(shortage_stats, dict) and outside_total > 1e-6:
+            _render_shortage_hex_stack_card(shortage_stats, unit)
 
     with st.expander("Urval och ytdetaljer", expanded=False):
         solar_v1_stats = energy_model_state.get("solar_v1_stats")
@@ -5371,6 +5623,15 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
             f"{COMBINED_ESTABLISHMENT_LAYER_LABEL} visar vind och sol tillsammans. "
             f"{OUTSIDE_LP_NEED_LAYER_LABEL} visar den extra etableringsyta som krävs när scenariot inte ryms."
         )
+    if stored_current and snapshot_state.get("fingerprint") != current_fingerprint:
+        snapshot_previous = stored_current
+    else:
+        snapshot_previous = previous_snapshot
+    st.session_state[snapshot_key] = {
+        "previous": snapshot_previous,
+        "current": current_snapshot,
+        "fingerprint": current_fingerprint,
+    }
 
 
 def _render_performance_log(performance_log: list[dict[str, Any]]) -> None:
@@ -5545,126 +5806,6 @@ def _data_method(region: dict[str, Any]) -> None:
         st.json(region)
 
 
-def _render_energy_model_summary(energy_model_state: dict[str, Any]) -> None:
-    if not energy_model_state.get("available"):
-        return
-    with st.expander("Energimix och ytdetaljer", expanded=False):
-        st.caption(
-            f"{energy_model_state.get('scenario_label', energy_model_state.get('scenario', '-'))} · "
-            f"mix {float(energy_model_state.get('wind_share_pct', 0.0) or 0.0):.0f}% vind / "
-            f"{float(energy_model_state.get('solar_share_pct', 0.0) or 0.0):.0f}% sol · "
-            f"markintensitet {energy_model_state.get('area_scenario_label', '-')} · "
-            f"källa {energy_model_state.get('source_scenario_label', '-')} "
-            f"{energy_model_state.get('source_year', '-')}, skala {float(energy_model_state.get('energy_scale', 1.0) or 1.0):g}x"
-        )
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Vind", f"{float(energy_model_state.get('wind_twh', 0.0) or 0.0):.2f} TWh")
-        c2.metric("Sol", f"{float(energy_model_state.get('solar_twh', 0.0) or 0.0):.2f} TWh")
-        c3.metric("Vindyta", f"{float(energy_model_state.get('wind_area_need_km2', 0.0) or 0.0):.2f} km²")
-        c4.metric("Solyta", f"{float(energy_model_state.get('solar_area_need_km2', 0.0) or 0.0):.2f} km²")
-        solar_v1_stats = energy_model_state.get("solar_v1_stats")
-        if isinstance(solar_v1_stats, dict):
-            s1, s2, s3 = st.columns(3)
-            s1.metric(f"{SOLAR_SMALL_SCALE_LABEL}: yta", f"{float(solar_v1_stats.get('total_area_km2', 0.0) or 0.0):.2f} km²")
-            s2.metric("Täcker solbehov", f"{float(solar_v1_stats.get('covered_share_pct', 0.0) or 0.0):.1f}%")
-            s3.metric("Kvarvarande solbehov", f"{float(solar_v1_stats.get('remaining_area_km2', 0.0) or 0.0):.2f} km²")
-            st.caption(
-                f"{SOLAR_SMALL_SCALE_LABEL} är en grupp i den samlade solpotentialen och kan kompletteras av {SOLAR_LARGE_SCALE_LABEL}."
-            )
-        solar_proposal_stats = energy_model_state.get("solar_proposal_stats")
-        if isinstance(solar_proposal_stats, dict):
-            solar_need = float(energy_model_state.get("solar_area_need_km2", 0.0) or 0.0)
-            solar_selected = float(solar_proposal_stats.get("selected_area_km2", 0.0) or 0.0)
-            solar_unmet = max(0.0, float(solar_proposal_stats.get("unmet_area_km2", 0.0) or 0.0))
-            solar_inside = float(solar_proposal_stats.get("lp_selected_area_km2", solar_selected) or 0.0)
-            solar_outside = float(solar_proposal_stats.get("outside_selected_area_km2", 0.0) or 0.0)
-            solar_coverage_pct = (min(solar_selected, solar_need) / solar_need * 100.0) if solar_need > 0 else 0.0
-            p1, p2, p3, p4 = st.columns(4)
-            p1.metric("Solbehov", f"{solar_need:.2f} km²")
-            p2.metric("Sol inom landskapets potential", f"{solar_inside:.2f} km²")
-            p3.metric("Sol utanför landskapets potential", f"{solar_outside:.2f} km²")
-            p4.metric("Sol täckning", f"{solar_coverage_pct:.1f}%")
-            if solar_need > 0 and solar_outside > 1e-6:
-                st.warning(
-                    "Varning: Solpotentialen räcker inte för hela energiscenariot. "
-                    f"{OUTSIDE_LP_NEED_LAYER_LABEL}: sol ca {solar_outside:.1f} km²."
-                )
-            if solar_need > 0 and solar_unmet > 1e-6:
-                st.warning(f"Varning: Solpotentialen räcker inte med detta energiscenario. Ca {solar_unmet:.1f} km² saknas.")
-            elif solar_need > 0 and solar_outside <= 1e-6:
-                st.success("Solpotentialen räcker för detta energiscenario.")
-        st.caption(
-            f"{WIND_LANDSCAPE_POTENTIAL_LABEL} är den möjliga ytan i landskapsmodellen. "
-            f"{COMBINED_ESTABLISHMENT_LAYER_LABEL} försöker möta vald mix och area demand för både vind och sol."
-        )
-        proposal_stats = energy_model_state.get("proposal_stats") or {}
-        if proposal_stats:
-            c3, c4 = st.columns(2)
-            c3.metric("Täckt yta", f"{float(proposal_stats.get('selected_area_km2', 0.0) or 0.0):.2f} km²")
-            c4.metric("Kvar", f"{float(proposal_stats.get('unmet_area_km2', 0.0) or 0.0):.2f} km²")
-            selected_twh = float(proposal_stats.get("selected_twh", 0.0) or 0.0)
-            if selected_twh > 0:
-                st.metric("Fördelad vindproduktion", f"{selected_twh:.2f} TWh")
-            et_shortage = float(proposal_stats.get("et_unmet_area_km2", 0.0) or 0.0)
-            outside_area = float(proposal_stats.get("outside_selected_area_km2", 0.0) or 0.0)
-            outside_hex_count = int(proposal_stats.get("outside_hex_count", 0) or 0)
-            max_ring = int(proposal_stats.get("max_expansion_ring", 0) or 0)
-            if et_shortage > 0:
-                st.error(
-                    "Varning: Landskapets potential räcker inte med detta energiscenario. "
-                    f"Ca {outside_area:.0f} km2 ligger utanför den potentiella ytan och visas som en röd konfliktyta i kartan."
-                )
-                if outside_hex_count > 0:
-                    st.caption(
-                        f"Utanför LP: {outside_hex_count:,} röda hex, {outside_area:.2f} km², "
-                        f"upp till expansionslager {max_ring} från blå LP.".replace(",", " ")
-                    )
-            needed_hex = int(proposal_stats.get("needed_hex", 0) or 0)
-            selected_count = int(proposal_stats.get("selected_hex_count", 0) or 0)
-            if selected_count <= 0:
-                selected_count = len(energy_model_state.get("proposal_frame", pd.DataFrame()))
-            hex_area = float(energy_model_state.get("hex_area_km2", 0.0) or 0.0)
-            available_hex = int(proposal_stats.get("available_candidate_hex", 0) or 0)
-            available_area = float(proposal_stats.get("available_candidate_area_km2", 0.0) or 0.0)
-            primary_candidates = int(proposal_stats.get("primary_candidate_hex", 0) or 0)
-            extension_candidates = int(proposal_stats.get("extension_candidate_hex", 0) or 0)
-            selected_primary = int(proposal_stats.get("selected_primary_hex", 0) or 0)
-            selected_extension = int(proposal_stats.get("selected_extension_hex", 0) or 0)
-            min_share = float(proposal_stats.get("min_share_pct", energy_model_state.get("auto_min_potential_share_pct", 65.0)) or 65.0)
-            mean_share = float(proposal_stats.get("mean_selected_share_pct", 0.0) or 0.0)
-            available_hex_text = f"{available_hex:,}".replace(",", " ")
-            h1, h2, h3_col = st.columns(3)
-            h1.metric("Area per hex", f"{hex_area:.4f} km²")
-            h2.metric("Hela hex behövs", f"{needed_hex:,}".replace(",", " "))
-            h3_col.metric("Valda hex", f"{selected_count:,}".replace(",", " "))
-            selected_potential_area = float(proposal_stats.get("selected_potential_area_km2", 0.0) or 0.0)
-            selected_hex_footprint = float(proposal_stats.get("selected_hex_footprint_km2", 0.0) or 0.0)
-            st.caption(
-                f"{COMBINED_ESTABLISHMENT_LAYER_LABEL}: {selected_count} vindceller valda. "
-                f"De innehåller {selected_potential_area:.2f} km² potentiell yta inom {selected_hex_footprint:.2f} km² hexavtryck "
-                f"({needed_hex} hela hex som grov jämförelse). "
-                f"Valbara LP-hex: {available_hex_text} med {available_area:.2f} km² potentiell yta; "
-                f"medelandel i urvalet {mean_share:.1f}%."
-            )
-            st.caption(
-                f"Urvalsordning: först kärn-LP med LP ≥ {min_share:.0f}% "
-                f"({selected_primary:,}/{primary_candidates:,} valda), sedan kompletterande LP "
-                f"({selected_extension:,}/{extension_candidates:,} valda).".replace(",", " ")
-            )
-            if selected_count > needed_hex:
-                st.caption("Area-share gör att fler hex behövs än den teoretiska jämförelsen med helt fyllda hex.")
-            if float(proposal_stats.get("unmet_area_km2", 0.0) or 0.0) > 0:
-                st.warning(
-                    "Lämplig blå kärnyta räcker inte. Planeringsval behövs: sänk potentialkrav, släpp in kantzoner, "
-                    "ändra restriktioner, välj ett lägre framtidsscenario eller minska area demand."
-                )
-        elif energy_model_state.get("placement_mode") == "manual":
-            st.info("Självplacering är valt. Kartklick/drag-and-drop är nästa interaktionssteg; inget manuellt urval ritas ännu.")
-        warning_table = energy_model_state.get("area_warnings")
-        if isinstance(warning_table, pd.DataFrame) and not warning_table.empty:
-            st.caption("AreaDemand har datakvalitetsvarningar. Se Energimodellering-panelen för detaljer.")
-
-
 def _unified_workspace_tab(
     region: dict[str, Any],
     scenario_state: dict[str, Any],
@@ -5794,7 +5935,6 @@ def _unified_workspace_tab(
                             max_value=25.0,
                             step=1.0,
                             key="solar_draft_area_m2_per_person",
-                            disabled=not draft_small_population_active,
                             help="Schablon för småskalig anläggning: befolkning per hex multipliceras med m2 panelyta per person.",
                         )
                         st.caption("Kartlager: källa, aggregerad 100 m buffert, solpolygon och gemensam potentiell etableringsyta.")
@@ -5815,7 +5955,6 @@ def _unified_workspace_tab(
                                 max_value=500.0,
                                 step=25.0,
                                 key="solar_draft_population_buffer_m",
-                                disabled=not draft_large_population_active,
                                 help="Totalt avstånd från befolkningspunkter. 250 m betyder 250 m totalt, inte 100 + 250 m.",
                             )
                             st.caption("Avståndet är totalt från befolkningspunkter. Solpolygonen och etableringsytan använder samma Markblokke-underlag.")
@@ -5851,7 +5990,6 @@ def _unified_workspace_tab(
                                 max_value=2000.0,
                                 step=50.0,
                                 key="solar_draft_protected_buffer_m",
-                                disabled=not draft_selected_protected_ids,
                                 help="0 m tar bort själva ytorna i Skyddad natur. Högre värden lägger till buffert.",
                             )
                         draft_large_scale_active = _solar_large_scale_is_active(
@@ -5906,6 +6044,16 @@ def _unified_workspace_tab(
     resolution_info = _hex_display_rule(region, h3_resolution, zoom_family_enabled)
     st.session_state["solar_builder_params"] = solar_params
     st.session_state["wind_builder_params"] = wind_ui_params
+    if energy_model_state.get("available"):
+        energy_model_state["region_id"] = str(region.get("region_id", "region") or "region")
+        energy_model_state["wind_ui_params"] = dict(wind_ui_params)
+        energy_model_state["wind_active_source_count"] = sum(
+            len(layer_ids) for layer_ids in normalize_group_layer_map(wind_selected_layers).values()
+        )
+        energy_model_state["solar_params"] = dict(solar_params)
+        energy_model_state["solar_large_population_active"] = bool(solar_large_population_active)
+        energy_model_state["solar_large_protected_active"] = bool(solar_large_protected_active)
+        energy_model_state["solar_large_protected_layer_count"] = int(len(solar_large_protected_layer_ids))
 
     layers: list[dict[str, Any]] = []
     potential_frames: list[dict[str, Any]] = []
@@ -6156,6 +6304,7 @@ def _unified_workspace_tab(
         and energy_model_state.get("show_proposal")
         and energy_model_state.get("placement_mode") == "auto"
     ):
+        energy_model_state["establishment_layer_visible"] = False
         perf_started = _perf_start()
         selected_establishment_frame = _combined_establishment_frame(
             region,
@@ -6187,6 +6336,7 @@ def _unified_workspace_tab(
             zoom_family_enabled,
         )
         if combined_establishment_layers:
+            energy_model_state["establishment_layer_visible"] = True
             layers.extend(combined_establishment_layers)
             unified_notes.append(
                 f"{COMBINED_ESTABLISHMENT_LAYER_LABEL} ersätter de separata sol- och vindlagren: blå = vind, gul = sol, grön = båda, röd = inte lämplig."
@@ -6210,7 +6360,7 @@ def _unified_workspace_tab(
             f"R{h3_resolution}; {len(selected_establishment_frame)} hex",
         )
 
-    if energy_model_state.get("available"):
+    if energy_model_state.get("available") and energy_model_state.get("establishment_layer_visible"):
         perf_started = _perf_start()
         energy_model_state["combined_establishment_stats"] = _combined_establishment_stats(energy_model_state)
         _add_perf_timing(performance_log, "Etableringsstatistik", perf_started)
@@ -6280,18 +6430,39 @@ def _unified_workspace_tab(
     )
     proposal_stats_for_note = energy_model_state.get("proposal_stats") if isinstance(energy_model_state, dict) else None
     solar_stats_for_note = energy_model_state.get("solar_proposal_stats") if isinstance(energy_model_state, dict) else None
-    warning_parts: list[str] = []
-    if isinstance(proposal_stats_for_note, dict) and float(proposal_stats_for_note.get("et_unmet_area_km2", 0.0) or 0.0) > 0:
-        outside_area_for_note = float(proposal_stats_for_note.get("outside_selected_area_km2", 0.0) or 0.0)
-        warning_parts.append(f"vind ca {outside_area_for_note:.0f} km2")
-    if isinstance(solar_stats_for_note, dict) and float(solar_stats_for_note.get("outside_selected_area_km2", 0.0) or 0.0) > 0:
-        solar_outside_area = float(solar_stats_for_note.get("outside_selected_area_km2", 0.0) or 0.0)
-        warning_parts.append(f"sol ca {solar_outside_area:.0f} km2")
-    if warning_parts:
+    outside_parts: list[str] = []
+    unresolved_parts: list[str] = []
+    wind_outside_for_note = 0.0
+    solar_outside_for_note = 0.0
+    wind_unresolved_for_note = 0.0
+    solar_unresolved_for_note = 0.0
+    if isinstance(proposal_stats_for_note, dict):
+        wind_outside_for_note = float(proposal_stats_for_note.get("outside_selected_area_km2", 0.0) or 0.0)
+        wind_unresolved_for_note = float(proposal_stats_for_note.get("unmet_area_km2", 0.0) or 0.0)
+    if isinstance(solar_stats_for_note, dict):
+        solar_outside_for_note = float(solar_stats_for_note.get("outside_selected_area_km2", 0.0) or 0.0)
+        solar_unresolved_for_note = float(solar_stats_for_note.get("unmet_area_km2", 0.0) or 0.0)
+    if wind_outside_for_note > 1e-6:
+        outside_parts.append(f"vind {wind_outside_for_note:.0f} km²")
+    if solar_outside_for_note > 1e-6:
+        outside_parts.append(f"sol {solar_outside_for_note:.0f} km²")
+    if wind_unresolved_for_note > 1e-6:
+        unresolved_parts.append(f"vind {wind_unresolved_for_note:.0f} km²")
+    if solar_unresolved_for_note > 1e-6:
+        unresolved_parts.append(f"sol {solar_unresolved_for_note:.0f} km²")
+    if outside_parts or unresolved_parts:
+        warning_sections: list[str] = []
+        outside_total_for_note = wind_outside_for_note + solar_outside_for_note
+        unresolved_total_for_note = wind_unresolved_for_note + solar_unresolved_for_note
+        if outside_parts:
+            warning_sections.append(f"utanför potential ca {outside_total_for_note:.0f} km² ({', '.join(outside_parts)})")
+        if unresolved_parts:
+            warning_sections.append(f"kvar att lösa ca {unresolved_total_for_note:.0f} km² ({', '.join(unresolved_parts)})")
         note_body = (
             "<strong style='color:#be123c;'>Varning:</strong> "
-            "Energiscenariot kräver mer etableringsyta än landskapets potential rymmer. "
-            f"{OUTSIDE_LP_NEED_LAYER_LABEL}: " + ", ".join(warning_parts) + "."
+            "Vald energimix ryms inte helt inom landskapets potential: "
+            + "; ".join(warning_sections)
+            + "."
         )
     perf_started = _perf_start()
     _render_layers(
