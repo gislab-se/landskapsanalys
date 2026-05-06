@@ -844,14 +844,12 @@ def allocate_wind_area_from_core_hexes(
         {True: "Karn-LP", False: "Kompletterande LP"}
     )
     candidates["priority_group"] = candidates["allocation_phase"].map({"Karn-LP": 0, "Kompletterande LP": 1}).fillna(1).astype(int)
-    candidates = candidates.sort_values(
-        ["priority_group", "core_score", "zone_size", "potential_area_share_pct", "hex_id"],
-        ascending=[True, False, False, False, True],
-    ).reset_index(drop=True)
-
-    candidates["potential_area_km2"] = (
-        candidates["potential_area_share_pct"].clip(lower=0.0, upper=100.0).div(100.0) * float(hex_area_km2)
-    )
+    if "potential_area_km2" in candidates.columns:
+        candidates["potential_area_km2"] = pd.to_numeric(candidates["potential_area_km2"], errors="coerce").fillna(0.0).clip(lower=0.0)
+    else:
+        candidates["potential_area_km2"] = (
+            candidates["potential_area_share_pct"].clip(lower=0.0, upper=100.0).div(100.0) * float(hex_area_km2)
+        )
     candidates = candidates[candidates["potential_area_km2"].gt(0.0)].copy()
     if candidates.empty:
         return empty, {
@@ -865,6 +863,10 @@ def allocate_wind_area_from_core_hexes(
             "primary_candidate_hex": 0,
             "extension_candidate_hex": 0,
         }
+    candidates = candidates.sort_values(
+        ["priority_group", "core_score", "zone_size", "potential_area_share_pct", "potential_area_km2", "hex_id"],
+        ascending=[True, False, False, False, False, True],
+    ).reset_index(drop=True)
 
     remaining_area = float(area_need_km2)
     selected_rows: list[dict[str, object]] = []
