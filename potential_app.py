@@ -128,7 +128,7 @@ WIND_LAYER_SELECTION_KEY = "wind_builder_selected_layers"
 WIND_RUNTIME_OVERLAY_KEY = "wind_builder_runtime_overlay_enabled"
 SOLAR_APPLIED_CONFIG_KEY = "solar_applied_config"
 START_DEFAULT_VERSION_KEY = "potential_start_default_version"
-START_DEFAULT_VERSION = "establishment_area_default_v4"
+START_DEFAULT_VERSION = "establishment_area_default_v5"
 WIND_CONTROL_LANGUAGE = "sv"
 WIND_RUNTIME_BASE_RESOLUTION = 10
 WIND_LANDSCAPE_POTENTIAL_LABEL = "Landskapspotential Vind"
@@ -171,7 +171,7 @@ DEFAULT_WIND_ESTABLISHMENT_LAYER_SELECTION.update(
 )
 DEFAULT_SOLAR_APPLIED_CONFIG = {
     "small_population_active": False,
-    "large_markblokke_active": False,
+    "large_markblokke_active": True,
     "large_scale_active": True,
     "large_population_active": True,
     "large_protected_layer_ids": [],
@@ -1362,7 +1362,7 @@ def _ensure_default_start_state(region: dict[str, Any]) -> None:
     st.session_state["show_solar_v1"] = False
     st.session_state["show_user_solar"] = True
     st.session_state["solar_draft_small_population_active"] = False
-    st.session_state["solar_draft_large_markblokke_active"] = False
+    st.session_state["solar_draft_large_markblokke_active"] = True
     st.session_state["solar_draft_large_population_active"] = True
     st.session_state["solar_draft_protected_active"] = False
     for layer_id in SOLAR_PROTECTED_LAYER_IDS:
@@ -1386,7 +1386,9 @@ def _solar_large_scale_is_active(
     population_active: bool,
     protected_layer_ids: list[str] | tuple[str, ...],
 ) -> bool:
-    return bool(markblokke_active or population_active or protected_layer_ids)
+    # Markblokke is the current v0 source for large-scale solar land area.
+    # Population and protected nature are filters on that source, not standalone sources.
+    return bool(markblokke_active)
 
 
 def _solar_protected_layer_control_key(layer_id: str) -> str:
@@ -1411,10 +1413,7 @@ def _initial_solar_config_from_session() -> dict[str, Any]:
         for layer_id in SOLAR_PROTECTED_LAYER_IDS
         if bool(st.session_state.get(_solar_protected_layer_control_key(layer_id), False))
     ]
-    legacy_large_active = bool(st.session_state.get("show_user_solar", False)) or bool(
-        st.session_state.get("solar_large_scale_active", False)
-    )
-    large_markblokke_active = bool(st.session_state.get("solar_large_markblokke_active", legacy_large_active))
+    large_markblokke_active = True
     large_population_active = bool(st.session_state.get("solar_large_population_active", False))
     large_scale_active = _solar_large_scale_is_active(
         large_markblokke_active,
@@ -1441,8 +1440,7 @@ def _solar_config_from_session() -> dict[str, Any]:
         config = _initial_solar_config_from_session()
         st.session_state[SOLAR_APPLIED_CONFIG_KEY] = dict(config)
     protected_layer_ids = _solar_control_selected_protected_layer_ids(config)
-    legacy_large_active = bool(config.get("large_scale_active", config.get("large_population_active", False)))
-    large_markblokke_active = bool(config.get("large_markblokke_active", legacy_large_active))
+    large_markblokke_active = True
     large_population_active = bool(config.get("large_population_active", False))
     large_scale_active = _solar_large_scale_is_active(
         large_markblokke_active,
@@ -1465,7 +1463,7 @@ def _solar_config_from_session() -> dict[str, Any]:
 def _prime_solar_draft_state(config: dict[str, Any]) -> None:
     protected_layer_ids = set(_solar_control_selected_protected_layer_ids(config))
     st.session_state.setdefault("solar_draft_small_population_active", bool(config.get("small_population_active", False)))
-    st.session_state.setdefault("solar_draft_large_markblokke_active", bool(config.get("large_markblokke_active", False)))
+    st.session_state["solar_draft_large_markblokke_active"] = True
     st.session_state.setdefault("solar_draft_large_population_active", bool(config.get("large_population_active", False)))
     st.session_state.setdefault("solar_draft_area_m2_per_person", float(config.get("panel_area_m2_per_person", 10.0) or 10.0))
     st.session_state.setdefault("solar_draft_population_buffer_m", float(config.get("population_buffer_m", 250.0) or 250.0))
@@ -1476,7 +1474,7 @@ def _prime_solar_draft_state(config: dict[str, Any]) -> None:
 
 
 def _solar_draft_config_from_session() -> dict[str, Any]:
-    large_markblokke_active = bool(st.session_state.get("solar_draft_large_markblokke_active", False))
+    large_markblokke_active = True
     large_population_active = bool(st.session_state.get("solar_draft_large_population_active", False))
     protected_active = bool(st.session_state.get("solar_draft_protected_active", False))
     protected_layer_ids = (
@@ -1712,7 +1710,7 @@ def _solar_v1_class(area_m2: float) -> dict[str, str]:
 def _solar_v1_legend_items() -> list[dict[str, str]]:
     seen: set[str] = set()
     items: list[dict[str, str]] = []
-    for value in [0, 10, 50, 150, 500, 1500]:
+    for value in [10, 50, 150, 500, 1500]:
         item = _solar_v1_class(float(value))
         if item["id"] in seen:
             continue
@@ -1821,34 +1819,35 @@ def _solar_v1_frame(
 
 
 @st.cache_data(show_spinner=False)
-def _solar_v1_feature_collection(frame_json: str, display_geometry_path: str | None) -> dict[str, Any]:
+def _solar_v1_feature_collection(frame_json: str, target_resolution: int) -> dict[str, Any]:
     frame = pd.read_json(StringIO(frame_json), orient="records")
     if frame.empty:
         return {"type": "FeatureCollection", "features": []}
-    display_geometries = load_h3_display_geometries(display_geometry_path) if display_geometry_path else None
     features: list[dict[str, Any]] = []
     for row in frame.itertuples(index=False):
         hex_id = str(row.hex_id)
-        geometry = geometry_for_hex(hex_id, display_geometries)
-        if geometry is None and display_geometry_path:
+        area_m2 = float(getattr(row, "solar_v1_area_m2", 0.0) or 0.0)
+        if area_m2 <= 0:
             continue
+        try:
+            source_resolution = int(h3.get_resolution(hex_id))
+        except Exception:
+            source_resolution = int(target_resolution)
+        child_resolution = min(15, max(int(target_resolution), source_resolution) + 1)
+        try:
+            display_hex = str(h3.cell_to_center_child(hex_id, child_resolution))
+        except Exception:
+            display_hex = hex_id
+        geometry = _h3_polygon_geometry(display_hex)
         if geometry is None:
-            try:
-                ring = [[float(lng), float(lat)] for lat, lng in h3.cell_to_boundary(hex_id)]
-            except Exception:
-                continue
-            if ring and ring[0] != ring[-1]:
-                ring.append(ring[0])
-            geometry = {"type": "Polygon", "coordinates": [ring]}
-        if not geometry.get("coordinates"):
             continue
         population = float(getattr(row, "population", 0.0) or 0.0)
-        area_m2 = float(getattr(row, "solar_v1_area_m2", 0.0) or 0.0)
         popup = (
             f"<strong>{hex_id}</strong><br>"
             f"{SOLAR_SMALL_SCALE_LABEL}: {area_m2:.0f} m2<br>"
             f"Befolkning i hex: {population:.1f}<br>"
-            f"Landskapstyp: {int(row.class_km)} - {row.landscape_type}"
+            f"Landskapstyp: {int(row.class_km)} - {row.landscape_type}<br>"
+            "Visas som liten schablonhex, inte som faktisk takpolygon."
         )
         features.append(
             {
@@ -1856,10 +1855,16 @@ def _solar_v1_feature_collection(frame_json: str, display_geometry_path: str | N
                 "geometry": geometry,
                 "properties": {
                     "hex_id": hex_id,
+                    "display_hex_id": display_hex,
                     "score": float(getattr(row, "solar_v1_score", 0.0) or 0.0),
                     "class": str(getattr(row, "solar_v1_class", "none")),
                     "class_label": str(getattr(row, "solar_v1_class_label", "0 m2")),
-                    "fill": str(getattr(row, "solar_v1_color", "#991b1b")),
+                    "fill": str(getattr(row, "solar_v1_color", "#fde68a")),
+                    "stroke": "#92400e",
+                    "stroke_weight": 0.18,
+                    "fill_opacity": 0.72,
+                    "tooltip_title": f"{SOLAR_SMALL_SCALE_LABEL}: {area_m2:.0f} m2",
+                    "tooltip_body": "Schablon från befolkning per hex",
                     "popup": popup,
                 },
             }
@@ -1870,7 +1875,7 @@ def _solar_v1_feature_collection(frame_json: str, display_geometry_path: str | N
 def _solar_v1_layer(
     name: str,
     frame: pd.DataFrame,
-    display_geometry_path: str | None,
+    target_resolution: int,
 ) -> dict[str, Any]:
     if frame.empty:
         map_frame = pd.DataFrame(
@@ -1902,14 +1907,20 @@ def _solar_v1_layer(
         ].copy()
     return {
         "name": name,
-        "feature_collection": _solar_v1_feature_collection(map_frame.to_json(orient="records", force_ascii=False), display_geometry_path),
+        "feature_collection": _solar_v1_feature_collection(map_frame.to_json(orient="records", force_ascii=False), int(target_resolution)),
         "fill_property": "fill",
+        "fill_opacity_property": "fill_opacity",
+        "stroke_property": "stroke",
+        "stroke_weight_property": "stroke_weight",
         "legend_items": _solar_v1_legend_items(),
-        "legend_id": "solar_v1_area",
-        "legend_title": "Småskalig solyta",
-        "default_visible": False,
-        "stroke": False,
-        "weight": 0.0,
+        "legend_id": "solar_v1_schematic",
+        "legend_title": "Småskalig solyta (schablon)",
+        "default_visible": True,
+        "stroke": True,
+        "stroke_opacity": 0.42,
+        "fill_opacity": 0.72,
+        "weight": 0.18,
+        "z_index": 488,
         "layer_kind": "hex",
         "opacity_family": name,
         "opacity_label": name,
@@ -2485,7 +2496,7 @@ def _solar_large_scale_polygon_geojson(path_str: str, population_buffer_m: float
         props["popup"] = (
             f"<strong>{SOLAR_POTENTIAL_POLYGON_LABEL}</strong><br>"
             f"Grupp: {SOLAR_LARGE_SCALE_LABEL}<br>"
-            "Polygonkälla: Markblokke 2026<br>"
+            "Polygonkälla: kandidatmark v0<br>"
             f"Avstånd till befolkning: {buffer_label}"
         )
         props["tooltip_title"] = SOLAR_POTENTIAL_POLYGON_LABEL
@@ -2631,7 +2642,7 @@ def _solar_potential_polygon_layer(
                     (
                         f"<strong>{SOLAR_POTENTIAL_POLYGON_LABEL}</strong><br>"
                         f"Grupp: {SOLAR_LARGE_SCALE_LABEL}<br>"
-                        "Polygonkälla: Markblokke 2026"
+                        "Polygonkälla: kandidatmark v0"
                     ),
                 )
                 props["tooltip_title"] = SOLAR_POTENTIAL_POLYGON_LABEL
@@ -6129,6 +6140,7 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
 
     proposal_stats = energy_model_state.get("proposal_stats") if isinstance(energy_model_state, dict) else None
     solar_stats = energy_model_state.get("solar_proposal_stats") if isinstance(energy_model_state, dict) else None
+    solar_v1_stats = energy_model_state.get("solar_v1_stats") if isinstance(energy_model_state, dict) else None
     proposal_stats = proposal_stats if isinstance(proposal_stats, dict) else {}
     solar_stats = solar_stats if isinstance(solar_stats, dict) else {}
 
@@ -6212,23 +6224,62 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
     source_label = str(energy_model_state.get("source_scenario_label", "-") or "-")
     source_year = str(energy_model_state.get("source_year", "-") or "-")
     energy_scale = float(energy_model_state.get("energy_scale", 1.0) or 1.0)
+    st.session_state.setdefault("establishment_area_display_unit", "km²")
+    unit = str(st.session_state.get("establishment_area_display_unit", "km²") or "km²")
+    if unit not in AREA_DISPLAY_UNITS:
+        unit = "km²"
+        st.session_state["establishment_area_display_unit"] = unit
     st.caption(
         f"Dummy/prototypdata · {scenario_label}: {energy_scale:g}x energi · "
         f"markintensitet {energy_model_state.get('area_scenario_label', '-')} · "
         f"mix {wind_share_pct:.0f}% vind / {solar_share_pct:.0f}% sol · källa {source_label} {source_year}"
-    )
-    unit = st.radio(
-        "Enhet",
-        options=AREA_DISPLAY_UNITS,
-        index=0,
-        horizontal=True,
-        key="establishment_area_display_unit",
     )
     st.caption(_format_hex_size_caption(h3_resolution, hex_area))
     if display_h3_resolution is not None and h3_resolution is not None and display_h3_resolution != h3_resolution:
         st.caption(
             f"Kartan visas som R{display_h3_resolution}. Ytbalans, täckning och scenarioallokering beräknas i R{h3_resolution}."
         )
+
+    active_filter_notes: list[str] = []
+    wind_params = energy_model_state.get("wind_ui_params") if isinstance(energy_model_state, dict) else None
+    if isinstance(wind_params, dict) and wind_available_hex > 0:
+        settlement_distance = float(wind_params.get("settlement_distance_m", 0.0) or 0.0)
+        road_distance = float(wind_params.get("road_distance_m", 0.0) or 0.0)
+        active_filter_notes.append(f"vind: befolkning {settlement_distance:.0f} m, vägar {road_distance:.0f} m")
+    solar_params = energy_model_state.get("solar_params") if isinstance(energy_model_state, dict) else None
+    if isinstance(solar_params, dict) and solar_available_hex > 0:
+        if bool(energy_model_state.get("solar_large_population_active", False)):
+            active_filter_notes.append(f"sol: befolkning {float(solar_params.get('population_buffer_m', 0.0) or 0.0):.0f} m")
+        if bool(energy_model_state.get("solar_large_protected_active", False)):
+            active_filter_notes.append(f"sol: skyddad natur {float(solar_params.get('protected_buffer_m', 0.0) or 0.0):.0f} m")
+
+    shortage_driver = ""
+    if outside_total > 1e-6:
+        if solar_outside_need > wind_outside_need * 1.15:
+            shortage_driver = " Bristen drivs främst av sol."
+        elif wind_outside_need > solar_outside_need * 1.15:
+            shortage_driver = " Bristen drivs främst av vind."
+        else:
+            shortage_driver = " Bristen är ungefär jämnt fördelad mellan vind och sol."
+    result_sentence = (
+        f"Scenariot ryms till {covered_share:.1f}% inom potentialen; "
+        f"{_format_area_primary(outside_total, unit, hex_area)} behöver lösas utanför potentialen.{shortage_driver}"
+        if outside_total > 1e-6
+        else f"Scenariot ryms inom potentialen med nuvarande filter; {covered_share:.1f}% av ytbehovet täcks."
+    )
+    map_summary_parts = [
+        f"{COMBINED_ESTABLISHMENT_LAYER_LABEL} visar vind/sol-potential efter filter",
+        f"{SCENARIO_ALLOCATION_LAYER_LABEL} visar scenariots placering med vita hex",
+    ]
+    if isinstance(solar_v1_stats, dict):
+        map_summary_parts.append(f"{SOLAR_SMALL_SCALE_LABEL} visas som gula schablonhexar")
+    if outside_total > 1e-6:
+        map_summary_parts.append(f"{OUTSIDE_LP_NEED_LAYER_LABEL} visar bristen utanför ön")
+    st.markdown("**Sammanfattning**")
+    st.caption(result_sentence)
+    st.caption("Karta: " + "; ".join(map_summary_parts) + ".")
+    if active_filter_notes:
+        st.caption("Aktiva filter: " + "; ".join(active_filter_notes) + ".")
 
     if outside_total > 1e-6:
         st.warning(
@@ -6327,43 +6378,33 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
     ]
     st.markdown("**Vind/sol och landskapspåverkan**")
     st.caption(
-        "Potential efter filter är tillgänglig yta före urval. Inom potential är den del av scenariot som ryms i landskapet. "
-        "Ytbehov utanför potential är hela bristen: ytbehov minus den del som ryms inom potentialen. "
-        "Outnyttjad potential är lämplig yta som scenariot inte använder."
+        "Tabellen visar ytbehov, tillgänglig potential efter filter, scenariots yta inom potential och återstående brist utanför potential."
     )
     _render_impact_change_table(impact_rows)
-    st.caption(
-        "Totalraden summerar teknikerna. En grön etableringshex med vit child-hex kan därför bära både vind- och solscenarioyta. "
-        "Det betyder samnyttjande i modellen, inte att den fysiska hexytan automatiskt dubbleras."
-    )
-    st.caption(
-        f"Ytbalans och scenarioallokering beräknas i R{h3_resolution if h3_resolution is not None else WIND_RUNTIME_BASE_RESOLUTION}. "
-        "Vald H3-upplösning ska främst påverka hur kartan generaliseras, inte slutsatsen i panelen."
-    )
-    st.caption(
-        f"{COMBINED_ESTABLISHMENT_LAYER_LABEL}: blå = endast vind, gul = endast sol, grön = båda och röd = inte lämplig. "
-        f"{SCENARIO_ALLOCATION_LAYER_LABEL} använder vita child-hex för scenariots placering oavsett teknik."
-    )
-    st.caption("Pilarna visar procentuell förändring sedan föregående beräknade läge: grön upp = ökat, röd ner = minskat, gul/grå = oförändrat.")
+    with st.expander("Så läses tabellen", expanded=False):
+        st.caption(
+            "Totalraden summerar teknikerna. En grön etableringshex med vit child-hex kan därför bära både vind- och solscenarioyta. "
+            "Det betyder samnyttjande i modellen, inte att den fysiska hexytan automatiskt dubbleras."
+        )
+        st.caption(
+            f"Ytbalans och scenarioallokering beräknas i R{h3_resolution if h3_resolution is not None else WIND_RUNTIME_BASE_RESOLUTION}. "
+            "Vald H3-upplösning ska främst påverka hur kartan generaliseras, inte slutsatsen i panelen."
+        )
+        st.caption(
+            f"{COMBINED_ESTABLISHMENT_LAYER_LABEL}: blå = endast vind, gul = endast sol, grön = båda och röd = inte lämplig. "
+            f"{SCENARIO_ALLOCATION_LAYER_LABEL} använder vita child-hex för scenariots placering oavsett teknik."
+        )
+        st.caption("Pilarna visar procentuell förändring sedan föregående beräknade läge: grön upp = ökat, röd ner = minskat, gul/grå = oförändrat.")
 
-    active_filter_notes: list[str] = []
-    wind_params = energy_model_state.get("wind_ui_params") if isinstance(energy_model_state, dict) else None
-    if isinstance(wind_params, dict) and wind_available_hex > 0:
-        settlement_distance = float(wind_params.get("settlement_distance_m", 0.0) or 0.0)
-        road_distance = float(wind_params.get("road_distance_m", 0.0) or 0.0)
-        active_filter_notes.append(f"vind: befolkning {settlement_distance:.0f} m, vägar {road_distance:.0f} m")
-    solar_params = energy_model_state.get("solar_params") if isinstance(energy_model_state, dict) else None
-    if isinstance(solar_params, dict) and solar_available_hex > 0:
-        if bool(energy_model_state.get("solar_large_population_active", False)):
-            active_filter_notes.append(f"sol: befolkning {float(solar_params.get('population_buffer_m', 0.0) or 0.0):.0f} m")
-        if bool(energy_model_state.get("solar_large_protected_active", False)):
-            active_filter_notes.append(f"sol: skyddad natur {float(solar_params.get('protected_buffer_m', 0.0) or 0.0):.0f} m")
-    if active_filter_notes:
-        st.caption("Beräknat med " + "; ".join(active_filter_notes) + ".")
-    st.caption(
-        f"Ytbalansen bygger på scenarioallokeringen. {COMBINED_ESTABLISHMENT_LAYER_LABEL} visar potential efter filter; "
-        f"{SCENARIO_ALLOCATION_LAYER_LABEL} visar vilka delar scenariot faktiskt använder."
-    )
+    with st.expander("Visning och enheter", expanded=False):
+        st.radio(
+            "Enhet",
+            options=AREA_DISPLAY_UNITS,
+            index=AREA_DISPLAY_UNITS.index(unit),
+            horizontal=True,
+            key="establishment_area_display_unit",
+        )
+        st.caption("Byte av enhet ändrar bara hur ytor visas i panelen, inte modellresultatet.")
 
     with st.expander("Hexdetaljer och kartmarkörer", expanded=False):
         st.caption("Tekniska kartmått för granskning av hexmarkörer och färgklasser.")
@@ -6419,7 +6460,6 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
             _render_shortage_hex_stack_card(shortage_stats, unit)
 
     with st.expander("Urval och ytdetaljer", expanded=False):
-        solar_v1_stats = energy_model_state.get("solar_v1_stats")
         if isinstance(solar_v1_stats, dict):
             small_cols = st.columns(3)
             small_cols[0].metric(f"{SOLAR_SMALL_SCALE_LABEL}: yta", f"{float(solar_v1_stats.get('total_area_km2', 0.0) or 0.0):.2f} km²")
@@ -6683,7 +6723,7 @@ def _unified_workspace_tab(
     st.session_state.setdefault("show_solar_v1", False)
     st.session_state.setdefault("solar_small_population_active", True)
     st.session_state.setdefault("solar_large_scale_active", False)
-    st.session_state.setdefault("solar_large_markblokke_active", False)
+    st.session_state["solar_large_markblokke_active"] = True
     st.session_state.setdefault("solar_large_population_active", False)
     st.session_state.setdefault("solar_v1_area_m2_per_person", 10.0)
     st.session_state.setdefault("solar_protected_buffer_m", 0.0)
@@ -6698,7 +6738,6 @@ def _unified_workspace_tab(
     show_solar_v1 = bool(applied_solar_config.get("small_population_active", False))
     show_user_solar = bool(applied_solar_config.get("large_scale_active", False))
     solar_small_population_active = bool(applied_solar_config.get("small_population_active", False))
-    solar_large_markblokke_active = bool(applied_solar_config.get("large_markblokke_active", False))
     solar_large_population_active = bool(applied_solar_config.get("large_population_active", False))
     solar_large_protected_layer_ids = list(applied_solar_config.get("large_protected_layer_ids", []))
     solar_large_protected_active = bool(solar_large_protected_layer_ids)
@@ -6780,6 +6819,11 @@ def _unified_workspace_tab(
                         )
                         if draft_small_population_active and not SOLAR_V1_POPULATION_LAYER_PATH.exists():
                             st.warning(_solar_v1_population_source_status())
+                        if draft_small_population_active:
+                            st.info(
+                                "Småskalig sol är en schablon från befolkning per hex. "
+                                "Den visas som små gula schablonhexar, inte som faktiska takpolygoner eller sammanhängande markyta."
+                            )
                         st.slider(
                             "Panelyta per person",
                             min_value=0.0,
@@ -6790,11 +6834,6 @@ def _unified_workspace_tab(
                         )
                         st.caption("Kartlager: källa, aggregerad 100 m buffert, solpolygon och gemensam potentiell etableringsyta.")
                     with st.expander(SOLAR_LARGE_SCALE_LABEL, expanded=False):
-                        draft_large_markblokke_active = st.checkbox(
-                            "Visa jordbruksmark (Markblokke)",
-                            key="solar_draft_large_markblokke_active",
-                            help="Visar och beräknar storskalig sol från Markblokke över hela öns landskapsunderlag.",
-                        )
                         with st.expander("Befolkning", expanded=False):
                             draft_large_population_active = st.checkbox(
                                 "Befolkningspunkter",
@@ -6808,7 +6847,7 @@ def _unified_workspace_tab(
                                 key="solar_draft_population_buffer_m",
                                 help="Totalt avstånd från befolkningspunkter. 250 m betyder 250 m totalt, inte 100 + 250 m.",
                             )
-                            st.caption("Avståndet är totalt från befolkningspunkter. Solpolygonen och etableringsytan använder samma Markblokke-underlag.")
+                            st.caption("Avståndet är totalt från befolkningspunkter. Solpolygonen och etableringsytan använder samma kandidatmarksunderlag.")
                         draft_selected_protected_ids: list[str] = []
                         with st.expander(PROTECTED_NATURE_LABEL, expanded=False):
                             draft_protected_active = st.checkbox(
@@ -6843,14 +6882,7 @@ def _unified_workspace_tab(
                                 key="solar_draft_protected_buffer_m",
                                 help="0 m tar bort själva ytorna i Skyddad natur. Högre värden lägger till buffert.",
                             )
-                        draft_large_scale_active = _solar_large_scale_is_active(
-                            draft_large_markblokke_active,
-                            draft_large_population_active,
-                            draft_selected_protected_ids,
-                        )
-                        if not draft_large_scale_active:
-                            st.caption("Storskalig sol aktiveras när minst ett lager i gruppen är valt.")
-                        st.caption("Landskapstypsfiltret är borttaget. Markblokke visas över hela öns landskapsunderlag.")
+                        st.caption("Storskalig sol använder tills vidare kandidatmark över hela öns landskapsunderlag.")
                         st.caption("Ingen bonitets- eller jordklassvariabel finns i nuvarande solunderlag; jordart/prekvartär beskriver geologi, inte jordbruksmarkens kvalitet.")
                     apply_solar = st.form_submit_button("Använd ändringar", type="primary", width="stretch")
                 if apply_solar:
@@ -6976,7 +7008,7 @@ def _unified_workspace_tab(
             }
         )
         unified_notes.append(
-            f"{SOLAR_LARGE_SCALE_LABEL} använder Markblokke över hela öns landskapsunderlag och filtrerar inte längre på två landskapstyper."
+            f"{SOLAR_LARGE_SCALE_LABEL} använder kandidatmark över hela öns landskapsunderlag och filtrerar inte längre på två landskapstyper."
         )
         if solar_large_population_active:
             unified_notes.append(
@@ -7007,6 +7039,14 @@ def _unified_workspace_tab(
             solar_small_buffer_geojson = _solar_population_buffer_geojson(100.0)
             _append_unique_layer(layers, _solar_population_source_layer())
             _append_unique_layer(layers, _solar_population_buffer_layer(region, h3_resolution, 100.0))
+        _append_unique_layer(
+            layers,
+            _solar_v1_layer(
+                f"{SOLAR_SMALL_SCALE_LABEL} (schablonhex)",
+                solar_v1_frame,
+                h3_resolution,
+            ),
+        )
         potential_frames.append(
             {
                 "label": SOLAR_SMALL_SCALE_LABEL,
@@ -7026,6 +7066,9 @@ def _unified_workspace_tab(
         energy_model_state["solar_v1_stats"] = _solar_v1_stats(solar_v1_analysis_frame, energy_model_state)
         unified_notes.append(
             f"{SOLAR_SMALL_SCALE_LABEL} bygger i första versionen på befolkning per hex och {solar_v1_area_m2_per_person:.0f} m2 panelyta per person."
+        )
+        unified_notes.append(
+            f"{SOLAR_SMALL_SCALE_LABEL} visas som separata gula schablonhexar för att inte läsas som sammanhängande markyta."
         )
         unified_notes.append(_solar_v1_population_source_status())
         _add_perf_timing(
@@ -7055,6 +7098,13 @@ def _unified_workspace_tab(
                 user_solar_analysis_frame if show_user_solar else pd.DataFrame(),
             )
         )
+        solar_establishment_potential_frame = _combined_solar_hex_frame(
+            region,
+            landscape_manifest,
+            analysis_h3_resolution,
+            pd.DataFrame(),
+            user_solar_analysis_frame if show_user_solar else pd.DataFrame(),
+        )
         _append_unique_layer(
             layers,
             _solar_potential_polygon_layer(
@@ -7063,7 +7113,7 @@ def _unified_workspace_tab(
                 solar_large_polygon_geojson,
             ),
         )
-        combined_solar_potential_frame = combined_solar_analysis_frame.copy()
+        combined_solar_potential_frame = solar_establishment_potential_frame.copy()
         potential_frames.append(
             {
                 "label": SOLAR_LANDSCAPE_POTENTIAL_LABEL,
