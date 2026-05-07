@@ -157,6 +157,85 @@ WIND_CULTURE_GROUP_ID = "culture"
 WIND_CULTURE_GROUP_LABEL = "kulturmiljöer"
 SOLAR_PROTECTED_GROUP_ID = "protected"
 SOLAR_PROTECTED_LAYER_IDS = tuple(WIND_GROUP_LAYER_DEFAULTS.get(SOLAR_PROTECTED_GROUP_ID, []))
+SOLAR_ROAD_GROUP_ID = "transport"
+SOLAR_CULTURE_GROUP_ID = "culture"
+SOLAR_COASTAL_GROUP_ID = "coastal"
+SOLAR_FILTER_GROUP_SPECS: dict[str, dict[str, Any]] = {
+    SOLAR_PROTECTED_GROUP_ID: {
+        "label": PROTECTED_NATURE_LABEL,
+        "source_label": SOLAR_PROTECTED_SOURCE_LABEL,
+        "buffer_label": SOLAR_PROTECTED_BUFFER_LABEL,
+        "layer_ids": SOLAR_PROTECTED_LAYER_IDS,
+        "active_key": "large_protected_active",
+        "layer_ids_key": "large_protected_layer_ids",
+        "buffer_key": "protected_buffer_m",
+        "draft_active_key": "solar_draft_protected_active",
+        "draft_buffer_key": "solar_draft_protected_buffer_m",
+        "buffer_default_m": 0.0,
+        "buffer_min_m": 0.0,
+        "buffer_max_m": 2000.0,
+        "buffer_step_m": 50.0,
+        "source_color": "#16a34a",
+        "buffer_color": "#16a34a",
+        "caption": f"{PROTECTED_NATURE_LABEL} används som avdrag i storskalig solpotential.",
+    },
+    SOLAR_ROAD_GROUP_ID: {
+        "label": "Vägar",
+        "source_label": "Källa: Vägar",
+        "buffer_label": "Buffert: Vägar",
+        "layer_ids": tuple(WIND_GROUP_LAYER_DEFAULTS.get(SOLAR_ROAD_GROUP_ID, [])),
+        "active_key": "large_road_active",
+        "layer_ids_key": "large_road_layer_ids",
+        "buffer_key": "road_buffer_m",
+        "draft_active_key": "solar_draft_road_active",
+        "draft_buffer_key": "solar_draft_road_buffer_m",
+        "buffer_default_m": 100.0,
+        "buffer_min_m": 0.0,
+        "buffer_max_m": 500.0,
+        "buffer_step_m": 25.0,
+        "source_color": "#b45309",
+        "buffer_color": "#f97316",
+        "caption": "Vägfiltret prövar respektavstånd till större vägar och allmänna vägstråk.",
+    },
+    SOLAR_CULTURE_GROUP_ID: {
+        "label": "Kulturmiljö",
+        "source_label": "Källa: Kulturmiljö",
+        "buffer_label": "Buffert: Kulturmiljö",
+        "layer_ids": tuple(WIND_GROUP_LAYER_DEFAULTS.get(SOLAR_CULTURE_GROUP_ID, [])),
+        "active_key": "large_culture_active",
+        "layer_ids_key": "large_culture_layer_ids",
+        "buffer_key": "culture_buffer_m",
+        "draft_active_key": "solar_draft_culture_active",
+        "draft_buffer_key": "solar_draft_culture_buffer_m",
+        "buffer_default_m": 0.0,
+        "buffer_min_m": 0.0,
+        "buffer_max_m": 1500.0,
+        "buffer_step_m": 50.0,
+        "source_color": "#9333ea",
+        "buffer_color": "#a855f7",
+        "caption": "Kulturmiljöfiltret tar bort ytor som träffar valda kulturmiljölager och eventuell buffert.",
+    },
+    SOLAR_COASTAL_GROUP_ID: {
+        "label": "Strandskydd / kust",
+        "source_label": "Källa: Strandskydd / kust",
+        "buffer_label": "Buffert: Strandskydd / kust",
+        "layer_ids": tuple(WIND_GROUP_LAYER_DEFAULTS.get(SOLAR_COASTAL_GROUP_ID, [])),
+        "default_layer_ids": ("strand_protection",),
+        "active_key": "large_coastal_active",
+        "layer_ids_key": "large_coastal_layer_ids",
+        "buffer_key": "coastal_buffer_m",
+        "draft_active_key": "solar_draft_coastal_active",
+        "draft_buffer_key": "solar_draft_coastal_buffer_m",
+        "buffer_default_m": 0.0,
+        "buffer_min_m": 0.0,
+        "buffer_max_m": 1000.0,
+        "buffer_step_m": 50.0,
+        "source_color": "#0e7490",
+        "buffer_color": "#06b6d4",
+        "caption": "Strandskydd och kustzon kan användas som ett försiktigt kustnära avdrag.",
+    },
+}
+SOLAR_FILTER_GROUP_IDS = tuple(SOLAR_FILTER_GROUP_SPECS)
 DEFAULT_WIND_ESTABLISHMENT_LAYER_SELECTION = {group_id: [] for group_id in WIND_GROUP_LAYER_DEFAULTS}
 DEFAULT_WIND_ADVANCED_LAYER_SELECTION = {
     WIND_SETTLEMENT_GROUP_ID: [WIND_POPULATION_SOURCE_LAYER_ID],
@@ -165,15 +244,23 @@ DEFAULT_WIND_ADVANCED_LAYER_SELECTION = {
 }
 DEFAULT_SOLAR_APPLIED_CONFIG = {
     "small_population_active": False,
-    "large_markblokke_active": True,
     "large_unfiltered_land_active": True,
     "large_scale_active": True,
     "large_population_active": False,
     "large_protected_layer_ids": [],
     "large_protected_active": False,
+    "large_road_layer_ids": [],
+    "large_road_active": False,
+    "large_culture_layer_ids": [],
+    "large_culture_active": False,
+    "large_coastal_layer_ids": [],
+    "large_coastal_active": False,
     "panel_area_m2_per_person": 10.0,
     "population_buffer_m": 250.0,
     "protected_buffer_m": 0.0,
+    "road_buffer_m": 100.0,
+    "culture_buffer_m": 0.0,
+    "coastal_buffer_m": 0.0,
 }
 ENERGY_PROPOSAL_LAYER_LABEL = WIND_ESTABLISHMENT_LAYER_LABEL
 WIND_AUTO_RESOLUTION_MIN_ZOOM: dict[int, int] = {10: 11, 9: 9, 8: 7, 7: 5, 6: 0}
@@ -187,19 +274,6 @@ SOLAR_V1_POPULATION_LAYER_PATH = (
     / "01_fastboendebefolkningmapinfo.csv"
 )
 SOLAR_V1_POPULATION_COUNT_COLUMN = "fastboendebefolkningmapinfo_count"
-SOLAR_LARGE_SCALE_POLYGON_DIR = (
-    ROOT
-    / "docs"
-    / "geocontext"
-    / "potential_framework"
-    / "data"
-    / "bornholm_solar_large_scale_markblokke"
-)
-SOLAR_LARGE_SCALE_H3_R10_AREA_PATH = (
-    SOLAR_LARGE_SCALE_POLYGON_DIR
-    / "h3_r10_area_share"
-    / "markblokke_bornholm_outside_population_000m_h3_r10_area_share.csv"
-)
 EML_PROVIDER_URL = "https://energymodellinglab.com/"
 IVL_PROVIDER_URL = "https://www.ivl.se/"
 WIND_SHARE_CLASS_SPECS: list[dict[str, Any]] = [
@@ -1358,37 +1432,111 @@ def _ensure_default_start_state(region: dict[str, Any]) -> None:
     st.session_state["show_solar_v1"] = False
     st.session_state["show_user_solar"] = True
     st.session_state["solar_draft_small_population_active"] = False
-    st.session_state["solar_draft_large_markblokke_active"] = True
     st.session_state["solar_draft_large_population_active"] = False
-    st.session_state["solar_draft_protected_active"] = False
-    for layer_id in SOLAR_PROTECTED_LAYER_IDS:
-        st.session_state[_solar_protected_layer_control_key(layer_id)] = True
+    for group_id, spec in SOLAR_FILTER_GROUP_SPECS.items():
+        st.session_state[str(spec["draft_active_key"])] = False
+        default_layer_ids = set(_solar_default_filter_layer_ids(group_id))
+        for layer_id in spec.get("layer_ids") or []:
+            st.session_state[_solar_filter_layer_control_key(group_id, str(layer_id))] = str(layer_id) in default_layer_ids
     st.session_state[start_default_key] = START_DEFAULT_VERSION
 
 
-def _solar_control_selected_protected_layer_ids(config: dict[str, Any]) -> list[str]:
-    raw_ids = config.get("large_protected_layer_ids")
+def _solar_filter_spec(group_id: str) -> dict[str, Any]:
+    return SOLAR_FILTER_GROUP_SPECS[str(group_id)]
+
+
+def _solar_filter_layer_ids(group_id: str) -> tuple[str, ...]:
+    return tuple(str(layer_id) for layer_id in (_solar_filter_spec(group_id).get("layer_ids") or ()))
+
+
+def _solar_default_filter_layer_ids(group_id: str) -> tuple[str, ...]:
+    spec = _solar_filter_spec(group_id)
+    requested = spec.get("default_layer_ids")
+    if requested is None:
+        requested = spec.get("layer_ids")
+    allowed = set(_solar_filter_layer_ids(group_id))
+    return tuple(str(layer_id) for layer_id in (requested or ()) if str(layer_id) in allowed)
+
+
+def _solar_filter_layer_control_key(group_id: str, layer_id: str) -> str:
+    if str(group_id) == SOLAR_PROTECTED_GROUP_ID:
+        return _solar_protected_layer_control_key(str(layer_id))
+    return f"solar_draft_{group_id}_layer__{layer_id}"
+
+
+def _solar_control_selected_filter_layer_ids(config: dict[str, Any], group_id: str) -> list[str]:
+    spec = _solar_filter_spec(group_id)
+    raw_ids = config.get(str(spec["layer_ids_key"]))
     if isinstance(raw_ids, (list, tuple, set)):
         requested = [str(layer_id) for layer_id in raw_ids]
-    elif bool(config.get("large_protected_active", False)):
-        requested = list(_solar_available_protected_layer_ids())
+    elif bool(config.get(str(spec["active_key"]), False)):
+        requested = list(_solar_default_filter_layer_ids(group_id))
     else:
         requested = []
-    return list(_solar_available_protected_layer_ids(requested))
+    return list(_solar_available_filter_layer_ids(group_id, requested))
+
+
+def _solar_control_selected_protected_layer_ids(config: dict[str, Any]) -> list[str]:
+    return _solar_control_selected_filter_layer_ids(config, SOLAR_PROTECTED_GROUP_ID)
+
+
+def _solar_filter_layer_labels(layer_ids: list[str] | tuple[str, ...]) -> list[str]:
+    _, layers, _ = load_acceptance_registry()
+    labels: list[str] = []
+    for layer_id in layer_ids:
+        layer_spec = layers.get(str(layer_id))
+        if layer_spec is None:
+            labels.append(str(layer_id))
+            continue
+        labels.append(layer_label(layer_spec, WIND_CONTROL_LANGUAGE, layer_spec.label))
+    return labels
+
+
+def _solar_active_filter_configs(config: dict[str, Any]) -> list[dict[str, Any]]:
+    active: list[dict[str, Any]] = []
+    for group_id in SOLAR_FILTER_GROUP_IDS:
+        spec = _solar_filter_spec(group_id)
+        layer_ids = _solar_control_selected_filter_layer_ids(config, group_id)
+        if not layer_ids:
+            continue
+        active.append(
+            {
+                "group_id": group_id,
+                "layer_ids": layer_ids,
+                "layer_labels": _solar_filter_layer_labels(layer_ids),
+                "buffer_m": float(config.get(str(spec["buffer_key"]), spec.get("buffer_default_m", 0.0)) or 0.0),
+                "label": str(spec["label"]),
+            }
+        )
+    return active
 
 
 def _solar_large_scale_is_active(
-    markblokke_active: bool,
+    base_active: bool,
     population_active: bool,
     protected_layer_ids: list[str] | tuple[str, ...],
 ) -> bool:
-    # Markblokke is the current v0 source for large-scale solar land area.
-    # Population and protected nature are filters on that source, not standalone sources.
-    return bool(markblokke_active)
+    _ = base_active
+    _ = population_active
+    _ = protected_layer_ids
+    return True
 
 
 def _solar_protected_layer_control_key(layer_id: str) -> str:
     return f"solar_draft_protected_layer__{layer_id}"
+
+
+def _solar_default_filter_config_values(config: dict[str, Any] | None = None) -> dict[str, Any]:
+    source = config if isinstance(config, dict) else {}
+    values: dict[str, Any] = {}
+    for group_id, spec in SOLAR_FILTER_GROUP_SPECS.items():
+        layer_ids = _solar_control_selected_filter_layer_ids(source, group_id) if source else []
+        values[str(spec["layer_ids_key"])] = layer_ids
+        values[str(spec["active_key"])] = bool(layer_ids)
+        values[str(spec["buffer_key"])] = float(
+            source.get(str(spec["buffer_key"]), spec.get("buffer_default_m", 0.0)) or 0.0
+        )
+    return values
 
 
 def _initial_solar_config_from_session() -> dict[str, Any]:
@@ -1398,28 +1546,29 @@ def _initial_solar_config_from_session() -> dict[str, Any]:
             "show_solar_v1",
             "show_user_solar",
             "solar_large_scale_active",
-            "solar_large_markblokke_active",
             "solar_large_population_active",
             "solar_draft_small_population_active",
         ]
     ):
         return dict(DEFAULT_SOLAR_APPLIED_CONFIG)
-    selected_protected_ids = [
-        layer_id
-        for layer_id in SOLAR_PROTECTED_LAYER_IDS
-        if bool(st.session_state.get(_solar_protected_layer_control_key(layer_id), False))
-    ]
-    large_markblokke_active = True
+    selected_filter_ids: dict[str, list[str]] = {}
+    for group_id in SOLAR_FILTER_GROUP_IDS:
+        selected_filter_ids[group_id] = [
+            layer_id
+            for layer_id in _solar_filter_layer_ids(group_id)
+            if bool(st.session_state.get(_solar_filter_layer_control_key(group_id, layer_id), False))
+        ]
+    selected_protected_ids = selected_filter_ids.get(SOLAR_PROTECTED_GROUP_ID, [])
+    large_scale_base_active = True
     large_population_active = bool(st.session_state.get("solar_large_population_active", False))
     large_scale_active = _solar_large_scale_is_active(
-        large_markblokke_active,
+        large_scale_base_active,
         large_population_active,
         selected_protected_ids,
     )
-    return {
+    config = {
         "small_population_active": bool(st.session_state.get("show_solar_v1", False))
         and bool(st.session_state.get("solar_small_population_active", True)),
-        "large_markblokke_active": large_markblokke_active,
         "large_unfiltered_land_active": False,
         "large_scale_active": large_scale_active,
         "large_population_active": large_population_active,
@@ -1429,6 +1578,14 @@ def _initial_solar_config_from_session() -> dict[str, Any]:
         "population_buffer_m": float(st.session_state.get("solar_builder_population_buffer_m", 250.0) or 250.0),
         "protected_buffer_m": float(st.session_state.get("solar_builder_protected_buffer_m", 0.0) or 0.0),
     }
+    for group_id, layer_ids in selected_filter_ids.items():
+        spec = _solar_filter_spec(group_id)
+        config[str(spec["layer_ids_key"])] = list(layer_ids)
+        config[str(spec["active_key"])] = bool(layer_ids)
+        config[str(spec["buffer_key"])] = float(
+            st.session_state.get(str(spec["draft_buffer_key"]), spec.get("buffer_default_m", 0.0)) or 0.0
+        )
+    return config
 
 
 def _solar_config_from_session() -> dict[str, Any]:
@@ -1436,17 +1593,17 @@ def _solar_config_from_session() -> dict[str, Any]:
     if not isinstance(config, dict):
         config = _initial_solar_config_from_session()
         st.session_state[SOLAR_APPLIED_CONFIG_KEY] = dict(config)
-    protected_layer_ids = _solar_control_selected_protected_layer_ids(config)
-    large_markblokke_active = True
+    filter_values = _solar_default_filter_config_values(config)
+    protected_layer_ids = list(filter_values.get("large_protected_layer_ids", []))
+    large_scale_base_active = True
     large_population_active = bool(config.get("large_population_active", False))
     large_scale_active = _solar_large_scale_is_active(
-        large_markblokke_active,
+        large_scale_base_active,
         large_population_active,
         protected_layer_ids,
     )
-    return {
+    normalized = {
         "small_population_active": bool(config.get("small_population_active", False)),
-        "large_markblokke_active": large_markblokke_active,
         "large_unfiltered_land_active": bool(config.get("large_unfiltered_land_active", False)),
         "large_scale_active": large_scale_active,
         "large_population_active": large_population_active,
@@ -1456,40 +1613,57 @@ def _solar_config_from_session() -> dict[str, Any]:
         "population_buffer_m": float(config.get("population_buffer_m", 250.0) or 250.0),
         "protected_buffer_m": float(config.get("protected_buffer_m", 0.0) or 0.0),
     }
+    normalized.update(filter_values)
+    return normalized
 
 
 def _prime_solar_draft_state(config: dict[str, Any]) -> None:
-    protected_layer_ids = set(_solar_control_selected_protected_layer_ids(config))
     st.session_state.setdefault("solar_draft_small_population_active", bool(config.get("small_population_active", False)))
-    st.session_state["solar_draft_large_markblokke_active"] = True
     st.session_state.setdefault("solar_draft_large_population_active", bool(config.get("large_population_active", False)))
     st.session_state.setdefault("solar_draft_area_m2_per_person", float(config.get("panel_area_m2_per_person", 10.0) or 10.0))
     st.session_state.setdefault("solar_draft_population_buffer_m", float(config.get("population_buffer_m", 250.0) or 250.0))
-    st.session_state.setdefault("solar_draft_protected_buffer_m", float(config.get("protected_buffer_m", 0.0) or 0.0))
-    for layer_id in SOLAR_PROTECTED_LAYER_IDS:
-        st.session_state.setdefault(_solar_protected_layer_control_key(layer_id), layer_id in protected_layer_ids)
-    st.session_state.setdefault("solar_draft_protected_active", bool(protected_layer_ids))
+    for group_id, spec in SOLAR_FILTER_GROUP_SPECS.items():
+        selected_layer_ids = set(_solar_control_selected_filter_layer_ids(config, group_id))
+        default_layer_ids = set(_solar_default_filter_layer_ids(group_id))
+        st.session_state.setdefault(
+            str(spec["draft_buffer_key"]),
+            float(config.get(str(spec["buffer_key"]), spec.get("buffer_default_m", 0.0)) or 0.0),
+        )
+        for layer_id in _solar_filter_layer_ids(group_id):
+            st.session_state.setdefault(
+                _solar_filter_layer_control_key(group_id, layer_id),
+                layer_id in selected_layer_ids or (not selected_layer_ids and layer_id in default_layer_ids),
+            )
+        st.session_state.setdefault(str(spec["draft_active_key"]), bool(selected_layer_ids))
 
 
 def _solar_draft_config_from_session() -> dict[str, Any]:
-    large_markblokke_active = True
+    large_scale_base_active = True
     large_population_active = bool(st.session_state.get("solar_draft_large_population_active", False))
-    protected_active = bool(st.session_state.get("solar_draft_protected_active", False))
-    protected_layer_ids = (
-        [
-            layer_id
-            for layer_id in SOLAR_PROTECTED_LAYER_IDS
-            if bool(st.session_state.get(_solar_protected_layer_control_key(layer_id), False))
-        ]
-        if protected_active
-        else []
-    )
-    return {
+    filter_values: dict[str, Any] = {}
+    for group_id, spec in SOLAR_FILTER_GROUP_SPECS.items():
+        active = bool(st.session_state.get(str(spec["draft_active_key"]), False))
+        layer_ids = (
+            [
+                layer_id
+                for layer_id in _solar_filter_layer_ids(group_id)
+                if bool(st.session_state.get(_solar_filter_layer_control_key(group_id, layer_id), False))
+            ]
+            if active
+            else []
+        )
+        layer_ids = list(_solar_available_filter_layer_ids(group_id, layer_ids))
+        filter_values[str(spec["layer_ids_key"])] = layer_ids
+        filter_values[str(spec["active_key"])] = bool(layer_ids)
+        filter_values[str(spec["buffer_key"])] = float(
+            st.session_state.get(str(spec["draft_buffer_key"]), spec.get("buffer_default_m", 0.0)) or 0.0
+        )
+    protected_layer_ids = list(filter_values.get("large_protected_layer_ids", []))
+    config = {
         "small_population_active": bool(st.session_state.get("solar_draft_small_population_active", False)),
-        "large_markblokke_active": large_markblokke_active,
         "large_unfiltered_land_active": False,
         "large_scale_active": _solar_large_scale_is_active(
-            large_markblokke_active,
+            large_scale_base_active,
             large_population_active,
             protected_layer_ids,
         ),
@@ -1500,6 +1674,50 @@ def _solar_draft_config_from_session() -> dict[str, Any]:
         "population_buffer_m": float(st.session_state.get("solar_draft_population_buffer_m", 250.0) or 250.0),
         "protected_buffer_m": float(st.session_state.get("solar_draft_protected_buffer_m", 0.0) or 0.0),
     }
+    config.update(filter_values)
+    return config
+
+
+def _render_solar_filter_control(group_id: str) -> list[str]:
+    spec = _solar_filter_spec(group_id)
+    label = str(spec["label"])
+    selected_layer_ids: list[str] = []
+    with st.expander(label, expanded=False):
+        active = st.checkbox(
+            f"Använd {label}",
+            key=str(spec["draft_active_key"]),
+            help=f"Valda lager används som avdrag i {SOLAR_LARGE_SCALE_LABEL}.",
+        )
+        options = _solar_filter_layer_options(group_id)
+        with st.expander("Avancerade inställningar", expanded=False):
+            st.caption(f"Välj vilka del-lager som ingår i {label}.")
+            for option in options:
+                layer_id = str(option["id"])
+                checked = st.checkbox(
+                    str(option["label"]),
+                    key=_solar_filter_layer_control_key(group_id, layer_id),
+                    disabled=not bool(option["ready"]),
+                    help=str(option.get("message", "") or ""),
+                )
+                if active and checked and bool(option["ready"]):
+                    selected_layer_ids.append(layer_id)
+        if not options:
+            st.caption(f"Inga lager hittades för {label.lower()} i acceptansregistret.")
+        elif not active:
+            st.caption(f"{label} används inte i solpotentialen.")
+        elif not selected_layer_ids:
+            st.caption(f"{label} behöver minst ett del-lager för att användas.")
+        else:
+            st.caption(str(spec.get("caption", "")))
+        st.slider(
+            f"Buffert {label.lower()}",
+            min_value=float(spec.get("buffer_min_m", 0.0)),
+            max_value=float(spec.get("buffer_max_m", 1000.0)),
+            step=float(spec.get("buffer_step_m", 50.0)),
+            key=str(spec["draft_buffer_key"]),
+            help="0 m tar bort själva källgeometrin. Högre värden lägger till buffert.",
+        )
+    return selected_layer_ids
 
 
 def _has_selected_wind_layers(layer_selection: dict[str, list[str]] | None = None) -> bool:
@@ -2140,10 +2358,14 @@ def _solar_population_buffer_layer(
     }
 
 
-def _solar_protected_source_layers(layer_ids: list[str] | tuple[str, ...] | None = None) -> list[dict[str, Any]]:
+def _solar_filter_source_layers(
+    group_id: str,
+    layer_ids: list[str] | tuple[str, ...] | None = None,
+) -> list[dict[str, Any]]:
+    spec = _solar_filter_spec(group_id)
     groups, layers, registry_meta = load_acceptance_registry()
     _ = groups
-    selected_layer_ids = _solar_available_protected_layer_ids(layer_ids)
+    selected_layer_ids = _solar_available_filter_layer_ids(group_id, layer_ids)
     features: list[dict[str, Any]] = []
     selected_labels: list[str] = []
     source_colors: list[str] = []
@@ -2165,20 +2387,20 @@ def _solar_protected_source_layers(layer_ids: list[str] | tuple[str, ...] | None
             props = copied.setdefault("properties", {})
             props["fill"] = source_color
             props["source_layer_id"] = layer_id
-            props["tooltip_title"] = SOLAR_PROTECTED_SOURCE_LABEL
+            props["tooltip_title"] = str(spec["source_label"])
             props["tooltip_body"] = label
-            props.setdefault("popup", f"<strong>{SOLAR_PROTECTED_SOURCE_LABEL}</strong><br>{label}")
+            props.setdefault("popup", f"<strong>{spec['source_label']}</strong><br>{label}")
             features.append(copied)
     if not features:
         return []
     return [
         {
-            "name": SOLAR_PROTECTED_SOURCE_LABEL,
-            "source_layer_id": f"{SOLAR_PROTECTED_GROUP_ID}:{'_'.join(selected_layer_ids)}",
+            "name": str(spec["source_label"]),
+            "source_layer_id": f"solar:{group_id}:{'_'.join(selected_layer_ids)}",
             "feature_collection": {"type": "FeatureCollection", "features": features},
             "fill_property": "fill",
-            "legend_items": [{"label": PROTECTED_NATURE_LABEL, "color": source_colors[0] if source_colors else "#15803d"}],
-            "legend_id": "solar_protected_source",
+            "legend_items": [{"label": str(spec["label"]), "color": source_colors[0] if source_colors else str(spec["source_color"])}],
+            "legend_id": f"solar_{group_id}_source",
             "legend_title": "",
             "default_visible": False,
             "stroke_color": source_colors[0] if source_colors else "#15803d",
@@ -2194,10 +2416,17 @@ def _solar_protected_source_layers(layer_ids: list[str] | tuple[str, ...] | None
     ]
 
 
-def _solar_available_protected_layer_ids(layer_ids: list[str] | tuple[str, ...] | set[str] | None = None) -> tuple[str, ...]:
+def _solar_protected_source_layers(layer_ids: list[str] | tuple[str, ...] | None = None) -> list[dict[str, Any]]:
+    return _solar_filter_source_layers(SOLAR_PROTECTED_GROUP_ID, layer_ids)
+
+
+def _solar_available_filter_layer_ids(
+    group_id: str,
+    layer_ids: list[str] | tuple[str, ...] | set[str] | None = None,
+) -> tuple[str, ...]:
     _, layers, registry_meta = load_acceptance_registry()
-    requested = list(SOLAR_PROTECTED_LAYER_IDS) if layer_ids is None else [str(layer_id) for layer_id in layer_ids]
-    allowed = set(SOLAR_PROTECTED_LAYER_IDS)
+    requested = list(_solar_filter_layer_ids(group_id)) if layer_ids is None else [str(layer_id) for layer_id in layer_ids]
+    allowed = set(_solar_filter_layer_ids(group_id))
     available: list[str] = []
     for layer_id in requested:
         if layer_id not in allowed or layer_id in available:
@@ -2209,21 +2438,20 @@ def _solar_available_protected_layer_ids(layer_ids: list[str] | tuple[str, ...] 
     return tuple(available)
 
 
-def _solar_protected_layer_options() -> list[dict[str, Any]]:
+def _solar_available_protected_layer_ids(layer_ids: list[str] | tuple[str, ...] | set[str] | None = None) -> tuple[str, ...]:
+    return _solar_available_filter_layer_ids(SOLAR_PROTECTED_GROUP_ID, layer_ids)
+
+
+def _solar_filter_layer_options(group_id: str) -> list[dict[str, Any]]:
     _, layers, registry_meta = load_acceptance_registry()
     availability = _wind_layer_status_lookup(registry_meta)
     options: list[dict[str, Any]] = []
-    for layer_id in SOLAR_PROTECTED_LAYER_IDS:
+    for layer_id in _solar_filter_layer_ids(group_id):
         layer_spec = layers.get(layer_id)
         if layer_spec is None:
             continue
+        ready = _wind_layer_is_ready(layer_id, availability)
         status = availability.get(layer_id, {})
-        ready = (
-            bool(status.get("geojson_ready"))
-            and bool(status.get("source_exists"))
-            and int(status.get("feature_count", 0) or 0) > 0
-            and str(status.get("status", "")) == "ok"
-        )
         message = str(status.get("message", "") or layer_note(layer_spec, WIND_CONTROL_LANGUAGE, layer_spec.note) or "")
         options.append(
             {
@@ -2236,17 +2464,22 @@ def _solar_protected_layer_options() -> list[dict[str, Any]]:
     return options
 
 
-def _solar_protected_runtime_result(
+def _solar_protected_layer_options() -> list[dict[str, Any]]:
+    return _solar_filter_layer_options(SOLAR_PROTECTED_GROUP_ID)
+
+
+def _solar_filter_runtime_result(
+    group_id: str,
     buffer_m: float,
     layer_ids: list[str] | tuple[str, ...] | None = None,
 ) -> dict[str, Any] | None:
-    selected_layer_ids = _solar_available_protected_layer_ids(layer_ids)
+    selected_layer_ids = _solar_available_filter_layer_ids(group_id, layer_ids)
     if not selected_layer_ids:
         return None
     try:
         config = {
             "groups": {
-                SOLAR_PROTECTED_GROUP_ID: {
+                str(group_id): {
                     "active_layer_ids": list(selected_layer_ids),
                     "analysis_value_m": int(round(max(0.0, float(buffer_m or 0.0)))),
                 }
@@ -2257,16 +2490,58 @@ def _solar_protected_runtime_result(
         return None
 
 
-def _solar_protected_buffer_geojson(
+def _solar_protected_runtime_result(
     buffer_m: float,
     layer_ids: list[str] | tuple[str, ...] | None = None,
 ) -> dict[str, Any] | None:
-    runtime_result = _solar_protected_runtime_result(float(buffer_m or 0.0), layer_ids)
-    runtime_group = (runtime_result or {}).get("groups", {}).get(SOLAR_PROTECTED_GROUP_ID) if isinstance(runtime_result, dict) else None
+    return _solar_filter_runtime_result(SOLAR_PROTECTED_GROUP_ID, buffer_m, layer_ids)
+
+
+def _solar_filter_buffer_geojson(
+    group_id: str,
+    buffer_m: float,
+    layer_ids: list[str] | tuple[str, ...] | None = None,
+) -> dict[str, Any] | None:
+    runtime_result = _solar_filter_runtime_result(group_id, float(buffer_m or 0.0), layer_ids)
+    runtime_group = (runtime_result or {}).get("groups", {}).get(str(group_id)) if isinstance(runtime_result, dict) else None
     if not isinstance(runtime_group, dict):
         return None
     geojson = runtime_group.get("geojson")
     return geojson if isinstance(geojson, dict) else None
+
+
+def _solar_protected_buffer_geojson(
+    buffer_m: float,
+    layer_ids: list[str] | tuple[str, ...] | None = None,
+) -> dict[str, Any] | None:
+    return _solar_filter_buffer_geojson(SOLAR_PROTECTED_GROUP_ID, buffer_m, layer_ids)
+
+
+def _solar_filter_buffer_frame(
+    region: dict[str, Any],
+    target_resolution: int,
+    group_id: str,
+    buffer_m: float,
+    layer_ids: list[str] | tuple[str, ...] | None = None,
+) -> pd.DataFrame:
+    display_geometry_path = _h3_display_geometry_path(region, int(target_resolution))
+    if not display_geometry_path:
+        return pd.DataFrame(columns=["hex_id", "filter_group_id", "filter_buffer_m", "filter_buffer_share_pct"])
+    buffer_geojson = _solar_filter_buffer_geojson(group_id, float(buffer_m or 0.0), layer_ids)
+    if not buffer_geojson:
+        return pd.DataFrame(columns=["hex_id", "filter_group_id", "filter_buffer_m", "filter_buffer_share_pct"])
+    share = runtime_combined_hex_frame(buffer_geojson, int(target_resolution), [])
+    if share.empty:
+        return pd.DataFrame(columns=["hex_id", "filter_group_id", "filter_buffer_m", "filter_buffer_share_pct"])
+    share = _filter_frame_to_display_geometries(share, display_geometry_path)
+    if share.empty:
+        return pd.DataFrame(columns=["hex_id", "filter_group_id", "filter_buffer_m", "filter_buffer_share_pct"])
+    score_col = "wind_score" if "wind_score" in share.columns else "potential_area_share_pct"
+    share["filter_buffer_share_pct"] = pd.to_numeric(share.get(score_col), errors="coerce").fillna(0.0).clip(lower=0.0, upper=100.0)
+    share = share[share["filter_buffer_share_pct"].gt(0.0)].copy()
+    share["filter_group_id"] = str(group_id)
+    share["filter_buffer_m"] = float(buffer_m or 0.0)
+    return share[["hex_id", "filter_group_id", "filter_buffer_m", "filter_buffer_share_pct"]].copy()
 
 
 def _solar_protected_buffer_frame(
@@ -2275,60 +2550,93 @@ def _solar_protected_buffer_frame(
     buffer_m: float,
     layer_ids: list[str] | tuple[str, ...] | None = None,
 ) -> pd.DataFrame:
+    frame = _solar_filter_buffer_frame(region, target_resolution, SOLAR_PROTECTED_GROUP_ID, buffer_m, layer_ids)
+    if frame.empty:
+        return pd.DataFrame(columns=["hex_id", "protected_buffer_m", "protected_buffer_share_pct"])
+    out = frame.rename(
+        columns={
+            "filter_buffer_m": "protected_buffer_m",
+            "filter_buffer_share_pct": "protected_buffer_share_pct",
+        }
+    )
+    return out[["hex_id", "protected_buffer_m", "protected_buffer_share_pct"]].copy()
+
+
+def _solar_filter_union_buffer_frame(
+    region: dict[str, Any],
+    target_resolution: int,
+    filter_configs: list[dict[str, Any]] | tuple[dict[str, Any], ...] | None,
+) -> pd.DataFrame:
     display_geometry_path = _h3_display_geometry_path(region, int(target_resolution))
     if not display_geometry_path:
-        return pd.DataFrame(columns=["hex_id", "protected_buffer_m", "protected_buffer_share_pct"])
-    buffer_geojson = _solar_protected_buffer_geojson(float(buffer_m or 0.0), layer_ids)
-    if not buffer_geojson:
-        return pd.DataFrame(columns=["hex_id", "protected_buffer_m", "protected_buffer_share_pct"])
-    share = runtime_combined_hex_frame(buffer_geojson, int(target_resolution), [])
+        return pd.DataFrame(columns=["hex_id", "filter_buffer_share_pct"])
+    features: list[dict[str, Any]] = []
+    for filter_config in filter_configs or []:
+        group_id = str(filter_config.get("group_id", ""))
+        layer_ids = filter_config.get("layer_ids") or []
+        buffer_m = float(filter_config.get("buffer_m", 0.0) or 0.0)
+        if group_id == "population":
+            geojson = _solar_population_buffer_geojson(buffer_m)
+        else:
+            geojson = _solar_filter_buffer_geojson(group_id, buffer_m, layer_ids)
+        if not isinstance(geojson, dict):
+            continue
+        for feature in geojson.get("features") or []:
+            if isinstance(feature, dict) and feature.get("geometry"):
+                features.append(feature)
+    if not features:
+        return pd.DataFrame(columns=["hex_id", "filter_buffer_share_pct"])
+    combined_geojson = {"type": "FeatureCollection", "features": features}
+    share = runtime_combined_hex_frame(combined_geojson, int(target_resolution), [])
     if share.empty:
-        return pd.DataFrame(columns=["hex_id", "protected_buffer_m", "protected_buffer_share_pct"])
+        return pd.DataFrame(columns=["hex_id", "filter_buffer_share_pct"])
     share = _filter_frame_to_display_geometries(share, display_geometry_path)
     if share.empty:
-        return pd.DataFrame(columns=["hex_id", "protected_buffer_m", "protected_buffer_share_pct"])
+        return pd.DataFrame(columns=["hex_id", "filter_buffer_share_pct"])
     score_col = "wind_score" if "wind_score" in share.columns else "potential_area_share_pct"
-    share["protected_buffer_share_pct"] = pd.to_numeric(share.get(score_col), errors="coerce").fillna(0.0).clip(lower=0.0, upper=100.0)
-    share = share[share["protected_buffer_share_pct"].gt(0.0)].copy()
-    share["protected_buffer_m"] = float(buffer_m or 0.0)
-    return share[["hex_id", "protected_buffer_m", "protected_buffer_share_pct"]].copy()
+    share["filter_buffer_share_pct"] = pd.to_numeric(share.get(score_col), errors="coerce").fillna(0.0).clip(lower=0.0, upper=100.0)
+    share = share[share["filter_buffer_share_pct"].gt(0.0)].copy()
+    return share[["hex_id", "filter_buffer_share_pct"]].copy()
 
 
-def _solar_protected_buffer_layer(
+def _solar_filter_buffer_layer(
+    group_id: str,
     buffer_m: float,
     layer_ids: list[str] | tuple[str, ...] | None = None,
 ) -> dict[str, Any] | None:
-    selected_layer_ids = _solar_available_protected_layer_ids(layer_ids)
-    buffer_geojson = _solar_protected_buffer_geojson(float(buffer_m or 0.0), selected_layer_ids)
+    spec = _solar_filter_spec(group_id)
+    selected_layer_ids = _solar_available_filter_layer_ids(group_id, layer_ids)
+    buffer_geojson = _solar_filter_buffer_geojson(group_id, float(buffer_m or 0.0), selected_layer_ids)
     if not buffer_geojson:
         return None
     features = buffer_geojson.get("features") if isinstance(buffer_geojson, dict) else None
     if not isinstance(features, list) or not features:
         return None
+    buffer_color = str(spec.get("buffer_color", "#16a34a"))
     for feature in features:
         props = feature.setdefault("properties", {})
-        props["fill"] = "#16a34a"
+        props["fill"] = buffer_color
         props["popup"] = (
-            f"<strong>{SOLAR_PROTECTED_BUFFER_LABEL}</strong><br>"
+            f"<strong>{spec['buffer_label']}</strong><br>"
             f"Buffert: {float(buffer_m or 0.0):.0f} m<br>"
-            f"{PROTECTED_NATURE_LABEL} används som avdrag i storskalig solpotential."
+            f"{spec['caption']}"
         )
-        props["tooltip_title"] = SOLAR_PROTECTED_BUFFER_LABEL
+        props["tooltip_title"] = str(spec["buffer_label"])
         props["tooltip_body"] = f"{float(buffer_m or 0.0):.0f} m buffert"
     return {
-        "name": SOLAR_PROTECTED_BUFFER_LABEL,
+        "name": str(spec["buffer_label"]),
         "buffer_layer_id": (
-            f"{SOLAR_PROTECTED_GROUP_ID}:buffer:{int(round(float(buffer_m or 0.0)))}:"
+            f"solar:{group_id}:buffer:{int(round(float(buffer_m or 0.0)))}:"
             f"{'_'.join(selected_layer_ids) if selected_layer_ids else 'none'}"
         ),
         "feature_collection": buffer_geojson,
         "fill_property": "fill",
-        "legend_items": [{"label": f"Buffert runt {PROTECTED_NATURE_LABEL.lower()}", "color": "#16a34a"}],
-        "legend_id": "solar_protected_buffer",
+        "legend_items": [{"label": f"Buffert runt {str(spec['label']).lower()}", "color": buffer_color}],
+        "legend_id": f"solar_{group_id}_buffer",
         "legend_title": "",
         "default_visible": False,
-        "stroke_color": "#166534",
-        "fill_color": "#16a34a",
+        "stroke_color": str(spec.get("source_color", buffer_color)),
+        "fill_color": buffer_color,
         "stroke_opacity": 0.56,
         "fill_opacity": 0.18,
         "weight": 0.75,
@@ -2339,29 +2647,11 @@ def _solar_protected_buffer_layer(
     }
 
 
-@st.cache_data(show_spinner=False)
-def _solar_large_scale_h3_r10_area_frame(path_str: str) -> pd.DataFrame:
-    path = Path(path_str)
-    columns = ["hex_id", "potential_area_m2", "potential_area_km2", "potential_area_share_pct"]
-    if not path.exists():
-        return pd.DataFrame(columns=columns)
-    try:
-        raw = pd.read_csv(path)
-    except Exception:
-        return pd.DataFrame(columns=columns)
-    if "hex_id" not in raw.columns or "potential_area_m2" not in raw.columns:
-        return pd.DataFrame(columns=columns)
-    work = raw.copy()
-    work["hex_id"] = work["hex_id"].astype(str)
-    work["potential_area_m2"] = pd.to_numeric(work["potential_area_m2"], errors="coerce").fillna(0.0).clip(lower=0.0)
-    work["potential_area_km2"] = work["potential_area_m2"] / 1_000_000.0
-    if "potential_area_share_pct" in work.columns:
-        work["potential_area_share_pct"] = pd.to_numeric(work["potential_area_share_pct"], errors="coerce").fillna(0.0)
-    else:
-        hex_area_m2 = float(h3_hex_area_km2(10) * 1_000_000.0)
-        work["potential_area_share_pct"] = work["potential_area_m2"] / max(hex_area_m2, 1e-9) * 100.0
-    work["potential_area_share_pct"] = work["potential_area_share_pct"].clip(lower=0.0, upper=100.0)
-    return work[work["potential_area_m2"].gt(0.0)].reindex(columns=columns)
+def _solar_protected_buffer_layer(
+    buffer_m: float,
+    layer_ids: list[str] | tuple[str, ...] | None = None,
+) -> dict[str, Any] | None:
+    return _solar_filter_buffer_layer(SOLAR_PROTECTED_GROUP_ID, buffer_m, layer_ids)
 
 
 def _solar_large_scale_frame(
@@ -2372,6 +2662,7 @@ def _solar_large_scale_frame(
     protected_buffer_m: float | None = None,
     protected_layer_ids: list[str] | tuple[str, ...] | None = None,
     unfiltered_land_active: bool = False,
+    filter_configs: list[dict[str, Any]] | tuple[dict[str, Any], ...] | None = None,
 ) -> pd.DataFrame:
     target_resolution = int(resolution)
     source_resolution = max(target_resolution, WIND_RUNTIME_BASE_RESOLUTION)
@@ -2392,60 +2683,51 @@ def _solar_large_scale_frame(
     if landscape.empty:
         return pd.DataFrame(columns=columns)
 
-    if bool(unfiltered_land_active):
-        work = landscape.copy()
-        hex_area_m2 = float(h3_hex_area_km2(target_resolution) * 1_000_000.0)
-        work["potential_area_m2"] = hex_area_m2
-        work["potential_area_km2"] = hex_area_m2 / 1_000_000.0
-        work["potential_area_share_pct"] = 100.0
-        work["protected_buffer_share_pct"] = 0.0
-        work["solar_score"] = 100.0
-        classes = [_solar_score_class(float(value)) for value in work["solar_score"]]
-        work["solar_class"] = [item["id"] for item in classes]
-        work["solar_class_label"] = [item["label"] for item in classes]
-        work["solar_color"] = [item["color"] for item in classes]
-        return _filter_frame_to_display_geometries(work.reindex(columns=columns), _h3_display_geometry_path(region, target_resolution))
-
-    polygon_path = _solar_large_scale_polygon_path(population_buffer_m)
-    polygon_geojson = _solar_large_scale_polygon_geojson(str(polygon_path), float(population_buffer_m or 0.0))
-    if not polygon_geojson:
-        return pd.DataFrame(columns=columns)
-
     source_landscape = _landscape_frame(region, landscape_manifest, source_resolution)
     if source_landscape.empty and source_resolution != target_resolution:
         source_resolution = target_resolution
         source_landscape = landscape
 
-    area = runtime_combined_hex_frame(polygon_geojson, source_resolution, [])
-    if area.empty:
-        return pd.DataFrame(columns=columns)
-    area = area[["hex_id", "wind_score"]].rename(columns={"wind_score": "potential_area_share_pct"}).copy()
-    area["hex_id"] = area["hex_id"].astype(str)
-    area["potential_area_share_pct"] = pd.to_numeric(area["potential_area_share_pct"], errors="coerce").fillna(0.0).clip(lower=0.0, upper=100.0)
-
     source = source_landscape[["hex_id"]].copy()
-    work = source.merge(area, on="hex_id", how="left")
-    work["potential_area_share_pct"] = pd.to_numeric(work["potential_area_share_pct"], errors="coerce").fillna(0.0).clip(lower=0.0, upper=100.0)
+    work = source.copy()
+    work["potential_area_share_pct"] = 100.0
     if work.empty:
         return pd.DataFrame(columns=columns)
 
-    work["protected_buffer_share_pct"] = 0.0
-    if protected_buffer_m is not None:
-        protected = _solar_protected_buffer_frame(
-            region,
-            source_resolution,
-            float(protected_buffer_m or 0.0),
-            protected_layer_ids,
+    active_filter_configs: list[dict[str, Any]] = []
+    if float(population_buffer_m or 0.0) > 0:
+        active_filter_configs.append(
+            {
+                "group_id": "population",
+                "layer_ids": [WIND_POPULATION_SOURCE_LAYER_ID],
+                "buffer_m": float(population_buffer_m or 0.0),
+                "label": "Befolkning",
+            }
         )
-        if not protected.empty:
-            protected = protected[["hex_id", "protected_buffer_share_pct"]].copy()
-            work = work.merge(protected, on="hex_id", how="left", suffixes=("", "_protected"))
-            if "protected_buffer_share_pct_protected" in work.columns:
-                work["protected_buffer_share_pct"] = pd.to_numeric(
-                    work["protected_buffer_share_pct_protected"],
-                    errors="coerce",
-                ).fillna(0.0).clip(lower=0.0, upper=100.0)
-                work = work.drop(columns=["protected_buffer_share_pct_protected"])
+    if filter_configs:
+        active_filter_configs.extend(dict(item) for item in filter_configs if isinstance(item, dict))
+    elif protected_buffer_m is not None:
+        active_filter_configs.append(
+            {
+                "group_id": SOLAR_PROTECTED_GROUP_ID,
+                "layer_ids": list(protected_layer_ids or []),
+                "buffer_m": float(protected_buffer_m or 0.0),
+                "label": PROTECTED_NATURE_LABEL,
+            }
+        )
+
+    work["protected_buffer_share_pct"] = 0.0
+    if active_filter_configs:
+        filters = _solar_filter_union_buffer_frame(region, source_resolution, active_filter_configs)
+        if not filters.empty:
+            filters = filters[["hex_id", "filter_buffer_share_pct"]].copy()
+            work = work.merge(filters, on="hex_id", how="left")
+            work["protected_buffer_share_pct"] = pd.to_numeric(
+                work.get("filter_buffer_share_pct"),
+                errors="coerce",
+            ).fillna(0.0).clip(lower=0.0, upper=100.0)
+            if "filter_buffer_share_pct" in work.columns:
+                work = work.drop(columns=["filter_buffer_share_pct"])
         work["potential_area_share_pct"] = (
             work["potential_area_share_pct"] - work["protected_buffer_share_pct"]
         ).clip(lower=0.0, upper=100.0)
@@ -2482,56 +2764,6 @@ def _solar_large_scale_frame(
     work["solar_class_label"] = [item["label"] for item in classes]
     work["solar_color"] = [item["color"] for item in classes]
     return _filter_frame_to_display_geometries(work.reindex(columns=columns), _h3_display_geometry_path(region, target_resolution))
-
-
-def _solar_large_scale_polygon_path(population_buffer_m: float) -> Path:
-    try:
-        distance = float(population_buffer_m or 0.0)
-    except Exception:
-        distance = 0.0
-    if distance <= 0:
-        rounded = 0
-    else:
-        rounded = int(round(distance / 25.0) * 25)
-        rounded = max(100, min(500, rounded))
-    return SOLAR_LARGE_SCALE_POLYGON_DIR / f"markblokke_bornholm_outside_population_{rounded:03d}m.geojson"
-
-
-@st.cache_data(show_spinner=False)
-def _solar_large_scale_polygon_geojson(path_str: str, population_buffer_m: float) -> dict[str, Any] | None:
-    path = Path(path_str)
-    if not path.exists():
-        return None
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return None
-    if not isinstance(data, dict):
-        return None
-    features: list[dict[str, Any]] = []
-    for feature in data.get("features") or []:
-        if not isinstance(feature, dict) or not feature.get("geometry"):
-            continue
-        copied = json.loads(json.dumps(feature))
-        props = copied.setdefault("properties", {})
-        buffer_m = props.get("buffer_m", population_buffer_m)
-        try:
-            buffer_label = f"{float(buffer_m):.0f} m"
-        except Exception:
-            buffer_label = "-"
-        props["fill"] = "#ca8a04"
-        props["popup"] = (
-            f"<strong>{SOLAR_POTENTIAL_POLYGON_LABEL}</strong><br>"
-            f"Grupp: {SOLAR_LARGE_SCALE_LABEL}<br>"
-            "Polygonkälla: kandidatmark v0<br>"
-            f"Avstånd till befolkning: {buffer_label}"
-        )
-        props["tooltip_title"] = SOLAR_POTENTIAL_POLYGON_LABEL
-        props["tooltip_body"] = SOLAR_LARGE_SCALE_LABEL
-        features.append(copied)
-    if not features:
-        return None
-    return {"type": "FeatureCollection", "features": features}
 
 
 def _combined_solar_hex_frame(
@@ -6387,8 +6619,17 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
     if isinstance(solar_params, dict) and solar_available_hex > 0:
         if bool(energy_model_state.get("solar_large_population_active", False)):
             active_filter_notes.append(f"sol: befolkning {float(solar_params.get('population_buffer_m', 0.0) or 0.0):.0f} m")
-        if bool(energy_model_state.get("solar_large_protected_active", False)):
-            active_filter_notes.append(f"sol: skyddad natur {float(solar_params.get('protected_buffer_m', 0.0) or 0.0):.0f} m")
+        solar_filter_configs = energy_model_state.get("solar_large_filter_configs")
+        if isinstance(solar_filter_configs, list):
+            for filter_config in solar_filter_configs:
+                group_id = str(filter_config.get("group_id", ""))
+                spec = SOLAR_FILTER_GROUP_SPECS.get(group_id, {})
+                label = str(spec.get("label", filter_config.get("label", group_id)))
+                layer_labels = [str(value) for value in (filter_config.get("layer_labels") or [])]
+                layer_text = f" ({', '.join(layer_labels[:3])}{'...' if len(layer_labels) > 3 else ''})" if layer_labels else ""
+                active_filter_notes.append(
+                    f"sol: {label.lower()} {float(filter_config.get('buffer_m', 0.0) or 0.0):.0f} m{layer_text}"
+                )
 
     shortage_driver = ""
     if outside_total > 1e-6:
@@ -6954,7 +7195,6 @@ def _unified_workspace_tab(
     st.session_state.setdefault("show_solar_v1", False)
     st.session_state.setdefault("solar_small_population_active", True)
     st.session_state.setdefault("solar_large_scale_active", False)
-    st.session_state["solar_large_markblokke_active"] = True
     st.session_state.setdefault("solar_large_population_active", False)
     st.session_state.setdefault("solar_v1_area_m2_per_person", 10.0)
     st.session_state.setdefault("solar_protected_buffer_m", 0.0)
@@ -6972,6 +7212,7 @@ def _unified_workspace_tab(
     solar_large_population_active = bool(applied_solar_config.get("large_population_active", False))
     solar_large_protected_layer_ids = list(applied_solar_config.get("large_protected_layer_ids", []))
     solar_large_protected_active = bool(solar_large_protected_layer_ids)
+    solar_large_filter_configs = _solar_active_filter_configs(applied_solar_config)
     show_user_wind = _wind_potential_is_active(_selected_wind_layers())
     show_v10 = bool(st.session_state.get("show_landscape_v10"))
     show_cluster = bool(st.session_state.get("show_landscape_cluster", False))
@@ -6988,7 +7229,10 @@ def _unified_workspace_tab(
     wind_controls_applied = False
     solar_params = _solar_params_from_control_state(solar_defaults)
     solar_params["population_buffer_m"] = float(applied_solar_config.get("population_buffer_m", 250.0) or 250.0)
-    solar_params["protected_buffer_m"] = float(applied_solar_config.get("protected_buffer_m", 0.0) or 0.0)
+    for group_id, spec in SOLAR_FILTER_GROUP_SPECS.items():
+        solar_params[str(spec["buffer_key"])] = float(
+            applied_solar_config.get(str(spec["buffer_key"]), spec.get("buffer_default_m", 0.0)) or 0.0
+        )
     solar_v1_area_m2_per_person = float(applied_solar_config.get("panel_area_m2_per_person", 10.0) or 0.0)
     solar_controls_applied = False
     energy_model_state: dict[str, Any] = {"available": False}
@@ -7087,41 +7331,14 @@ def _unified_workspace_tab(
                                 help="Totalt avstånd från befolkningspunkter. 250 m betyder 250 m totalt, inte 100 + 250 m.",
                             )
                             st.caption("Avståndet är totalt från befolkningspunkter. Solpolygonen och etableringsytan använder samma kandidatmarksunderlag.")
-                        draft_selected_protected_ids: list[str] = []
-                        with st.expander(PROTECTED_NATURE_LABEL, expanded=False):
-                            draft_protected_active = st.checkbox(
-                                f"Använd {PROTECTED_NATURE_LABEL}",
-                                key="solar_draft_protected_active",
-                                help=f"Samlar valda naturskyddslager till ett avdrag i {SOLAR_LARGE_SCALE_LABEL}.",
-                            )
-                            protected_options = _solar_protected_layer_options()
-                            with st.expander("Avancerade inställningar", expanded=False):
-                                st.caption(f"Välj vilka del-lager som ingår i {PROTECTED_NATURE_LABEL}.")
-                                for option in protected_options:
-                                    layer_id = str(option["id"])
-                                    checked = st.checkbox(
-                                        str(option["label"]),
-                                        key=_solar_protected_layer_control_key(layer_id),
-                                        disabled=(not bool(option["ready"])) or (not draft_protected_active),
-                                        help=str(option.get("message", "") or ""),
-                                    )
-                                    if draft_protected_active and checked and bool(option["ready"]):
-                                        draft_selected_protected_ids.append(layer_id)
-                            if not protected_options:
-                                st.caption("Inga naturskyddslager hittades i acceptansregistret.")
-                            elif not draft_protected_active:
-                                st.caption(f"{PROTECTED_NATURE_LABEL} används inte i solpotentialen.")
-                            elif not draft_selected_protected_ids:
-                                st.caption(f"{PROTECTED_NATURE_LABEL} behöver minst ett del-lager för att användas.")
-                            st.slider(
-                                f"Buffert {PROTECTED_NATURE_LABEL.lower()}",
-                                min_value=0.0,
-                                max_value=2000.0,
-                                step=50.0,
-                                key="solar_draft_protected_buffer_m",
-                                help="0 m tar bort själva ytorna i Skyddad natur. Högre värden lägger till buffert.",
-                            )
-                        st.caption("Storskalig sol använder tills vidare kandidatmark över hela öns landskapsunderlag.")
+                        for solar_filter_group_id in (
+                            SOLAR_PROTECTED_GROUP_ID,
+                            SOLAR_ROAD_GROUP_ID,
+                            SOLAR_CULTURE_GROUP_ID,
+                            SOLAR_COASTAL_GROUP_ID,
+                        ):
+                            _render_solar_filter_control(solar_filter_group_id)
+                        st.caption("Storskalig sol använder hela landskapsunderlaget som kandidatbas. Valda filter drar bort yta från den basen.")
                         st.caption("Ingen bonitets- eller jordklassvariabel finns i nuvarande solunderlag; jordart/prekvartär beskriver geologi, inte jordbruksmarkens kvalitet.")
                     apply_solar = st.form_submit_button("Använd ändringar", type="primary", width="stretch")
                 if apply_solar:
@@ -7182,6 +7399,7 @@ def _unified_workspace_tab(
         energy_model_state["solar_large_unfiltered_land_active"] = bool(applied_solar_config.get("large_unfiltered_land_active", False))
         energy_model_state["solar_large_protected_active"] = bool(solar_large_protected_active)
         energy_model_state["solar_large_protected_layer_count"] = int(len(solar_large_protected_layer_ids))
+        energy_model_state["solar_large_filter_configs"] = list(solar_large_filter_configs)
 
     layers: list[dict[str, Any]] = []
     potential_frames: list[dict[str, Any]] = []
@@ -7210,6 +7428,7 @@ def _unified_workspace_tab(
             large_protected_buffer_m,
             solar_large_protected_layer_ids,
             solar_unfiltered_land_active,
+            solar_large_filter_configs,
         )
         user_solar_analysis_frame = (
             user_solar_frame.copy()
@@ -7222,23 +7441,20 @@ def _unified_workspace_tab(
                 large_protected_buffer_m,
                 solar_large_protected_layer_ids,
                 solar_unfiltered_land_active,
+                solar_large_filter_configs,
             )
         )
-        if solar_unfiltered_land_active:
-            solar_large_polygon_geojson = None
-        else:
-            large_polygon_path = _solar_large_scale_polygon_path(large_population_buffer_m)
-            solar_large_polygon_geojson = _solar_large_scale_polygon_geojson(str(large_polygon_path), large_population_buffer_m)
+        solar_large_polygon_geojson = None
         if solar_large_population_active:
             _append_unique_layer(layers, _solar_population_source_layer())
             _append_unique_layer(layers, _solar_population_buffer_layer(region, h3_resolution, large_population_buffer_m))
-        if solar_large_protected_active:
-            for protected_layer in _solar_protected_source_layers(solar_large_protected_layer_ids):
-                _append_unique_layer(layers, protected_layer)
-            _append_unique_layer(
-                layers,
-                _solar_protected_buffer_layer(float(large_protected_buffer_m or 0.0), solar_large_protected_layer_ids),
-            )
+        for filter_config in solar_large_filter_configs:
+            group_id = str(filter_config.get("group_id", ""))
+            layer_ids = list(filter_config.get("layer_ids") or [])
+            buffer_m = float(filter_config.get("buffer_m", 0.0) or 0.0)
+            for source_layer in _solar_filter_source_layers(group_id, layer_ids):
+                _append_unique_layer(layers, source_layer)
+            _append_unique_layer(layers, _solar_filter_buffer_layer(group_id, buffer_m, layer_ids))
         potential_frames.append(
             {
                 "label": f"{SOLAR_LANDSCAPE_POTENTIAL_LABEL}: {SOLAR_LARGE_SCALE_LABEL}",
@@ -7259,15 +7475,19 @@ def _unified_workspace_tab(
             )
         else:
             unified_notes.append(
-                f"{SOLAR_LARGE_SCALE_LABEL} använder kandidatmark över hela öns landskapsunderlag och filtrerar inte längre på två landskapstyper."
+                f"{SOLAR_LARGE_SCALE_LABEL} använder hela landskapsunderlaget som kandidatbas. Aktiva filter drar bort yta från den basen."
             )
         if solar_large_population_active:
             unified_notes.append(
                 f"Befolkningslagret tar bort potential inom {large_population_buffer_m:.0f} m från befolkningspunkter."
             )
-        if solar_large_protected_active:
+        for filter_config in solar_large_filter_configs:
+            group_id = str(filter_config.get("group_id", ""))
+            label = str(SOLAR_FILTER_GROUP_SPECS.get(group_id, {}).get("label", filter_config.get("label", group_id)))
+            layer_labels = [str(value) for value in (filter_config.get("layer_labels") or [])]
+            layer_text = f" ({', '.join(layer_labels[:3])}{'...' if len(layer_labels) > 3 else ''})" if layer_labels else ""
             unified_notes.append(
-                f"{PROTECTED_NATURE_LABEL} drar av potential med {float(large_protected_buffer_m or 0.0):.0f} m buffert."
+                f"{label}{layer_text} drar av potential med {float(filter_config.get('buffer_m', 0.0) or 0.0):.0f} m buffert."
             )
         if solar_controls_applied:
             unified_notes.append(f"{SOLAR_LANDSCAPE_POTENTIAL_LABEL}: ändringar tillämpade.")
@@ -7768,9 +7988,14 @@ def _unified_workspace_tab(
                     st.caption(
                         f"Avstånd till befolkning är {float(solar_params.get('population_buffer_m', 250.0) or 250.0):.0f} m för storskalig sol."
                     )
-                if solar_large_protected_active:
+                for filter_config in solar_large_filter_configs:
+                    group_id = str(filter_config.get("group_id", ""))
+                    label = str(SOLAR_FILTER_GROUP_SPECS.get(group_id, {}).get("label", filter_config.get("label", group_id)))
+                    layer_count = len(list(filter_config.get("layer_ids") or []))
+                    layer_labels = [str(value) for value in (filter_config.get("layer_labels") or [])]
+                    layer_text = f": {', '.join(layer_labels[:4])}{'...' if len(layer_labels) > 4 else ''}" if layer_labels else ""
                     st.caption(
-                        f"{PROTECTED_NATURE_LABEL}: {len(solar_large_protected_layer_ids)} del-lager är aktiva med {float(solar_params.get('protected_buffer_m', 0.0) or 0.0):.0f} m buffert."
+                        f"{label}: {layer_count} del-lager är aktiva med {float(filter_config.get('buffer_m', 0.0) or 0.0):.0f} m buffert{layer_text}."
                     )
             if show_user_wind and custom_wind_preview_state is not None:
                 left_metric, right_metric = st.columns(2)
