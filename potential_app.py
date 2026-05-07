@@ -6603,6 +6603,86 @@ def _combined_summary(map_state: dict[str, Any], scenario_state: dict[str, Any])
             [["kärnläge", "hexagoner", "medelandel", "kärnscore"]]
         )
 
+    def _potential_area_series(frame: pd.DataFrame, technology: str) -> pd.Series:
+        if frame.empty:
+            return pd.Series(dtype="float64")
+        if "potential_area_km2" in frame.columns:
+            return pd.to_numeric(frame["potential_area_km2"], errors="coerce").fillna(0.0).clip(lower=0.0)
+        if "solar_v1_area_km2" in frame.columns:
+            return pd.to_numeric(frame["solar_v1_area_km2"], errors="coerce").fillna(0.0).clip(lower=0.0)
+        if "potential_area_m2" in frame.columns:
+            return pd.to_numeric(frame["potential_area_m2"], errors="coerce").fillna(0.0).clip(lower=0.0) / 1_000_000.0
+        score_col = f"{technology}_score"
+        if score_col in frame.columns:
+            return pd.to_numeric(frame[score_col], errors="coerce").fillna(0.0).clip(lower=0.0) / 100.0
+        return pd.Series(1.0, index=frame.index, dtype="float64")
+
+    def _landscape_derivation_summary(frame: pd.DataFrame, technology: str) -> tuple[pd.DataFrame, str]:
+        columns = ["landskapstyp", "hexagoner", "potential_km2", "andel_potential_pct", "medelpoäng"]
+        if frame.empty or "landscape_type" not in frame.columns:
+            return pd.DataFrame(columns=columns), "Landskapshärledning saknas för detta lager."
+        work = frame.copy()
+        work["landskapstyp"] = work["landscape_type"].fillna("Okänd").astype(str).replace("", "Okänd")
+        work["potential_area_km2__derived"] = _potential_area_series(work, technology)
+        score_col = f"{technology}_score"
+        if score_col not in work.columns and technology == "solar_v1" and "solar_v1_score" in work.columns:
+            score_col = "solar_v1_score"
+        if score_col in work.columns:
+            work["score__derived"] = pd.to_numeric(work[score_col], errors="coerce").fillna(0.0)
+        else:
+            work["score__derived"] = 0.0
+        work = work[work["potential_area_km2__derived"].gt(0.0)].copy()
+        if work.empty:
+            return pd.DataFrame(columns=columns), "Ingen positiv potential finns att härleda till landskapstyper."
+        total_area = float(work["potential_area_km2__derived"].sum())
+        grouped = (
+            work.groupby("landskapstyp", as_index=False)
+            .agg(
+                hexagoner=("hex_id", "count"),
+                potential_km2=("potential_area_km2__derived", "sum"),
+                medelpoäng=("score__derived", "mean"),
+            )
+            .sort_values("potential_km2", ascending=False)
+        )
+        grouped["andel_potential_pct"] = (grouped["potential_km2"] / max(total_area, 1e-9) * 100.0).round(1)
+        grouped["potential_km2"] = grouped["potential_km2"].round(2)
+        grouped["medelpoäng"] = grouped["medelpoäng"].round(1)
+        top = grouped.iloc[0]
+        text = (
+            f"Störst del av potentialen ligger i {top['landskapstyp']} "
+            f"({float(top['andel_potential_pct']):.1f}% av potentialytan)."
+        )
+        return grouped[columns], text
+
+    def _landscape_structure_summary(frame: pd.DataFrame, technology: str) -> pd.DataFrame:
+        columns = ["struktur", "hexagoner", "potential_km2", "andel_potential_pct", "medelpoäng"]
+        if frame.empty or "class_km" not in frame.columns:
+            return pd.DataFrame(columns=columns)
+        work = frame.copy()
+        work["struktur"] = work["class_km"].fillna("Okänd").astype(str).replace("", "Okänd")
+        work["potential_area_km2__derived"] = _potential_area_series(work, technology)
+        score_col = f"{technology}_score"
+        if score_col not in work.columns and technology == "solar_v1" and "solar_v1_score" in work.columns:
+            score_col = "solar_v1_score"
+        work["score__derived"] = pd.to_numeric(work[score_col], errors="coerce").fillna(0.0) if score_col in work.columns else 0.0
+        work = work[work["potential_area_km2__derived"].gt(0.0)].copy()
+        if work.empty:
+            return pd.DataFrame(columns=columns)
+        total_area = float(work["potential_area_km2__derived"].sum())
+        grouped = (
+            work.groupby("struktur", as_index=False)
+            .agg(
+                hexagoner=("hex_id", "count"),
+                potential_km2=("potential_area_km2__derived", "sum"),
+                medelpoäng=("score__derived", "mean"),
+            )
+            .sort_values("potential_km2", ascending=False)
+        )
+        grouped["andel_potential_pct"] = (grouped["potential_km2"] / max(total_area, 1e-9) * 100.0).round(1)
+        grouped["potential_km2"] = grouped["potential_km2"].round(2)
+        grouped["medelpoäng"] = grouped["medelpoäng"].round(1)
+        return grouped[columns]
+
     def _metric_value_text(frame: pd.DataFrame, score_col: str, template: str) -> str:
         if frame.empty:
             return "-"
@@ -6665,6 +6745,15 @@ def _combined_summary(map_state: dict[str, Any], scenario_state: dict[str, Any])
             else:
                 summary_frame = potential_summary(frame, technology)
             st.dataframe(summary_frame, width="stretch", hide_index=True)
+            with st.expander("Landskapshärledning", expanded=False):
+                derivation_frame, derivation_text = _landscape_derivation_summary(frame, technology)
+                st.caption(derivation_text)
+                if not derivation_frame.empty:
+                    st.dataframe(derivation_frame.head(8), width="stretch", hide_index=True)
+                structure_frame = _landscape_structure_summary(frame, technology)
+                if not structure_frame.empty:
+                    st.caption("Strukturfördelning efter nuvarande landskapskluster.")
+                    st.dataframe(structure_frame.head(8), width="stretch", hide_index=True)
             if item.get("summary_mode") == "wind_share":
                 with st.expander("Kärnområden", expanded=False):
                     st.caption("Mörkare nyans inom samma potentialklass markerar hexagoner som ligger djupare i en sammanhängande zon.")
