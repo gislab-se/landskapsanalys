@@ -6230,6 +6230,10 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
         unit = "km²"
         st.session_state["establishment_area_display_unit"] = unit
     st.caption(
+        "Panelen visar om vald mix av vind och sol ryms i de landskap som modellen bedömer som möjliga efter aktiva filter. "
+        "Kartan färgsätter platser som möjliga för vind, sol, båda teknikerna eller ingen av dem."
+    )
+    st.caption(
         f"Dummy/prototypdata · {scenario_label}: {energy_scale:g}x energi · "
         f"markintensitet {energy_model_state.get('area_scenario_label', '-')} · "
         f"mix {wind_share_pct:.0f}% vind / {solar_share_pct:.0f}% sol · källa {source_label} {source_year}"
@@ -6262,10 +6266,10 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
         else:
             shortage_driver = " Bristen är ungefär jämnt fördelad mellan vind och sol."
     result_sentence = (
-        f"Scenariot ryms till {covered_share:.1f}% inom potentialen; "
+        f"Scenariot ryms till {covered_share:.1f}% inom landskapets möjliga etableringsyta. "
         f"{_format_area_primary(outside_total, unit, hex_area)} behöver lösas utanför potentialen.{shortage_driver}"
         if outside_total > 1e-6
-        else f"Scenariot ryms inom potentialen med nuvarande filter; {covered_share:.1f}% av ytbehovet täcks."
+        else f"Scenariot ryms inom landskapets möjliga etableringsyta med nuvarande filter. {covered_share:.1f}% av ytbehovet täcks."
     )
     map_summary_parts = [
         f"{COMBINED_ESTABLISHMENT_LAYER_LABEL} visar vind/sol-potential efter filter",
@@ -6280,34 +6284,6 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
     st.caption("Karta: " + "; ".join(map_summary_parts) + ".")
     if active_filter_notes:
         st.caption("Aktiva filter: " + "; ".join(active_filter_notes) + ".")
-
-    if outside_total > 1e-6:
-        st.warning(
-            "Vald energimix ryms inte helt inom landskapets potential. "
-            f"{_format_area_with_context(outside_total, unit, hex_area)} behöver lösas utanför landskapets potential."
-        )
-    elif total_need > 0:
-        st.success("Vald energimix ryms inom landskapets potential med nuvarande urval.")
-
-    st.metric(
-        "Ryms inom potential",
-        f"{_format_area_primary(total_covered, unit, hex_area)} av {_format_area_primary(total_need, unit, hex_area)}",
-        _change_delta_text(total_covered, _previous_snapshot_value(previous_snapshot, "total_covered_area_km2")),
-        delta_color=_change_delta_color(total_covered, _previous_snapshot_value(previous_snapshot, "total_covered_area_km2")),
-    )
-    place_cols = st.columns(2)
-    place_cols[0].metric(
-        "Inom potential",
-        _format_area_with_context(inside_total, unit, hex_area),
-        _change_delta_text(inside_total, _previous_snapshot_value(previous_snapshot, "inside_total_km2")),
-        delta_color=_change_delta_color(inside_total, _previous_snapshot_value(previous_snapshot, "inside_total_km2")),
-    )
-    place_cols[1].metric(
-        "Ytbehov utanför potential",
-        _format_area_with_context(outside_total, unit, hex_area),
-        _change_delta_text(outside_total, _previous_snapshot_value(previous_snapshot, "outside_total_km2")),
-        delta_color=_change_delta_color(outside_total, _previous_snapshot_value(previous_snapshot, "outside_total_km2")),
-    )
     impact_rows = [
         {
             "teknik": "Vind",
@@ -6378,9 +6354,37 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
     ]
     st.markdown("**Vind/sol och landskapspåverkan**")
     st.caption(
-        "Tabellen visar ytbehov, tillgänglig potential efter filter, scenariots yta inom potential och återstående brist utanför potential."
+        "Tabellen visar hur mycket yta scenariot kräver, hur mycket möjlig yta som finns efter filter, och om något behöver lösas utanför potentialen."
     )
     _render_impact_change_table(impact_rows)
+
+    if outside_total > 1e-6:
+        st.warning(
+            "Vald energimix ryms inte helt inom landskapets potential. "
+            f"{_format_area_with_context(outside_total, unit, hex_area)} behöver lösas utanför landskapets potential."
+        )
+    elif total_need > 0:
+        st.success("Vald energimix ryms inom landskapets potential med nuvarande urval.")
+
+    st.metric(
+        "Ryms inom potential",
+        f"{_format_area_primary(total_covered, unit, hex_area)} av {_format_area_primary(total_need, unit, hex_area)}",
+        _change_delta_text(total_covered, _previous_snapshot_value(previous_snapshot, "total_covered_area_km2")),
+        delta_color=_change_delta_color(total_covered, _previous_snapshot_value(previous_snapshot, "total_covered_area_km2")),
+    )
+    place_cols = st.columns(2)
+    place_cols[0].metric(
+        "Inom potential",
+        _format_area_with_context(inside_total, unit, hex_area),
+        _change_delta_text(inside_total, _previous_snapshot_value(previous_snapshot, "inside_total_km2")),
+        delta_color=_change_delta_color(inside_total, _previous_snapshot_value(previous_snapshot, "inside_total_km2")),
+    )
+    place_cols[1].metric(
+        "Ytbehov utanför potential",
+        _format_area_with_context(outside_total, unit, hex_area),
+        _change_delta_text(outside_total, _previous_snapshot_value(previous_snapshot, "outside_total_km2")),
+        delta_color=_change_delta_color(outside_total, _previous_snapshot_value(previous_snapshot, "outside_total_km2")),
+    )
     with st.expander("Så läses tabellen", expanded=False):
         st.caption(
             "Totalraden summerar teknikerna. En grön etableringshex med vit child-hex kan därför bära både vind- och solscenarioyta. "
