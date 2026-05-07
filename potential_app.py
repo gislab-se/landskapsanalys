@@ -6367,6 +6367,10 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
         f"mix {wind_share_pct:.0f}% vind / {solar_share_pct:.0f}% sol · källa {source_label} {source_year}"
     )
     st.caption(_format_hex_size_caption(h3_resolution, hex_area))
+    st.caption(
+        "Ytorna summeras som hela H3-celler. Vid kusten kan därför redovisad yta vara större än faktisk landyta, "
+        "eftersom kustceller räknas med även när delar av cellen ligger i havet."
+    )
     if display_h3_resolution is not None and h3_resolution is not None and display_h3_resolution != h3_resolution:
         st.caption(
             f"Kartan visas som R{display_h3_resolution}. Ytbalans, täckning och scenarioallokering beräknas i R{h3_resolution}."

@@ -147,7 +147,7 @@ geometry_land_share_pct <- function(geom) {
   if (length(geom_sfc) == 0) {
     return(0)
   }
-  geom_union <- tryCatch(st_union(geom_sfc), error = function(e) NULL)
+  geom_union <- tryCatch(clip_geom_to_landmass(st_union(geom_sfc)), error = function(e) NULL)
   if (is.null(geom_union)) {
     return(0)
   }
@@ -287,9 +287,9 @@ intersection_reduce <- function(geoms) {
   out
 }
 
-prepare_layer_geometry <- function(layer_sf, analysis_kind, analysis_value_m, base_buffer_m = 0, already_clipped = FALSE) {
+prepare_layer_geometry <- function(layer_sf, analysis_kind, analysis_value_m, base_buffer_m = 0, already_clipped = FALSE, clip_to_landmass = TRUE) {
   layer_geom <- repair_sfc(st_union(st_geometry(layer_sf)))
-  if (!already_clipped) {
+  if (clip_to_landmass && !already_clipped) {
     layer_geom <- clip_geom_to_landmass(layer_geom)
   }
   if (length(layer_geom) == 0) {
@@ -304,10 +304,13 @@ prepare_layer_geometry <- function(layer_sf, analysis_kind, analysis_value_m, ba
 
   if (buffer_distance_m > 0) {
     buffered_geom <- st_buffer(layer_geom, dist = buffer_distance_m, nQuadSegs = 4)
-    return(extract_polygonal(clip_geom_to_landmass(buffered_geom)))
+    if (clip_to_landmass) {
+      return(extract_polygonal(clip_geom_to_landmass(buffered_geom)))
+    }
+    return(extract_polygonal(buffered_geom))
   }
 
-  if (already_clipped) {
+  if (already_clipped || !clip_to_landmass) {
     return(extract_polygonal(layer_geom))
   }
 
@@ -356,7 +359,8 @@ for (group_id in names(config_groups)) {
       analysis_kind = analysis_kind,
       analysis_value_m = analysis_value_m,
       base_buffer_m = layer_input$base_buffer_m,
-      already_clipped = layer_input$already_clipped
+      already_clipped = layer_input$already_clipped,
+      clip_to_landmass = group_id != "aviation_approach"
     )
     if (length(buffered_geom) == 0) {
       next
@@ -387,7 +391,7 @@ for (group_id in names(config_groups)) {
         "<br>Threshold: ", analysis_value_m, " m",
         "<br>Geometry role: ", role,
         "<br>Land share on map: ", land_share_pct, "%",
-        "<br>Clipped to Bornholm landmass."
+        ifelse(group_id == "aviation_approach", "<br>Display buffer is not clipped at coastline.", "<br>Clipped to Bornholm landmass.")
       )
     ),
     geometry = group_geom
