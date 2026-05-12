@@ -1,14 +1,16 @@
 {
   "analysis_id": "trondelag_landscape_placeholder",
-  "display_name": "Trondelag landskapsanalys placeholder",
+  "display_name": "Trondelag landskapsanalys preliminar",
   "region_id": "trondelag",
-  "status": "placeholder",
-  "native_crs": "TBD",
+  "status": "preliminary",
+  "native_crs": "EPSG:25832",
   "web_crs": "EPSG:4326",
   "source_h3_resolution": 8,
   "default_h3_resolution": 8,
   "available_h3_resolutions": [9, 8, 7, 6],
   "landscape_geojson": "data/processed/trondelag/landscape/trondelag_landscape_h3_r8.geojson",
+  "pdf_landscape_geojson": "data/processed/trondelag/landscape/trondelag_landscape_pdf_h3_r8.geojson",
+  "pdf_landscape_display_name": "Landskapstyper från PDF",
   "factor_scores": "data/processed/trondelag/landscape/trondelag_landscape_h3_r8.geojson",
   "cluster_profile": "data/processed/trondelag/landscape/trondelag_cluster_profile.csv",
   "cluster_sizes": "data/processed/trondelag/landscape/trondelag_cluster_sizes.csv",
@@ -30,8 +32,28 @@
     "7": "Struktur 7",
     "8": "Struktur 8"
   },
-  "landscape_type_labels": {},
-  "landscape_type_colors": {},
+  "landscape_type_labels": {
+    "LT01": "Ytterkustlandskap",
+    "LT02": "Fjordlandskap",
+    "LT03": "Fjordnära jordbrukslandskap",
+    "LT04": "Fjällnära skogslandskap",
+    "LT05": "Dalgångslandskap",
+    "LT06": "Lågfjällslandskap",
+    "LT07": "Högfjällslandskap",
+    "LT08": "Sjö- och våtmarkslandskap",
+    "LT09": "Vidsträckt fjällandskap"
+  },
+  "landscape_type_colors": {
+    "LT01": "#5F7FA1",
+    "LT02": "#C4D2DA",
+    "LT03": "#E6E8B6",
+    "LT04": "#92B08E",
+    "LT05": "#BDAA87",
+    "LT06": "#99A395",
+    "LT07": "#E5E8E1",
+    "LT08": "#A1A557",
+    "LT09": "#CAD0C6"
+  },
   "semantic_roles": {
     "coastal_lowland": ["F2"],
     "steep_valley_relief": ["F1"],
@@ -39,5 +61,5 @@
     "settlement_built_structure": ["F4"],
     "mixed_everyday_matrix": ["F5"]
   },
-  "method_note": "Placeholder manifest. Replace paths and labels when Trondelag landscape analysis is available."
+  "method_note": "Preliminar aktivering for Potential App. Ordinarie landskapslager anvander R8-geometri och first-pass-modell. pdf_landscape_geojson ar ett separat granskningslager digitaliserat fran Lablabs georefererade GIS-PDF."
 }

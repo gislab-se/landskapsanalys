@@ -136,7 +136,7 @@ def _mode_or_first(values: pd.Series) -> Any:
 def landscape_frame_for_resolution(manifest: dict[str, Any], resolution: int) -> pd.DataFrame:
     source_resolution = landscape_source_resolution(manifest)
     frame = load_factor_scores(manifest).copy()
-    if int(resolution) == source_resolution:
+    if int(resolution) >= source_resolution:
         return frame
 
     factors = factor_columns(manifest, frame)

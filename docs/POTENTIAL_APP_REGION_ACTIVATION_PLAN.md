@@ -140,3 +140,36 @@ Nästa tekniska steg är att bygga en regionvalideringsrapport som körs för al
 4. Koppla sol- och vindregler, även om de först är generiska.
 5. Låt landskapshärledning och faktorhärledning visa "data saknas" tills landskapsanalysen är färdig.
 6. Koppla energimodell först när scenario-/DuckDB-underlag finns.
+
+## Trondelag Minimal Datapaket 2026-05-12
+
+Trondelag har nu ett forsta minimalt datapaket i app-repot:
+
+- `data/processed/trondelag/h3/trondelag_h3_r6_land_clipped.geojson`
+- `data/processed/trondelag/h3/trondelag_h3_r7_land_clipped.geojson`
+- `data/processed/trondelag/h3/trondelag_h3_r8_land_clipped.geojson`
+- `data/processed/trondelag/h3/trondelag_h3_r9_land_clipped.geojson`
+- `data/processed/trondelag/mask/trondelag_land_region_mask_25832.gpkg`
+- `data/processed/trondelag/mask/trondelag_land_region_mask_wgs84.geojson`
+- `data/processed/trondelag/landscape/trondelag_landscape_h3_r8.geojson`
+- `data/processed/trondelag/landscape/trondelag_cluster_profile.csv`
+- `data/processed/trondelag/landscape/trondelag_cluster_sizes.csv`
+- `data/processed/trondelag/landscape/trondelag_run_summary.csv`
+
+Verifierad appstatus:
+
+- Regionmanifestet pekar mot R6-R9 H3-displaygeometrier.
+- R8-landskapslagret kan lasas som faktorpoang och landskapshex.
+- Faktorlistan ar `F1`-`F5`.
+- R6-R8 kan lasas och rollas upp fran landskapslagret.
+- R9 finns men ar stort: 625 387 landselekterade fulla H3-geometrier, cirka 331 MB. Appen ska darfor inte lasa R9 bara for att skapa UI-labels.
+- `default_display_h3_resolution` ar satt till R8 for Trondelag sa forsta oppningen inte hamnar direkt pa R9.
+
+Kvarvarande luckor:
+
+- `data/processed/trondelag/trondelag_times.duckdb` saknas.
+- `data/raw/trondelag/AreaDemand.xlsx` saknas.
+- Landskapsvarden ar preliminara och arvda fran R7 first-pass-modell.
+- R9 bor senare ersattas med maskklippt eller mer effektiv displaystrategi.
+- Jordart/surficial geology saknas.
+- Licens/proveniens behover fortfarande verifieras i pipeline-konfig.

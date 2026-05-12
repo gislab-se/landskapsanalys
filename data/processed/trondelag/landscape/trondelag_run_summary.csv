@@ -1,0 +1,12 @@
+metric,value
+run_id,potential_app_minimal_2026-05-12
+source_landscape_run,landscape_first_pass_res7_no_energy_grouped_cover_2026-04-28
+mask_crs_native,EPSG:25832
+geojson_crs,EPSG:4326
+mask_definition,"N500 landcover clipped to Trondelag boundary, excluding objtype Havflate; inland water remains in mask"
+r8_landscape_rows,89312
+r8_real_inherited_rows,88851
+r8_placeholder_rows,461
+source_boundary,D:/LABLAB_Energiforsk/Projekt SL01/Geodatakatalog_SL01/Utkommande_SL01/UT_Trondelag_SL01/UTM 33/ADM_FY_TRL_33.gpkg
+source_landcover,D:/LABLAB_Energiforsk/Projekt SL01/Geodatakatalog_SL01/Utkommande_SL01/UT_Trondelag_SL01/UTM 32/N500_AD_Merged_TRL_32.gpkg
+source_first_pass_geojson,C:/gislab/regional-landscape-pipeline/outputs/trondelag/landscape_first_pass_res7_no_energy_grouped_cover_2026-04-28/landscape/map/trondelag_landscape_first_pass_res7_map.geojson
