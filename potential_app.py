@@ -133,9 +133,9 @@ APP_LANGUAGES = {
     "en": "English",
 }
 APP_LANGUAGE_BUTTONS = {
-    "da_no": "🇩🇰/🇳🇴 DA/NO",
-    "sv": "🇸🇪 SV",
-    "en": "🇬🇧 EN",
+    "da_no": "DA/NO",
+    "sv": "SV",
+    "en": "EN",
 }
 MAP_VIEW_RESET_TOKEN_KEY = "potential_map_view_reset_token"
 MAP_STATE_VERSION = "establishment-start-v6"
@@ -143,6 +143,9 @@ LEFT_PANEL_OPEN_KEY = "potential_left_panel_open"
 RIGHT_PANEL_OPEN_KEY = "potential_right_panel_open"
 RIGHT_PANEL_WIDTH_KEY = "potential_right_panel_width_pct"
 PERFORMANCE_HISTORY_KEY = "potential_performance_history_v1"
+UI_ONLY_RERUN_KEY = "potential_ui_only_rerun"
+UI_ONLY_RERUN_REASON_KEY = "potential_ui_only_rerun_reason"
+WORKSPACE_RENDER_CACHE_KEY = "potential_workspace_render_cache_v1"
 REGION_SELECT_KEY = "potential_selected_region_id"
 WIND_LAYER_SELECTION_KEY = "wind_builder_selected_layers"
 WIND_RUNTIME_OVERLAY_KEY = "wind_builder_runtime_overlay_enabled"
@@ -458,20 +461,97 @@ def _wind_control_language() -> str:
 
 def _render_language_switcher(panel: Any | None = None) -> None:
     target = panel or st.sidebar
-    target.caption(_t("Språk"))
-    cols = target.columns(3)
     current = _language()
+    target.divider()
+    target.caption(f"{_t('Språk')}: {_t(APP_LANGUAGES[current])}")
+    cols = target.columns(3)
     for idx, (code, label) in enumerate(APP_LANGUAGES.items()):
-        button_type = "primary" if code == current else "secondary"
         if cols[idx].button(
             APP_LANGUAGE_BUTTONS.get(code, _t(label)),
             key=f"app_language_{code}",
-            type=button_type,
-            width="stretch",
+            type="secondary",
+            disabled=code == current,
             help=_t(label),
         ):
             st.session_state[APP_LANGUAGE_KEY] = code
+            _request_ui_only_rerun("språk")
             st.rerun()
+
+
+def _request_ui_only_rerun(reason: str) -> None:
+    st.session_state[UI_ONLY_RERUN_KEY] = True
+    st.session_state[UI_ONLY_RERUN_REASON_KEY] = str(reason)
+
+
+def _ui_only_rerun_requested() -> bool:
+    return bool(st.session_state.get(UI_ONLY_RERUN_KEY, False))
+
+
+def _ui_only_rerun_reason() -> str:
+    return str(st.session_state.get(UI_ONLY_RERUN_REASON_KEY, "visning"))
+
+
+def _clear_ui_only_rerun() -> None:
+    st.session_state[UI_ONLY_RERUN_KEY] = False
+    st.session_state[UI_ONLY_RERUN_REASON_KEY] = ""
+
+
+def _workspace_calculation_fingerprint(
+    region: dict[str, Any],
+    scenario_state: dict[str, Any],
+    h3_resolution: int,
+    analysis_h3_resolution: int,
+    zoom_family_enabled: bool,
+    show_user_solar: bool,
+    show_solar_v1: bool,
+    show_user_wind: bool,
+    show_v10: bool,
+    show_pdf_types: bool,
+    show_cluster: bool,
+    show_factor: bool,
+    selected_factor: str,
+    applied_solar_config: dict[str, Any],
+    solar_params: dict[str, Any],
+    solar_large_filter_configs: list[dict[str, Any]],
+    wind_selected_layers: dict[str, list[str]],
+    wind_ui_params: dict[str, Any],
+    energy_model_state: dict[str, Any],
+) -> str:
+    """Hash the calculation inputs, deliberately excluding UI language."""
+    payload = {
+        "region_id": str(region.get("region_id", "region")),
+        "scenario": scenario_state.get("scenario"),
+        "h3_resolution": int(h3_resolution),
+        "analysis_h3_resolution": int(analysis_h3_resolution),
+        "zoom_family_enabled": bool(zoom_family_enabled),
+        "show_user_solar": bool(show_user_solar),
+        "show_solar_v1": bool(show_solar_v1),
+        "show_user_wind": bool(show_user_wind),
+        "show_landscape_types": bool(show_v10),
+        "show_landscape_pdf_types": bool(show_pdf_types),
+        "show_landscape_structures": bool(show_cluster),
+        "show_landscape_factors": bool(show_factor),
+        "selected_factor": str(selected_factor),
+        "applied_solar_config": applied_solar_config,
+        "solar_params": solar_params,
+        "solar_large_filter_configs": solar_large_filter_configs,
+        "wind_selected_layers": normalize_group_layer_map(wind_selected_layers),
+        "wind_ui_params": wind_ui_params,
+        "energy_debug_run_id": energy_model_state.get("debug_run_id"),
+        "energy_available": bool(energy_model_state.get("available")),
+        "energy_show_proposal": bool(energy_model_state.get("show_proposal")),
+        "energy_placement_mode": energy_model_state.get("placement_mode"),
+    }
+    return _short_hash(payload)
+
+
+def _cached_workspace_payload(fingerprint: str) -> dict[str, Any] | None:
+    cached = st.session_state.get(WORKSPACE_RENDER_CACHE_KEY)
+    if not isinstance(cached, dict):
+        return None
+    if str(cached.get("fingerprint", "")) != str(fingerprint):
+        return None
+    return cached
 
 
 WIND_SHARE_CLASS_SPECS: list[dict[str, Any]] = [
@@ -625,6 +705,7 @@ def _toggle_panel(key: str) -> None:
     st.session_state[key] = not was_open
     if key == RIGHT_PANEL_OPEN_KEY and was_open is False and _right_panel_width_pct() <= 0.0:
         st.session_state[RIGHT_PANEL_WIDTH_KEY] = 34.0
+    _request_ui_only_rerun("panel")
 
 
 def _panel_shell() -> tuple[Any | None, Any | None]:
@@ -948,6 +1029,8 @@ def _workspace_shell() -> tuple[Any | None, Any, Any | None]:
                     key=RIGHT_PANEL_WIDTH_KEY,
                     format="%.0f%%",
                     label_visibility="collapsed",
+                    on_change=_request_ui_only_rerun,
+                    args=("panelbredd",),
                 )
                 st.caption(
                     {
@@ -1582,6 +1665,8 @@ def _render_opacity_control(key_prefix: str) -> None:
             step=0.05,
             key=_opacity_key(key_prefix),
             help="0.1 är nästan genomskinligt. 0.9 är nästan helt fyllt.",
+            on_change=_request_ui_only_rerun,
+            args=("opacitet",),
         )
 
 
@@ -1615,6 +1700,8 @@ def _hex_opacity_controls(layers: list[dict[str, Any]], key_prefix: str) -> list
             step=0.05,
             key=control_key,
             help=f"Styr opaciteten för hexlagret {family['label']}. 0.1 är nästan genomskinligt, 0.9 nästan helt fyllt.",
+            on_change=_request_ui_only_rerun,
+            args=("hexopacitet",),
         )
     return list(families.values())
 
@@ -1919,6 +2006,7 @@ def _ensure_default_start_state(region: dict[str, Any]) -> None:
     st.session_state[SOLAR_APPLIED_CONFIG_KEY] = dict(DEFAULT_SOLAR_APPLIED_CONFIG)
     st.session_state["combined_h3_resolution"] = _preferred_h3_resolution(region, 9)
     st.session_state["show_landscape_v10"] = False
+    st.session_state["show_landscape_pdf_types"] = False
     st.session_state["show_landscape_cluster"] = False
     st.session_state["show_landscape_factor"] = False
     st.session_state["show_solar_v1"] = False
@@ -2279,6 +2367,7 @@ def _map_panel_controls(region: dict[str, Any], key_prefix: str, panel: Any | No
             st.markdown("[Läs mer om H3-upplösningar](https://h3geo.org/).")
             if st.button(_t("Återställ kartvy"), key=f"{key_prefix}_reset_map_view"):
                 _request_browser_map_view_reset()
+                _request_ui_only_rerun("kartvy")
                 st.rerun()
     else:
         h3_resolution = current_value
@@ -4115,6 +4204,17 @@ def _landscape_frame(
     return _filter_frame_to_display_geometries(frame, _h3_display_geometry_path(region, resolution))
 
 
+def _pdf_landscape_manifest(landscape_manifest: dict[str, Any]) -> dict[str, Any] | None:
+    pdf_path = landscape_manifest.get("pdf_landscape_geojson")
+    if not pdf_path:
+        return None
+    manifest = landscape_manifest.copy()
+    manifest["landscape_geojson"] = pdf_path
+    manifest["factor_scores"] = pdf_path
+    manifest["analysis_id"] = f"{landscape_manifest.get('analysis_id', 'landscape')}_pdf"
+    return manifest
+
+
 def _solar_legend_items(solar_rules: dict[str, Any]) -> list[dict[str, str]]:
     return [
         {"label": str(item.get("label", item.get("id", "Okänd"))), "color": str(item.get("color", "#999999"))}
@@ -4785,15 +4885,6 @@ def _wind_group_controls(
                     render_layer_checkbox(layer)
 
                 with st.expander("Avancerade inställningar", expanded=False):
-                    st.slider(
-                        ui_text("display_blend", language),
-                        min_value=0,
-                        max_value=100,
-                        step=5,
-                        key=_wind_control_key("blend", group.id),
-                        help=ui_text("display_blend_help", language),
-                    )
-                    st.caption("Påverkar bara hur källager och grupplager visas i kartkontrollen, inte själva beräkningen.")
                     if is_settlement_group:
                         st.caption("Befolkningspunkter är standard. Välj fler bebyggelseproxyer om de behövs för analysen.")
                     elif is_culture_group:
@@ -7432,6 +7523,55 @@ def _render_performance_log(performance_log: list[dict[str, Any]]) -> None:
         st.caption(f"Summa mätta steg: {total_seconds:.2f} s. Långsammast: {slowest.get('steg', '-')} ({float(slowest.get('tid_s', 0.0) or 0.0):.2f} s).")
 
 
+def _render_reused_workspace_outputs(
+    cache: dict[str, Any],
+    region: dict[str, Any],
+    scenario_state: dict[str, Any],
+    opacity: float,
+    preserve_map_view: bool,
+    map_reset_token: int,
+    right_panel: Any | None,
+) -> None:
+    layers = cache.get("layers") if isinstance(cache.get("layers"), list) else []
+    map_state = cache.get("map_state") if isinstance(cache.get("map_state"), dict) else {}
+    energy_model_state = cache.get("energy_model_state") if isinstance(cache.get("energy_model_state"), dict) else {"available": False}
+    performance_log = cache.get("performance_log") if isinstance(cache.get("performance_log"), list) else []
+    note_body = str(cache.get("note_body", ""))
+
+    reason = _ui_only_rerun_reason() or "visning"
+    st.caption(f"Visningsändring ({reason}): återanvänder senaste beräknade karta och potential. Ingen ny potentialberäkning körs.")
+    _render_layers(
+        region,
+        layers,
+        opacity,
+        map_state_key=f"{region.get('region_id', 'region')}:workspace:{MAP_STATE_VERSION}" if preserve_map_view else None,
+        map_reset_token=map_reset_token,
+        opacity_key_prefix="combined",
+        note_title="Gemensam potentialvy",
+        note_body=note_body,
+    )
+
+    summary_target = right_panel or st.container()
+    with summary_target:
+        _render_establishment_focus(energy_model_state)
+        _combined_summary(map_state, scenario_state)
+        _render_performance_log(performance_log)
+        with st.expander(_t("Aktiva beräkningar"), expanded=False):
+            st.caption(
+                "Den senaste visningsändringen återanvände redan beräknade resultat. "
+                "Samma princip används nu för språk, paneler, kartvy och opacitet."
+            )
+            performance_diagnostics = energy_model_state.get("performance_diagnostics") if isinstance(energy_model_state, dict) else None
+            if isinstance(performance_diagnostics, list) and performance_diagnostics:
+                st.dataframe(
+                    pd.DataFrame(performance_diagnostics).head(8),
+                    width="stretch",
+                    hide_index=True,
+                    height=min(344, 72 + 32 * min(8, len(performance_diagnostics))),
+                )
+        _data_method(region)
+
+
 def _combined_summary(map_state: dict[str, Any], scenario_state: dict[str, Any]) -> None:
     landscape_manifest = map_state.get("landscape_manifest") if isinstance(map_state.get("landscape_manifest"), dict) else {}
     landscape_factors = [str(value) for value in (map_state.get("landscape_factors") or [])]
@@ -8043,6 +8183,7 @@ def _unified_workspace_tab(
     st.session_state["show_default_wind"] = False
     st.session_state["show_user_wind"] = False
     st.session_state.setdefault("show_landscape_v10", True)
+    st.session_state.setdefault("show_landscape_pdf_types", False)
     st.session_state.setdefault("show_landscape_cluster", False)
     st.session_state.setdefault("show_landscape_factor", False)
 
@@ -8057,12 +8198,15 @@ def _unified_workspace_tab(
     solar_large_filter_configs = _solar_active_filter_configs(applied_solar_config)
     show_user_wind = _wind_potential_is_active(_selected_wind_layers())
     show_v10 = bool(st.session_state.get("show_landscape_v10"))
+    pdf_landscape_available = bool((landscape_manifest or {}).get("pdf_landscape_geojson"))
+    show_pdf_types = bool(st.session_state.get("show_landscape_pdf_types", False)) and pdf_landscape_available
+    pdf_landscape_label = str((landscape_manifest or {}).get("pdf_landscape_display_name") or "Landskapstyper från PDF")
     show_cluster = bool(st.session_state.get("show_landscape_cluster", False))
     show_factor = bool(st.session_state.get("show_landscape_factor", False))
     selected_factor = str(st.session_state.get("combined_landscape_factor", factors[0] if factors else ""))
     if selected_factor not in factors and factors:
         selected_factor = factors[0]
-    active_landscape_count = _count_enabled(show_v10, show_cluster, show_factor)
+    active_landscape_count = _count_enabled(show_v10, show_pdf_types, show_cluster, show_factor)
     active_wind_count = _count_enabled(show_user_wind)
     active_solar_count = _count_enabled(show_user_solar, show_solar_v1)
 
@@ -8088,6 +8232,12 @@ def _unified_workspace_tab(
             with st.expander(_t("Landskap"), expanded=True):
                 st.caption(f"Aktiva kartlager: {active_landscape_count}")
                 show_v10 = st.checkbox(_t("Landskapstyper"), value=show_v10, key="show_landscape_v10")
+                show_pdf_types = st.checkbox(
+                    pdf_landscape_label,
+                    value=show_pdf_types,
+                    disabled=not pdf_landscape_available,
+                    key="show_landscape_pdf_types",
+                )
                 show_cluster = st.checkbox(_t("Landskapstrukturer"), value=show_cluster, key="show_landscape_cluster")
                 show_factor = st.checkbox(_t("Landskapsfaktorer"), value=show_factor, key="show_landscape_factor")
                 selected_factor = st.selectbox(
@@ -8242,6 +8392,43 @@ def _unified_workspace_tab(
         energy_model_state["solar_large_protected_active"] = bool(solar_large_protected_active)
         energy_model_state["solar_large_protected_layer_count"] = int(len(solar_large_protected_layer_ids))
         energy_model_state["solar_large_filter_configs"] = list(solar_large_filter_configs)
+
+    workspace_fingerprint = _workspace_calculation_fingerprint(
+        region,
+        scenario_state,
+        h3_resolution,
+        analysis_h3_resolution,
+        zoom_family_enabled,
+        show_user_solar,
+        show_solar_v1,
+        show_user_wind,
+        show_v10,
+        show_pdf_types,
+        show_cluster,
+        show_factor,
+        selected_factor,
+        applied_solar_config,
+        solar_params,
+        solar_large_filter_configs,
+        wind_selected_layers,
+        wind_ui_params,
+        energy_model_state,
+    )
+    if _ui_only_rerun_requested():
+        cached_workspace = _cached_workspace_payload(workspace_fingerprint)
+        if cached_workspace is not None:
+            _render_reused_workspace_outputs(
+                cached_workspace,
+                region,
+                scenario_state,
+                opacity,
+                preserve_map_view,
+                map_reset_token,
+                right_panel,
+            )
+            _clear_ui_only_rerun()
+            return
+        _clear_ui_only_rerun()
 
     calc_steps = _calculation_progress_steps(
         show_user_solar,
@@ -8706,7 +8893,7 @@ def _unified_workspace_tab(
         _add_perf_timing(performance_log, "Etableringsstatistik", perf_started)
         _advance_calculation_progress(calc_progress, "Etableringsstatistik")
 
-    if show_v10 or show_cluster or show_factor:
+    if show_v10 or show_pdf_types or show_cluster or show_factor:
         perf_started = _perf_start()
         landscape_frame = _landscape_frame(region, landscape_manifest, h3_resolution)
         if show_v10:
@@ -8725,6 +8912,24 @@ def _unified_workspace_tab(
                     ),
                 )
             )
+        if show_pdf_types:
+            pdf_manifest = _pdf_landscape_manifest(landscape_manifest)
+            if pdf_manifest is not None:
+                layers.extend(
+                    _hex_family_layers(
+                        region,
+                        h3_resolution,
+                        zoom_family_enabled,
+                        "landscape_pdf_types_hex",
+                        pdf_landscape_label,
+                        lambda resolution: _landscape_type_layer(
+                            pdf_landscape_label,
+                            _landscape_frame(region, pdf_manifest, int(resolution)),
+                            pdf_manifest,
+                            _h3_display_geometry_path(region, int(resolution)),
+                        ),
+                    )
+                )
         _add_perf_timing(performance_log, "Landskapslager", perf_started, f"R{h3_resolution}; {len(landscape_frame)} hex")
         _advance_calculation_progress(calc_progress, "Landskapslager")
         if show_cluster:
@@ -8831,6 +9036,24 @@ def _unified_workspace_tab(
     _finish_calculation_progress(calc_progress, performance_log)
     _record_performance_history(performance_bucket, performance_log)
     energy_model_state["performance_diagnostics"] = _performance_diagnostic_rows(performance_log, performance_estimates)
+    st.session_state[WORKSPACE_RENDER_CACHE_KEY] = {
+        "fingerprint": workspace_fingerprint,
+        "layers": layers,
+        "note_body": note_body,
+        "performance_log": performance_log,
+        "energy_model_state": energy_model_state,
+        "map_state": {
+            "layers": layers,
+            "potential_frames": potential_frames,
+            "landscape_manifest": landscape_manifest,
+            "landscape_factors": factors,
+            "resolution": h3_resolution,
+            "analysis_resolution": analysis_h3_resolution,
+            "resolution_info": resolution_info,
+            "landscape_active": bool(show_v10 or show_cluster or show_factor),
+            "opacity_key_prefix": "combined",
+        },
+    }
 
     summary_target = right_panel or st.container()
     with summary_target:
@@ -8934,7 +9157,6 @@ def _unified_workspace_tab(
 def main() -> None:
     st.session_state.setdefault(APP_LANGUAGE_KEY, "sv")
     st.set_page_config(page_title=_t(PAGE_TITLE), layout="wide", initial_sidebar_state="expanded")
-    _render_language_switcher(st.sidebar)
     left_panel, main_panel, right_panel = _workspace_shell()
     region = _select_region(None)
     scenario_state = _scenario_state(region, None)
@@ -8945,6 +9167,7 @@ def main() -> None:
     with main_panel:
         _workspace_header(region, scenario_state, h3_resolution)
         _unified_workspace_tab(region, scenario_state, context, left_panel, right_panel)
+    _render_language_switcher(st.sidebar)
 
 
 if __name__ == "__main__":
