@@ -1,0 +1,43 @@
+{
+  "analysis_id": "trondelag_landscape_placeholder",
+  "display_name": "Trondelag landskapsanalys placeholder",
+  "region_id": "trondelag",
+  "status": "placeholder",
+  "native_crs": "TBD",
+  "web_crs": "EPSG:4326",
+  "source_h3_resolution": 8,
+  "default_h3_resolution": 8,
+  "available_h3_resolutions": [9, 8, 7, 6],
+  "landscape_geojson": "data/processed/trondelag/landscape/trondelag_landscape_h3_r8.geojson",
+  "factor_scores": "data/processed/trondelag/landscape/trondelag_landscape_h3_r8.geojson",
+  "cluster_profile": "data/processed/trondelag/landscape/trondelag_cluster_profile.csv",
+  "cluster_sizes": "data/processed/trondelag/landscape/trondelag_cluster_sizes.csv",
+  "run_summary": "data/processed/trondelag/landscape/trondelag_run_summary.csv",
+  "factor_labels": {
+    "F1": "Relief och dalstruktur",
+    "F2": "Kust och strandlandskap",
+    "F3": "Skog och skyddad natur",
+    "F4": "Bebyggelse och infrastruktur",
+    "F5": "Oppet produktionslandskap"
+  },
+  "cluster_labels": {
+    "1": "Struktur 1",
+    "2": "Struktur 2",
+    "3": "Struktur 3",
+    "4": "Struktur 4",
+    "5": "Struktur 5",
+    "6": "Struktur 6",
+    "7": "Struktur 7",
+    "8": "Struktur 8"
+  },
+  "landscape_type_labels": {},
+  "landscape_type_colors": {},
+  "semantic_roles": {
+    "coastal_lowland": ["F2"],
+    "steep_valley_relief": ["F1"],
+    "protected_forest_habitat": ["F3"],
+    "settlement_built_structure": ["F4"],
+    "mixed_everyday_matrix": ["F5"]
+  },
+  "method_note": "Placeholder manifest. Replace paths and labels when Trondelag landscape analysis is available."
+}

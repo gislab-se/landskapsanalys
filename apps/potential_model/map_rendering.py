@@ -208,6 +208,7 @@ def build_layered_hex_map_html(
       const previousToken = viewStorage.getItem(tokenKey);
       if (previousToken !== String(mapResetToken)) {{
         viewStorage.removeItem(storageKey('view'));
+        viewStorage.removeItem(storageKey('overlays'));
         viewStorage.setItem(tokenKey, String(mapResetToken));
         return true;
       }}
