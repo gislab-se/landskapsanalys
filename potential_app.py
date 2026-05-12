@@ -126,6 +126,17 @@ def landscape_type_display_colors(manifest: dict[str, Any] | None = None) -> dic
 
 
 PAGE_TITLE = "Sol- och vindpotential"
+APP_LANGUAGE_KEY = "potential_app_language"
+APP_LANGUAGES = {
+    "da_no": "Danska/Norska",
+    "sv": "Svenska",
+    "en": "English",
+}
+APP_LANGUAGE_BUTTONS = {
+    "da_no": "🇩🇰/🇳🇴 DA/NO",
+    "sv": "🇸🇪 SV",
+    "en": "🇬🇧 EN",
+}
 MAP_VIEW_RESET_TOKEN_KEY = "potential_map_view_reset_token"
 MAP_STATE_VERSION = "establishment-start-v6"
 LEFT_PANEL_OPEN_KEY = "potential_left_panel_open"
@@ -285,6 +296,184 @@ SOLAR_V1_POPULATION_LAYER_PATH = (
 SOLAR_V1_POPULATION_COUNT_COLUMN = "fastboendebefolkningmapinfo_count"
 EML_PROVIDER_URL = "https://energymodellinglab.com/"
 IVL_PROVIDER_URL = "https://www.ivl.se/"
+
+APP_TRANSLATIONS: dict[str, dict[str, str]] = {
+    "sv": {},
+    "da_no": {
+        "Sol- och vindpotential": "Sol- og vindpotentiale",
+        "Danska/Norska": "Dansk/Norsk",
+        "Svenska": "Svensk",
+        "English": "Engelsk",
+        "Språk": "Sprog/Språk",
+        "Region": "Region",
+        "Scenarier": "Scenarier",
+        "Scenario": "Scenario",
+        "Lager": "Lag",
+        "Geografier": "Geografier",
+        "Landskap": "Landskab",
+        "Landskapstyper": "Landskabstyper",
+        "Landskapstrukturer": "Landskabsstrukturer",
+        "Landskapsfaktorer": "Landskabsfaktorer",
+        "Faktor": "Faktor",
+        "H3-upplösning": "H3-oppløsning",
+        "H3-rollup": "H3-rollup",
+        "Hexvisning": "Hexvisning",
+        "Snabb visning: vald upplösning": "Hurtig visning: valgt oppløsning",
+        "Återställ kartvy": "Nulstil kartvisning",
+        "Panelbredd": "Panelbredde",
+        "Visa/dölj kontext": "Vis/skjul kontekst",
+        "Karta": "Kort/Kart",
+        "Etableringsyta": "Etableringsareal",
+        "Regionstatus": "Regionstatus",
+        "Nästa datapaket": "Neste datapakke",
+        "Data och metod": "Data og metode",
+        "Aktiva beräkningar": "Aktive beregninger",
+        "Beräkning och datakvalitet": "Beregning og datakvalitet",
+        "Energimodellering": "Energimodellering",
+        "Social acceptans": "Social accept",
+        "Visa social acceptans": "Vis social accept",
+        "Kommer i augusti": "Kommer i august",
+        "Levereras av EML": "Leveres af EML",
+        "Levereras av IVL": "Leveres af IVL",
+        "Landskapspotential Vind": "Landskabspotentiale Vind",
+        "Landskapspotential Sol": "Landskabspotentiale Sol",
+        "Småskalig anläggning på tak": "Småskala anlæg på tag",
+        "Storskalig anläggning på land": "Storskala anlæg på land",
+        "Potentiell etableringsyta": "Potentielt etableringsareal",
+        "Scenariofördelning i etableringshex": "Scenariefordeling i etableringshex",
+        "Ytbehov utanför landskapets potential": "Arealbehov udenfor landskabets potentiale",
+        "Befolkning": "Befolkning",
+        "Befolkningspunkter": "Befolkningspunkter",
+        "Panelyta per person": "Panelareal per person",
+        "Avstånd till befolkning": "Afstand til befolkning",
+        "Använd ändringar": "Anvend ændringer",
+        "Energimix": "Energimix",
+        "Placering": "Placering",
+        "Placera automatiskt": "Placér automatisk",
+        "Placera själv": "Placér selv",
+        "Visa föreslagen etableringsyta": "Vis foreslået etableringsareal",
+        "Sammanfattning": "Sammenfatning",
+        "Vind/sol och landskapspåverkan": "Vind/sol og landskabspåvirkning",
+        "Så läses tabellen": "Sådan læses tabellen",
+        "Visning och enheter": "Visning og enheder",
+        "Hexdetaljer och kartmarkörer": "Hexdetaljer og kortmarkører",
+        "Urval och ytdetaljer": "Udvalg og arealdetaljer",
+        "Prestanda": "Ydeevne",
+        "Landskapsanalys": "Landskabsanalyse",
+        "Lager som visas": "Lag som vises",
+        "Kärnområden": "Kerneområder",
+        "Inga lager är tända.": "Ingen lag er tændt.",
+        "Alla grundmanifest och H3-geometrier finns.": "Alle grundmanifest og H3-geometrier findes.",
+        "Data saknas för vissa lager/funktioner. Det är okej i detta läge.": "Data mangler for visse lag/funktioner. Det er okay i denne fase.",
+        "Inga regionmanifest hittades.": "Ingen regionmanifest fundet.",
+        "planerad": "planlagt",
+        "På": "På",
+    },
+    "en": {
+        "Sol- och vindpotential": "Solar and Wind Potential",
+        "Danska/Norska": "Danish/Norwegian",
+        "Svenska": "Swedish",
+        "English": "English",
+        "Språk": "Language",
+        "Region": "Region",
+        "Scenarier": "Scenarios",
+        "Scenario": "Scenario",
+        "Lager": "Layers",
+        "Geografier": "Geographies",
+        "Landskap": "Landscape",
+        "Landskapstyper": "Landscape Types",
+        "Landskapstrukturer": "Landscape Structures",
+        "Landskapsfaktorer": "Landscape Factors",
+        "Faktor": "Factor",
+        "H3-upplösning": "H3 Resolution",
+        "H3-rollup": "H3 Rollup",
+        "Hexvisning": "Hex Display",
+        "Snabb visning: vald upplösning": "Fast display: selected resolution",
+        "Återställ kartvy": "Reset map view",
+        "Panelbredd": "Panel width",
+        "Visa/dölj kontext": "Show/hide context",
+        "Karta": "Map",
+        "Etableringsyta": "Establishment Area",
+        "Regionstatus": "Region Status",
+        "Nästa datapaket": "Next Data Package",
+        "Data och metod": "Data and Method",
+        "Aktiva beräkningar": "Active Calculations",
+        "Beräkning och datakvalitet": "Calculation and Data Quality",
+        "Energimodellering": "Energy Modelling",
+        "Social acceptans": "Social Acceptance",
+        "Visa social acceptans": "Show social acceptance",
+        "Kommer i augusti": "Coming in August",
+        "Levereras av EML": "Provided by EML",
+        "Levereras av IVL": "Provided by IVL",
+        "Landskapspotential Vind": "Landscape Potential Wind",
+        "Landskapspotential Sol": "Landscape Potential Solar",
+        "Småskalig anläggning på tak": "Small-scale rooftop installation",
+        "Storskalig anläggning på land": "Large-scale ground installation",
+        "Potentiell etableringsyta": "Potential Establishment Area",
+        "Scenariofördelning i etableringshex": "Scenario Allocation in Establishment Hexes",
+        "Ytbehov utanför landskapets potential": "Area Demand Outside Landscape Potential",
+        "Befolkning": "Population",
+        "Befolkningspunkter": "Population points",
+        "Panelyta per person": "Panel area per person",
+        "Avstånd till befolkning": "Distance to population",
+        "Använd ändringar": "Apply changes",
+        "Energimix": "Energy mix",
+        "Placering": "Placement",
+        "Placera automatiskt": "Place automatically",
+        "Placera själv": "Place manually",
+        "Visa föreslagen etableringsyta": "Show proposed establishment area",
+        "Sammanfattning": "Summary",
+        "Vind/sol och landskapspåverkan": "Wind/Solar and Landscape Impact",
+        "Så läses tabellen": "How to read the table",
+        "Visning och enheter": "Display and Units",
+        "Hexdetaljer och kartmarkörer": "Hex Details and Map Markers",
+        "Urval och ytdetaljer": "Selection and Area Details",
+        "Prestanda": "Performance",
+        "Landskapsanalys": "Landscape Analysis",
+        "Lager som visas": "Visible Layers",
+        "Kärnområden": "Core Areas",
+        "Inga lager är tända.": "No layers are enabled.",
+        "Alla grundmanifest och H3-geometrier finns.": "All base manifests and H3 geometries are available.",
+        "Data saknas för vissa lager/funktioner. Det är okej i detta läge.": "Data is missing for some layers/functions. That is okay at this stage.",
+        "Inga regionmanifest hittades.": "No region manifests found.",
+        "planerad": "planned",
+        "På": "On",
+    },
+}
+
+
+def _language() -> str:
+    value = str(st.session_state.get(APP_LANGUAGE_KEY, "sv"))
+    return value if value in APP_LANGUAGES else "sv"
+
+
+def _t(text: str, **kwargs: Any) -> str:
+    translated = APP_TRANSLATIONS.get(_language(), {}).get(str(text), str(text))
+    return translated.format(**kwargs) if kwargs else translated
+
+
+def _wind_control_language() -> str:
+    return "en" if _language() == "en" else "sv"
+
+
+def _render_language_switcher(panel: Any | None = None) -> None:
+    target = panel or st.sidebar
+    target.caption(_t("Språk"))
+    cols = target.columns(3)
+    current = _language()
+    for idx, (code, label) in enumerate(APP_LANGUAGES.items()):
+        button_type = "primary" if code == current else "secondary"
+        if cols[idx].button(
+            APP_LANGUAGE_BUTTONS.get(code, _t(label)),
+            key=f"app_language_{code}",
+            type=button_type,
+            width="stretch",
+            help=_t(label),
+        ):
+            st.session_state[APP_LANGUAGE_KEY] = code
+            st.rerun()
+
+
 WIND_SHARE_CLASS_SPECS: list[dict[str, Any]] = [
     {"id": "share_0", "label": "0%", "max_pct": 0.0, "legend_label": "0%", "base_color": "#d7301f", "core_color": "#7f0000"},
     {"id": "share_1", "label": ">0-5%", "max_pct": 5.0, "legend_label": "<=5%", "base_color": "#ef4444", "core_color": "#991b1b"},
@@ -605,7 +794,7 @@ def _panel_shell() -> tuple[Any | None, Any | None]:
         st.button(
             ">" if right_open else "<",
             key="right_panel_edge_toggle",
-            help="Visa/dölj kontext",
+            help=_t("Visa/dölj kontext"),
             on_click=_toggle_panel,
             args=(RIGHT_PANEL_OPEN_KEY,),
         )
@@ -750,9 +939,9 @@ def _workspace_shell() -> tuple[Any | None, Any, Any | None]:
             right_panel = st.container(border=True)
             with right_panel:
                 st.markdown('<span id="right-panel-content-anchor"></span>', unsafe_allow_html=True)
-                st.caption("Panelbredd")
+                st.caption(_t("Panelbredd"))
                 st.slider(
-                    "Panelbredd",
+                    _t("Panelbredd"),
                     min_value=0.0,
                     max_value=100.0,
                     step=1.0,
@@ -760,21 +949,26 @@ def _workspace_shell() -> tuple[Any | None, Any, Any | None]:
                     format="%.0f%%",
                     label_visibility="collapsed",
                 )
-                st.caption("0% gör panelen minimal. 100% ger nästan hela arbetsytan till panelen.")
+                st.caption(
+                    {
+                        "en": "0% makes the panel minimal. 100% gives almost the full workspace to the panel.",
+                        "da_no": "0% gør panelet minimalt. 100% giver næsten hele arbejdsfladen til panelet.",
+                    }.get(_language(), "0% gör panelen minimal. 100% ger nästan hela arbetsytan till panelen.")
+                )
 
     return left_panel, main_col, right_panel
 
 
 def _region_choice_label(region: dict[str, Any]) -> str:
     status = str(region.get("status", "planned"))
-    suffix = "" if status == "active" else " (planerad)"
+    suffix = "" if status == "active" else f" ({_t('planerad')})"
     return f"{region.get('display_name', region.get('region_id'))}{suffix}"
 
 
 def _region_options() -> dict[str, dict[str, Any]]:
     regions = list_regions()
     if not regions:
-        st.error("Inga regionmanifest hittades.")
+        st.error(_t("Inga regionmanifest hittades."))
         st.stop()
     options = {str(region["region_id"]): region for region in regions}
     default_id = "bornholm" if "bornholm" in options else next(iter(options))
@@ -790,7 +984,7 @@ def _select_region(panel: Any | None = None) -> dict[str, Any]:
         return options[selected_id]
 
     selected_id = panel.selectbox(
-        "Region",
+        _t("Region"),
         options=list(options),
         key=REGION_SELECT_KEY,
         format_func=lambda region_id: _region_choice_label(options[region_id]),
@@ -801,23 +995,23 @@ def _select_region(panel: Any | None = None) -> dict[str, Any]:
 def _scenario_sidebar(region: dict[str, Any]) -> dict[str, Any]:
     scenario_manifest = load_linked_manifest(region, "scenario_manifest")
     st.sidebar.divider()
-    st.sidebar.header("Scenarier")
+    st.sidebar.header(_t("Scenarier"))
 
     if scenario_manifest is None:
-        st.sidebar.caption("Scenariomanifest saknas för vald region.")
+        st.sidebar.caption({"en": "Scenario manifest is missing for the selected region.", "da_no": "Scenariomanifest mangler for valgt region."}.get(_language(), "Scenariomanifest saknas för vald region."))
         return {"scenario": None, "manifest": None}
 
     levels = scenario_manifest.get("scenario_levels") or []
     selected = None
     if levels:
         selected = st.sidebar.radio(
-            "Scenario",
+            _t("Scenario"),
             options=levels,
             index=levels.index("medium") if "medium" in levels else 0,
             format_func=lambda value: {"low": "Låg", "medium": "Mellan", "high": "Hög"}.get(value, str(value)),
         )
     st.sidebar.caption(f"Scenario-set: {scenario_manifest.get('scenario_set_id', '-')}")
-    st.sidebar.caption(f"Lager: {len(scenario_manifest.get('layers') or [])}")
+    st.sidebar.caption(f"{_t('Lager')}: {len(scenario_manifest.get('layers') or [])}")
     if not scenario_manifest.get("layers"):
         st.sidebar.caption("Scenariofiler kopplas in senare.")
     return {"scenario": selected, "manifest": scenario_manifest}
@@ -827,7 +1021,7 @@ def _scenario_state(region: dict[str, Any], panel: Any | None = None) -> dict[st
     scenario_manifest = load_linked_manifest(region, "scenario_manifest")
     if scenario_manifest is None:
         if panel is not None:
-            panel.caption("Scenariomanifest saknas för vald region.")
+            panel.caption({"en": "Scenario manifest is missing for the selected region.", "da_no": "Scenariomanifest mangler for valgt region."}.get(_language(), "Scenariomanifest saknas för vald region."))
         return {"scenario": None, "manifest": None}
 
     levels = scenario_manifest.get("scenario_levels") or []
@@ -846,14 +1040,14 @@ def _scenario_state(region: dict[str, Any], panel: Any | None = None) -> dict[st
             selected = st.session_state.get(scenario_key)
         else:
             selected = panel.radio(
-                "Scenario",
+                _t("Scenario"),
                 options=levels,
                 key=scenario_key,
                 format_func=lambda value: {"low": "Låg", "medium": "Mellan", "high": "Hög"}.get(value, str(value)),
             )
     if panel is not None:
         panel.caption(f"Scenario-set: {scenario_manifest.get('scenario_set_id', '-')}")
-        panel.caption(f"Lager: {len(scenario_manifest.get('layers') or [])}")
+        panel.caption(f"{_t('Lager')}: {len(scenario_manifest.get('layers') or [])}")
         if not scenario_manifest.get("layers"):
             panel.caption("Scenariofiler kopplas in senare.")
     return {"scenario": selected, "manifest": scenario_manifest}
@@ -1052,7 +1246,7 @@ def _render_energy_modeling_panel(
     if st.session_state.get(scenario_key) not in planning_ids:
         st.session_state[scenario_key] = default_planning_id
     planning_id = panel.selectbox(
-        "Energiscenario och markintensitet",
+        {"en": "Energy scenario and land intensity", "da_no": "Energiscenario og arealintensitet"}.get(_language(), "Energiscenario och markintensitet"),
         options=planning_ids,
         key=scenario_key,
         format_func=lambda value: _planning_scenario_option_label(planning_by_id.get(str(value), {"id": value})),
@@ -1081,10 +1275,10 @@ def _render_energy_modeling_panel(
 
     placement_key = f"energy_model_placement_{region.get('region_id', 'region')}"
     placement_mode = panel.radio(
-        "Placering",
+        _t("Placering"),
         options=["auto", "manual"],
         key=placement_key,
-        format_func=lambda value: {"auto": "Placera automatiskt", "manual": "Placera själv"}.get(value, value),
+        format_func=lambda value: {"auto": _t("Placera automatiskt"), "manual": _t("Placera själv")}.get(value, value),
     )
     if placement_mode == "manual":
         panel.info("Självplacering är förberedd som arbetsläge. Första robusta steg blir klicka för att lägga till/ta bort hex; drag-and-drop kräver ett separat kartinteraktionssteg.")
@@ -1108,7 +1302,7 @@ def _render_energy_modeling_panel(
     st.session_state.setdefault(mix_key, 50)
     solar_share_pct = float(
         panel.slider(
-            "Energimix",
+            _t("Energimix"),
             min_value=0,
             max_value=100,
             step=5,
@@ -1178,9 +1372,9 @@ def _render_energy_modeling_panel(
         )
 
     show_key = f"energy_model_show_proposal_{region.get('region_id', 'region')}"
-    show_proposal = panel.checkbox("Visa föreslagen etableringsyta", value=True, key=show_key)
+    show_proposal = panel.checkbox(_t("Visa föreslagen etableringsyta"), value=True, key=show_key)
 
-    with panel.expander("Beräkning och datakvalitet", expanded=False):
+    with panel.expander(_t("Beräkning och datakvalitet"), expanded=False):
         calc_df = area_demand[["Teknik", "twh", "km2_per_twh", "area_need_km2"]].rename(
             columns={"twh": "TWh", "km2_per_twh": "km²/TWh", "area_need_km2": "km²"}
         )
@@ -1260,21 +1454,26 @@ def _render_region_scenario_panel(panel: Any | None) -> tuple[dict[str, Any], di
         region = _select_region(None)
         return region, _scenario_state(region, None)
 
-    with panel.expander("Region", expanded=False):
+    with panel.expander(_t("Region"), expanded=False):
         region = _select_region(st)
-    with panel.expander("Scenarier", expanded=False):
+    with panel.expander(_t("Scenarier"), expanded=False):
         scenario_state = _scenario_state(region, st)
     return region, scenario_state
 
 
 def _metric_header(region: dict[str, Any], scenario_state: dict[str, Any], h3_resolution: int | None = None) -> None:
-    st.title(PAGE_TITLE)
-    st.caption(f"Regional v0 för scenarier, {SOLAR_LANDSCAPE_POTENTIAL_LABEL}, {WIND_LANDSCAPE_POTENTIAL_LABEL} och landskapsanalys.")
+    st.title(_t(PAGE_TITLE))
+    st.caption(
+        {
+            "en": f"Regional v0 for scenarios, {_t(SOLAR_LANDSCAPE_POTENTIAL_LABEL)}, {_t(WIND_LANDSCAPE_POTENTIAL_LABEL)} and landscape analysis.",
+            "da_no": f"Regional v0 for scenarier, {_t(SOLAR_LANDSCAPE_POTENTIAL_LABEL)}, {_t(WIND_LANDSCAPE_POTENTIAL_LABEL)} og landskabsanalyse.",
+        }.get(_language(), f"Regional v0 för scenarier, {SOLAR_LANDSCAPE_POTENTIAL_LABEL}, {WIND_LANDSCAPE_POTENTIAL_LABEL} och landskapsanalys.")
+    )
 
     c1, c2, c3, c4, c5 = st.columns(5)
-    c1.metric("Region", str(region.get("display_name", region.get("region_id"))))
-    c2.metric("Scenario", str(scenario_state.get("scenario") or "-"))
-    c3.metric("Nominell skala", str(region.get("nominal_scale", "TBD")))
+    c1.metric(_t("Region"), str(region.get("display_name", region.get("region_id"))))
+    c2.metric(_t("Scenario"), str(scenario_state.get("scenario") or "-"))
+    c3.metric({"en": "Nominal scale", "da_no": "Nominel skala"}.get(_language(), "Nominell skala"), str(region.get("nominal_scale", "TBD")))
     c4.metric("CRS", str(region.get("native_crs", "TBD")))
     shown_resolution = h3_resolution or region.get("default_h3_resolution")
     c5.metric("H3", "TBD" if shown_resolution in {None, ""} else f"R{shown_resolution}")
@@ -1290,7 +1489,7 @@ def _workspace_header(region: dict[str, Any], scenario_state: dict[str, Any], h3
         <div class="workspace-header">
           <div>
             <div class="workspace-eyebrow">{region_label} · scenario {scenario_label} · H3 {h3_label}</div>
-            <h1>{PAGE_TITLE}</h1>
+            <h1>{_t(PAGE_TITLE)}</h1>
           </div>
           <div class="workspace-pill">CRS: {region.get("native_crs", "TBD")}</div>
         </div>
@@ -2036,9 +2235,9 @@ def _map_panel_controls(region: dict[str, Any], key_prefix: str, panel: Any | No
     st.session_state[display_mode_key] = current_display_mode
 
     if panel is not None:
-        with panel.expander("H3-upplösning", expanded=False):
+        with panel.expander(_t("H3-upplösning"), expanded=False):
             h3_resolution = st.radio(
-                "H3-rollup",
+                _t("H3-rollup"),
                 options=available,
                 index=available.index(current_value),
                 format_func=lambda value: _h3_option_label(region, value),
@@ -2048,11 +2247,11 @@ def _map_panel_controls(region: dict[str, Any], key_prefix: str, panel: Any | No
             zoom_family_min_resolution = min(_display_family_resolutions(region, int(h3_resolution)))
             zoom_family_label = f"Utforska: zoomanpassad R{int(h3_resolution)}-R{int(zoom_family_min_resolution)}"
             display_mode = st.radio(
-                "Hexvisning",
+                _t("Hexvisning"),
                 options=display_modes,
                 index=display_modes.index(current_display_mode),
                 format_func=lambda value: {
-                    "selected": "Snabb visning: vald upplösning",
+                    "selected": _t("Snabb visning: vald upplösning"),
                     "zoom_family": zoom_family_label,
                 }.get(str(value), str(value)),
                 horizontal=False,
@@ -2060,11 +2259,11 @@ def _map_panel_controls(region: dict[str, Any], key_prefix: str, panel: Any | No
             )
             zoom_family_enabled = display_mode == "zoom_family"
             if zoom_family_enabled:
-                st.caption("Bygger flera H3-upplösningar och växlar lager efter zoomnivå. Användbart för granskning, men långsammare.")
+                st.caption({"en": "Builds several H3 resolutions and switches layers by zoom level. Useful for review, but slower.", "da_no": "Bygger flere H3-oppløsninger og skifter lag efter zoomniveau. Nyttigt til granskning, men langsommere."}.get(_language(), "Bygger flera H3-upplösningar och växlar lager efter zoomnivå. Användbart för granskning, men långsammare."))
             else:
-                st.caption("Bygger bara vald H3-upplösning. Snabbast efter ändringar i vind- och solpotential.")
+                st.caption({"en": "Builds only the selected H3 resolution. Fastest after changes in wind and solar potential.", "da_no": "Bygger kun valgt H3-oppløsning. Hurtigst efter ændringer i vind- og solpotentiale."}.get(_language(), "Bygger bara vald H3-upplösning. Snabbast efter ändringar i vind- och solpotential."))
             st.markdown("[Läs mer om H3-upplösningar](https://h3geo.org/).")
-            if st.button("Återställ kartvy", key=f"{key_prefix}_reset_map_view"):
+            if st.button(_t("Återställ kartvy"), key=f"{key_prefix}_reset_map_view"):
                 _request_browser_map_view_reset()
                 st.rerun()
     else:
@@ -6764,7 +6963,7 @@ def _landscape_type_layer(
 
 
 def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
-    st.subheader("Etableringsyta")
+    st.subheader(_t("Etableringsyta"))
     if not energy_model_state.get("available"):
         st.caption("Etableringsytan visas när energimodelleringen är aktiv.")
         return
@@ -6941,7 +7140,7 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
         map_summary_parts.append(f"{SOLAR_SMALL_SCALE_LABEL} visas som gula schablonhexar")
     if outside_total > 1e-6:
         map_summary_parts.append(f"{OUTSIDE_LP_NEED_LAYER_LABEL} visar bristen utanför ön")
-    st.markdown("**Sammanfattning**")
+    st.markdown(f"**{_t('Sammanfattning')}**")
     st.caption(result_sentence)
     st.caption("Karta: " + "; ".join(map_summary_parts) + ".")
     if active_filter_notes:
@@ -7016,7 +7215,7 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
             "andel inom potential": _value_with_change_html(f"{covered_share:.1f}%", covered_share, _previous_snapshot_value(previous_snapshot, "total_coverage_pct")),
         },
     ]
-    st.markdown("**Vind/sol och landskapspåverkan**")
+    st.markdown(f"**{_t('Vind/sol och landskapspåverkan')}**")
     st.caption(
         "Tabellen visar hur mycket yta scenariot kräver, hur mycket möjlig yta som finns efter filter, och om något behöver lösas utanför potentialen."
     )
@@ -7049,7 +7248,7 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
         _change_delta_text(outside_total, _previous_snapshot_value(previous_snapshot, "outside_total_km2")),
         delta_color=_change_delta_color(outside_total, _previous_snapshot_value(previous_snapshot, "outside_total_km2")),
     )
-    with st.expander("Så läses tabellen", expanded=False):
+    with st.expander(_t("Så läses tabellen"), expanded=False):
         st.caption(
             "Totalraden summerar teknikerna. En grön etableringshex med mörk scenariohex kan därför bära både vind- och solscenarioyta. "
             "Det betyder samnyttjande i modellen, inte att den fysiska hexytan automatiskt dubbleras."
@@ -7064,7 +7263,7 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
         )
         st.caption("Pilarna visar procentuell förändring sedan föregående beräknade läge: grön upp = ökat, röd ner = minskat, gul/grå = oförändrat.")
 
-    with st.expander("Visning och enheter", expanded=False):
+    with st.expander(_t("Visning och enheter"), expanded=False):
         st.radio(
             "Enhet",
             options=AREA_DISPLAY_UNITS,
@@ -7074,7 +7273,7 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
         )
         st.caption("Byte av enhet ändrar bara hur ytor visas i panelen, inte modellresultatet.")
 
-    with st.expander("Hexdetaljer och kartmarkörer", expanded=False):
+    with st.expander(_t("Hexdetaljer och kartmarkörer"), expanded=False):
         st.caption("Tekniska kartmått för granskning av hexmarkörer och färgklasser.")
         hex_stats = energy_model_state.get("establishment_hex_stats")
         if isinstance(hex_stats, dict):
@@ -7127,7 +7326,7 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
         if isinstance(shortage_stats, dict) and outside_total > 1e-6:
             _render_shortage_hex_stack_card(shortage_stats, unit)
 
-    with st.expander("Urval och ytdetaljer", expanded=False):
+    with st.expander(_t("Urval och ytdetaljer"), expanded=False):
         if isinstance(solar_v1_stats, dict):
             small_cols = st.columns(3)
             small_cols[0].metric(f"{SOLAR_SMALL_SCALE_LABEL}: yta", f"{float(solar_v1_stats.get('total_area_km2', 0.0) or 0.0):.2f} km²")
@@ -7193,7 +7392,7 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
 def _render_performance_log(performance_log: list[dict[str, Any]]) -> None:
     if not performance_log:
         return
-    with st.expander("Prestanda", expanded=False):
+    with st.expander(_t("Prestanda"), expanded=False):
         total_seconds = sum(float(row.get("tid_s", 0.0) or 0.0) for row in performance_log)
         slowest = max(performance_log, key=lambda row: float(row.get("tid_s", 0.0) or 0.0))
         st.caption(
@@ -7440,7 +7639,7 @@ def _combined_summary(map_state: dict[str, Any], scenario_state: dict[str, Any])
         target_classes = [str(value) for value in (high_classes or ["high", "very_high"])]
         return float(frame[class_col].astype(str).isin(target_classes).mean() * 100.0)
 
-    st.subheader("Karta")
+    st.subheader(_t("Karta"))
     resolution_info = map_state.get("resolution_info") or {}
     context_rows = [
         {"inställning": "Scenario", "värde": str(scenario_state.get("scenario") or "-")},
@@ -7454,12 +7653,12 @@ def _combined_summary(map_state: dict[str, Any], scenario_state: dict[str, Any])
         st.caption(str(resolution_info.get("caption")))
 
     layer_rows = _layer_control_rows(map_state.get("layers") or [], str(map_state.get("opacity_key_prefix") or "combined"))
-    with st.expander(f"Lager som visas ({len(layer_rows)})", expanded=False):
+    with st.expander(f"{_t('Lager som visas')} ({len(layer_rows)})", expanded=False):
         if layer_rows:
             st.dataframe(pd.DataFrame(layer_rows), width="stretch", hide_index=True, height=min(260, 72 + 36 * len(layer_rows)))
             st.caption("Det här är status för kartan. Lager kan tändas och släckas i kartans lagerkontroll.")
         else:
-            st.caption("Inga lager är tända.")
+            st.caption(_t("Inga lager är tända."))
 
     for item in map_state.get("potential_frames") or []:
         frame = item["frame"]
@@ -7487,33 +7686,33 @@ def _combined_summary(map_state: dict[str, Any], scenario_state: dict[str, Any])
             else:
                 summary_frame = potential_summary(frame, technology)
             st.dataframe(summary_frame, width="stretch", hide_index=True)
-            with st.expander("Landskapstyper", expanded=False):
+            with st.expander(_t("Landskapstyper"), expanded=False):
                 derivation_frame, derivation_text = _landscape_derivation_summary(frame, technology)
                 st.caption(derivation_text)
                 if not derivation_frame.empty:
                     st.dataframe(derivation_frame.head(10), width="stretch", hide_index=True)
-            with st.expander("Landskapsstrukturer", expanded=False):
+            with st.expander(_t("Landskapstrukturer"), expanded=False):
                 structure_frame, structure_text = _landscape_structure_summary(frame, technology)
                 st.caption(structure_text)
                 if not structure_frame.empty:
                     st.dataframe(structure_frame.head(10), width="stretch", hide_index=True)
-            with st.expander("Landskapsfaktorer", expanded=False):
+            with st.expander(_t("Landskapsfaktorer"), expanded=False):
                 factor_frame, factor_text = _landscape_factor_summary(frame, technology)
                 st.caption(factor_text)
                 if not factor_frame.empty:
                     st.dataframe(factor_frame.head(10), width="stretch", hide_index=True)
             if item.get("summary_mode") == "wind_share":
-                with st.expander("Kärnområden", expanded=False):
+                with st.expander(_t("Kärnområden"), expanded=False):
                     st.caption("Mörkare nyans inom samma potentialklass markerar hexagoner som ligger djupare i en sammanhängande zon.")
                     st.dataframe(_wind_core_summary(frame), width="stretch", hide_index=True)
 
     if map_state.get("landscape_active"):
-        with st.expander("Landskapsanalys", expanded=False):
+        with st.expander(_t("Landskapsanalys"), expanded=False):
             st.write("v9-kluster, v10-landskapstyper och faktorlager visas med samma H3-rollup som potentiallagren.")
 
 
 def _data_method(region: dict[str, Any]) -> None:
-    with st.expander("Data och metod"):
+    with st.expander(_t("Data och metod")):
         rows = []
         for key, label in [
             ("scenario_manifest", "Scenarier"),
@@ -7545,18 +7744,19 @@ def _disabled_note(label: str, status_rows: list[dict[str, Any]]) -> str:
 
 
 def _missing_wind_controls(status_rows: list[dict[str, Any]]) -> None:
+    language = _wind_control_language()
     st.caption(_disabled_note("Vindregler", status_rows))
     st.caption("Samma vindkontroller visas för alla regioner. De aktiveras när regionens vindregler och H3-/landskapsunderlag finns.")
     for group in ordered_groups():
-        label = group_label(group, WIND_CONTROL_LANGUAGE, group.label)
+        label = group_label(group, language, group.label)
         if group.id == WIND_SETTLEMENT_GROUP_ID:
-            label = WIND_SETTLEMENT_GROUP_LABEL
+            label = _t(WIND_SETTLEMENT_GROUP_LABEL)
         elif group.id == SOLAR_PROTECTED_GROUP_ID:
-            label = PROTECTED_NATURE_LABEL
+            label = _t(PROTECTED_NATURE_LABEL)
         with st.expander(label, expanded=group.id in {"settlement", "transport", "electrical"}):
-            st.caption(group_interpretation(group, WIND_CONTROL_LANGUAGE, group.interpretation))
+            st.caption(group_interpretation(group, language, group.interpretation))
             st.slider(
-                group_analysis_label(group, WIND_CONTROL_LANGUAGE, group.analysis_label),
+                group_analysis_label(group, language, group.analysis_label),
                 min_value=int(group.analysis_min_m),
                 max_value=int(group.analysis_max_m),
                 value=int(group.analysis_default_m),
@@ -7569,7 +7769,7 @@ def _missing_wind_controls(status_rows: list[dict[str, Any]]) -> None:
                 st.caption("Inga källager är registrerade för denna grupp ännu.")
             for layer in group_layers[:6]:
                 st.checkbox(
-                    layer_label(layer, WIND_CONTROL_LANGUAGE, layer.label),
+                    layer_label(layer, language, layer.label),
                     value=False,
                     key=f"missing_wind_layer_{layer.id}",
                     disabled=True,
@@ -7583,16 +7783,16 @@ def _missing_solar_controls(status_rows: list[dict[str, Any]]) -> None:
     st.caption(_disabled_note("Solregler", status_rows))
     st.caption("Samma solkontroller visas för alla regioner. De aktiveras när solregler, H3-/landskapsunderlag och relevanta källager finns.")
     with st.form("missing_solar_landscape_potential_controls", clear_on_submit=False):
-        with st.expander(SOLAR_SMALL_SCALE_LABEL, expanded=True):
+        with st.expander(_t(SOLAR_SMALL_SCALE_LABEL), expanded=True):
             st.checkbox(
-                "Befolkningspunkter",
+                _t("Befolkningspunkter"),
                 value=False,
                 key="missing_solar_small_population_active",
                 disabled=True,
                 help="Aktiveras när befolkningsunderlag finns för regionen.",
             )
             st.slider(
-                "Panelyta per person",
+                _t("Panelyta per person"),
                 min_value=0.0,
                 max_value=25.0,
                 value=10.0,
@@ -7601,11 +7801,11 @@ def _missing_solar_controls(status_rows: list[dict[str, Any]]) -> None:
                 disabled=True,
             )
             st.caption("Småskalig sol kan fyllas på senare med befolkningsunderlag.")
-        with st.expander(SOLAR_LARGE_SCALE_LABEL, expanded=True):
-            with st.expander("Befolkning", expanded=False):
-                st.checkbox("Befolkningspunkter", value=False, key="missing_solar_large_population", disabled=True)
+        with st.expander(_t(SOLAR_LARGE_SCALE_LABEL), expanded=True):
+            with st.expander(_t("Befolkning"), expanded=False):
+                st.checkbox(_t("Befolkningspunkter"), value=False, key="missing_solar_large_population", disabled=True)
                 st.slider(
-                    "Avstånd till befolkning",
+                    _t("Avstånd till befolkning"),
                     min_value=100.0,
                     max_value=500.0,
                     value=250.0,
@@ -7627,40 +7827,41 @@ def _missing_solar_controls(status_rows: list[dict[str, Any]]) -> None:
                         disabled=True,
                     )
                     st.caption(str(spec.get("caption", "Kopplas in när regiondata finns.")))
-        st.form_submit_button("Använd ändringar", disabled=True, width="stretch")
+        st.form_submit_button(_t("Använd ändringar"), disabled=True, width="stretch")
 
 
 def _missing_energy_controls(status_rows: list[dict[str, Any]]) -> None:
     st.caption(_disabled_note("Scenarier/energimodell", status_rows))
     st.selectbox(
-        "Energiscenario och markintensitet",
+        {"en": "Energy scenario and land intensity", "da_no": "Energiscenario og arealintensitet"}.get(_language(), "Energiscenario och markintensitet"),
         options=["Låg", "Mellan", "Hög"],
         index=1,
         key="missing_energy_scenario",
         disabled=True,
     )
     st.radio(
-        "Placering",
-        options=["Placera automatiskt", "Placera själv"],
+        _t("Placering"),
+        options=["auto", "manual"],
         key="missing_energy_placement",
+        format_func=lambda value: {"auto": _t("Placera automatiskt"), "manual": _t("Placera själv")}.get(value, value),
         disabled=True,
     )
-    st.slider("Energimix", min_value=0, max_value=100, value=50, step=5, format="%d%% sol", key="missing_energy_mix", disabled=True)
-    st.checkbox("Visa föreslagen etableringsyta", value=True, key="missing_energy_show_proposal", disabled=True)
+    st.slider(_t("Energimix"), min_value=0, max_value=100, value=50, step=5, format="%d%% sol", key="missing_energy_mix", disabled=True)
+    st.checkbox(_t("Visa föreslagen etableringsyta"), value=True, key="missing_energy_show_proposal", disabled=True)
     st.info("Energimodellering aktiveras när scenariomanifest, DuckDB och AreaDemand är kopplade.")
 
 
 def _missing_potential_summary(label: str, missing_text: str) -> None:
-    with st.expander(label, expanded=False):
+    with st.expander(_t(label), expanded=False):
         left, right = st.columns(2)
         left.metric("Medelpoäng", "-")
         right.metric("Hög potential", "-")
         st.info(missing_text)
-        with st.expander("Landskapstyper", expanded=False):
+        with st.expander(_t("Landskapstyper"), expanded=False):
             st.caption("Härledning visas när landskapsanalys finns för regionen.")
-        with st.expander("Landskapsstrukturer", expanded=False):
+        with st.expander(_t("Landskapstrukturer"), expanded=False):
             st.caption("Strukturhärledning visas när kluster/strukturdata finns.")
-        with st.expander("Landskapsfaktorer", expanded=False):
+        with st.expander(_t("Landskapsfaktorer"), expanded=False):
             st.caption("Faktorhärledning visas när faktoranalysen finns.")
 
 
@@ -7676,26 +7877,26 @@ def _render_missing_data_workspace(
     region_label = str(region.get("display_name", region.get("region_id", "region")))
 
     if left_panel is not None:
-        with left_panel.expander("Geografier", expanded=True):
-            with st.expander("Region", expanded=True):
+        with left_panel.expander(_t("Geografier"), expanded=True):
+            with st.expander(_t("Region"), expanded=True):
                 _select_region(st)
                 st.caption(f"{region_label}: regionen kan öppnas även om data fylls på stegvis.")
-            with st.expander("Landskap", expanded=True):
+            with st.expander(_t("Landskap"), expanded=True):
                 st.caption("Landskapsdata saknas ännu för denna region." if context.get("landscape_manifest") is None else "Landskapsmanifest finns.")
-                st.checkbox("Landskapstyper", value=False, disabled=True, key="missing_show_landscape_v10")
-                st.checkbox("Landskapstrukturer", value=False, disabled=True, key="missing_show_landscape_cluster")
-                st.checkbox("Landskapsfaktorer", value=False, disabled=True, key="missing_show_landscape_factor")
+                st.checkbox(_t("Landskapstyper"), value=False, disabled=True, key="missing_show_landscape_v10")
+                st.checkbox(_t("Landskapstrukturer"), value=False, disabled=True, key="missing_show_landscape_cluster")
+                st.checkbox(_t("Landskapsfaktorer"), value=False, disabled=True, key="missing_show_landscape_factor")
                 st.selectbox(
-                    "Faktor",
+                    _t("Faktor"),
                     options=["F1 - faktoranalys saknas"],
                     index=0,
                     key="missing_landscape_factor",
                     disabled=True,
                 )
-            with st.expander("H3-upplösning", expanded=False):
+            with st.expander(_t("H3-upplösning"), expanded=False):
                 resolutions = _available_h3_resolutions(region)
                 st.selectbox(
-                    "H3-upplösning",
+                    _t("H3-upplösning"),
                     options=resolutions,
                     index=0,
                     key="missing_combined_h3_resolution",
@@ -7703,7 +7904,7 @@ def _render_missing_data_workspace(
                     disabled=True,
                 )
                 st.radio(
-                    "Hexvisning",
+                    _t("Hexvisning"),
                     options=["Snabb vald upplösning", "Zoomanpassad familj"],
                     key="missing_combined_h3_display_mode",
                     disabled=True,
@@ -7715,14 +7916,14 @@ def _render_missing_data_workspace(
                     hide_index=True,
                     height=180,
                 )
-            with st.expander(WIND_LANDSCAPE_POTENTIAL_LABEL, expanded=False):
+            with st.expander(_t(WIND_LANDSCAPE_POTENTIAL_LABEL), expanded=False):
                 _missing_wind_controls(status_rows)
-            with st.expander(SOLAR_LANDSCAPE_POTENTIAL_LABEL, expanded=False):
+            with st.expander(_t(SOLAR_LANDSCAPE_POTENTIAL_LABEL), expanded=False):
                 _missing_solar_controls(status_rows)
-        with left_panel.expander("Energimodellering", expanded=False):
+        with left_panel.expander(_t("Energimodellering"), expanded=False):
             _missing_energy_controls(status_rows)
-        with left_panel.expander("Social acceptans", expanded=False):
-            st.checkbox("Visa social acceptans", value=False, key="missing_social_acceptance", disabled=True)
+        with left_panel.expander(_t("Social acceptans"), expanded=False):
+            st.checkbox(_t("Visa social acceptans"), value=False, key="missing_social_acceptance", disabled=True)
             st.caption("Social acceptans kan kopplas in som regiondata senare.")
 
     st.info(
@@ -7754,18 +7955,18 @@ def _render_missing_data_workspace(
 
     summary_target = right_panel or st.container()
     with summary_target:
-        st.subheader("Karta")
+        st.subheader(_t("Karta"))
         st.caption("Karta och lagerkontroll visas när H3-geometrier och minst ett lager finns.")
-        with st.expander("Lager som visas (0)", expanded=False):
+        with st.expander(f"{_t('Lager som visas')} (0)", expanded=False):
             st.caption("Inga lager är tända eftersom regiondata saknas.")
-        st.subheader("Etableringsyta")
+        st.subheader(_t("Etableringsyta"))
         st.caption("Etableringsytan visas när sol- eller vindpotential och energimodellering är kopplade.")
         _missing_potential_summary(WIND_LANDSCAPE_POTENTIAL_LABEL, "Vindpotential väntar på H3-/landskapsunderlag och vindregler.")
         _missing_potential_summary(SOLAR_LANDSCAPE_POTENTIAL_LABEL, "Solpotential väntar på H3-/landskapsunderlag och solregler.")
-        st.subheader("Regionstatus")
+        st.subheader(_t("Regionstatus"))
         st.caption("Samma appstruktur används för alla regioner. Saknade delar visas som status, inte som krasch.")
         st.dataframe(pd.DataFrame(status_rows), width="stretch", hide_index=True, height=min(420, 72 + 32 * len(status_rows)))
-        with st.expander("Nästa datapaket", expanded=True):
+        with st.expander(_t("Nästa datapaket"), expanded=True):
             st.caption("Minsta praktiska paket för att börja visa potential är H3-geometrier, potentialmanifest och teknikregler.")
             st.markdown(
                 "- `h3_display_geometries` i regionmanifestet\n"
@@ -7852,17 +8053,17 @@ def _unified_workspace_tab(
     performance_log: list[dict[str, Any]] = []
 
     if left_panel is not None:
-        with left_panel.expander("Geografier", expanded=False):
-            with st.expander("Region", expanded=False):
+        with left_panel.expander(_t("Geografier"), expanded=False):
+            with st.expander(_t("Region"), expanded=False):
                 region = _select_region(st)
 
-            with st.expander("Landskap", expanded=True):
+            with st.expander(_t("Landskap"), expanded=True):
                 st.caption(f"Aktiva kartlager: {active_landscape_count}")
-                show_v10 = st.checkbox("Landskapstyper", value=show_v10, key="show_landscape_v10")
-                show_cluster = st.checkbox("Landskapstrukturer", value=show_cluster, key="show_landscape_cluster")
-                show_factor = st.checkbox("Landskapsfaktorer", value=show_factor, key="show_landscape_factor")
+                show_v10 = st.checkbox(_t("Landskapstyper"), value=show_v10, key="show_landscape_v10")
+                show_cluster = st.checkbox(_t("Landskapstrukturer"), value=show_cluster, key="show_landscape_cluster")
+                show_factor = st.checkbox(_t("Landskapsfaktorer"), value=show_factor, key="show_landscape_factor")
                 selected_factor = st.selectbox(
-                    "Faktor",
+                    _t("Faktor"),
                     options=factors,
                     index=factors.index(selected_factor) if selected_factor in factors else 0,
                     format_func=lambda factor: f"{factor} - {factor_label(landscape_manifest, factor)}",
@@ -7874,7 +8075,7 @@ def _unified_workspace_tab(
             analysis_h3_resolution = _analysis_h3_resolution(region)
             analysis_hex_area_km2 = float(h3_hex_area_km2(analysis_h3_resolution))
 
-            with st.expander(WIND_LANDSCAPE_POTENTIAL_LABEL, expanded=False):
+            with st.expander(_t(WIND_LANDSCAPE_POTENTIAL_LABEL), expanded=False):
                 if _wind_empty_selection_is_active(wind_selected_layers):
                     wind_status_caption = "Status: aktiv utan filter"
                 elif active_wind_count:
@@ -7891,12 +8092,12 @@ def _unified_workspace_tab(
                 else:
                     st.caption("Snabb visning är aktiv. Hexlager byggs bara i vald H3-upplösning.")
                 st.caption("Separat sparning behövs inte längre i den här arbetsvyn.")
-                wind_selected_layers, wind_ui_params, wind_controls_applied = _wind_group_controls("wind_unified", language=WIND_CONTROL_LANGUAGE)
+                wind_selected_layers, wind_ui_params, wind_controls_applied = _wind_group_controls("wind_unified", language=_wind_control_language())
                 show_user_wind = _wind_potential_is_active(wind_selected_layers)
                 if _wind_empty_selection_is_active(wind_selected_layers):
                     st.caption("Inga vindfilter är valda: ofiltrerad vindpotential används som startläge.")
 
-            with st.expander(SOLAR_LANDSCAPE_POTENTIAL_LABEL, expanded=active_solar_count > 0):
+            with st.expander(_t(SOLAR_LANDSCAPE_POTENTIAL_LABEL), expanded=active_solar_count > 0):
                 st.caption(f"Aktiva solgrupper: {active_solar_count}")
                 with st.form("solar_landscape_potential_controls_unified", clear_on_submit=False):
                     st.caption(
@@ -7907,9 +8108,9 @@ def _unified_workspace_tab(
                         "[Vill du veta mer om att anlägga sol över land? Läs guiden från Byplanlab.]"
                         "(https://byplanlab.dk/sites/default/files/2025-06/Sol%20over%20land%20-%20Guide%20til%20planl%C3%A6gning%20af%20solenergi.pdf)"
                     )
-                    with st.expander(SOLAR_SMALL_SCALE_LABEL, expanded=False):
+                    with st.expander(_t(SOLAR_SMALL_SCALE_LABEL), expanded=False):
                         draft_small_population_active = st.checkbox(
-                            "Befolkningspunkter",
+                            _t("Befolkningspunkter"),
                             key="solar_draft_small_population_active",
                             help="Källan visas som aggregerade H3-centroider, inte som individpunkter.",
                         )
@@ -7921,7 +8122,7 @@ def _unified_workspace_tab(
                                 "Den visas som små gula schablonhexar, inte som faktiska takpolygoner eller sammanhängande markyta."
                             )
                         st.slider(
-                            "Panelyta per person",
+                            _t("Panelyta per person"),
                             min_value=0.0,
                             max_value=25.0,
                             step=1.0,
@@ -7929,14 +8130,14 @@ def _unified_workspace_tab(
                             help="Schablon för småskalig anläggning: befolkning per hex multipliceras med m2 panelyta per person.",
                         )
                         st.caption("Kartlager: källa, aggregerad 100 m buffert, solpolygon och gemensam potentiell etableringsyta.")
-                    with st.expander(SOLAR_LARGE_SCALE_LABEL, expanded=False):
-                        with st.expander("Befolkning", expanded=False):
+                    with st.expander(_t(SOLAR_LARGE_SCALE_LABEL), expanded=False):
+                        with st.expander(_t("Befolkning"), expanded=False):
                             draft_large_population_active = st.checkbox(
-                                "Befolkningspunkter",
+                                _t("Befolkningspunkter"),
                                 key="solar_draft_large_population_active",
                             )
                             st.slider(
-                                "Avstånd till befolkning",
+                                _t("Avstånd till befolkning"),
                                 min_value=100.0,
                                 max_value=500.0,
                                 step=25.0,
@@ -7953,7 +8154,7 @@ def _unified_workspace_tab(
                             _render_solar_filter_control(solar_filter_group_id)
                         st.caption("Storskalig sol använder hela landskapsunderlaget som kandidatbas. Valda filter drar bort yta från den basen.")
                         st.caption("Ingen bonitets- eller jordklassvariabel finns i nuvarande solunderlag; jordart/prekvartär beskriver geologi, inte jordbruksmarkens kvalitet.")
-                    apply_solar = st.form_submit_button("Använd ändringar", type="primary", width="stretch")
+                    apply_solar = st.form_submit_button(_t("Använd ändringar"), type="primary", width="stretch")
                 if apply_solar:
                     region_id = str(region.get("region_id", "region"))
                     scenario_manifest = scenario_state.get("manifest") or {}
@@ -7973,8 +8174,8 @@ def _unified_workspace_tab(
                     solar_controls_applied = True
                     st.rerun()
 
-        with left_panel.expander("Energimodellering", expanded=False):
-            st.caption("Levereras av EML")
+        with left_panel.expander(_t("Energimodellering"), expanded=False):
+            st.caption(_t("Levereras av EML"))
             st.markdown(f"[Energy Modelling Lab]({EML_PROVIDER_URL})")
             perf_started = _perf_start()
             energy_model_state = _render_energy_modeling_panel(region, scenario_state, analysis_h3_resolution, st)
@@ -7987,9 +8188,9 @@ def _unified_workspace_tab(
                     "energy_model": energy_model_state,
                 }
 
-        with left_panel.expander("Social acceptans", expanded=False):
-            st.caption("Levereras av IVL")
-            st.caption("Kommer i augusti")
+        with left_panel.expander(_t("Social acceptans"), expanded=False):
+            st.caption(_t("Levereras av IVL"))
+            st.caption(_t("Kommer i augusti"))
             st.markdown(f"[IVL Svenska Miljöinstitutet]({IVL_PROVIDER_URL})")
 
     display_geometry_path = _h3_display_geometry_path(region, h3_resolution)
@@ -8621,7 +8822,7 @@ def _unified_workspace_tab(
             scenario_state,
         )
         _render_performance_log(performance_log)
-        with st.expander("Aktiva beräkningar", expanded=False):
+        with st.expander(_t("Aktiva beräkningar"), expanded=False):
             performance_diagnostics = energy_model_state.get("performance_diagnostics") if isinstance(energy_model_state, dict) else None
             if isinstance(performance_diagnostics, list) and performance_diagnostics:
                 diagnostic_frame = pd.DataFrame(performance_diagnostics)
@@ -8661,11 +8862,11 @@ def _unified_workspace_tab(
                     st.caption("Kartlager i senaste HTML-renderingen.")
                     st.dataframe(debug_frame, width="stretch", hide_index=True, height=min(360, 72 + 32 * len(debug_frame)))
             if show_user_solar:
-                st.metric(f"Aktiv {SOLAR_LARGE_SCALE_LABEL}", "På")
-                st.caption(f"{SOLAR_LARGE_SCALE_LABEL} visas som solpolygon och kan ingå i {COMBINED_ESTABLISHMENT_LAYER_LABEL}.")
+                st.metric(f"Aktiv {_t(SOLAR_LARGE_SCALE_LABEL)}", _t("På"))
+                st.caption(f"{_t(SOLAR_LARGE_SCALE_LABEL)} visas som solpolygon och kan ingå i {_t(COMBINED_ESTABLISHMENT_LAYER_LABEL)}.")
             if show_solar_v1:
                 stats = energy_model_state.get("solar_v1_stats") if isinstance(energy_model_state, dict) else None
-                st.metric(f"Aktiv {SOLAR_SMALL_SCALE_LABEL}", "På")
+                st.metric(f"Aktiv {_t(SOLAR_SMALL_SCALE_LABEL)}", _t("På"))
                 st.caption(
                     f"Småskalig solyta beräknas som befolkning per hex × {solar_v1_area_m2_per_person:.0f} m2/person."
                 )
@@ -8703,7 +8904,9 @@ def _unified_workspace_tab(
 
 
 def main() -> None:
-    st.set_page_config(page_title=PAGE_TITLE, layout="wide", initial_sidebar_state="expanded")
+    st.session_state.setdefault(APP_LANGUAGE_KEY, "sv")
+    st.set_page_config(page_title=_t(PAGE_TITLE), layout="wide", initial_sidebar_state="expanded")
+    _render_language_switcher(st.sidebar)
     left_panel, main_panel, right_panel = _workspace_shell()
     region = _select_region(None)
     scenario_state = _scenario_state(region, None)
