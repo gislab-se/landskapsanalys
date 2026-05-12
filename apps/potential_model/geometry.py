@@ -36,14 +36,8 @@ def load_h3_display_geometries(path_str: str) -> dict[str, dict[str, Any]]:
         properties = feature.get("properties") or {}
         hex_id = properties.get("hex_id") or properties.get("h3_address")
         geometry = feature.get("geometry")
-        if not hex_id:
-            continue
-        if isinstance(geometry, dict) and geometry.get("coordinates"):
-            geometries[str(hex_id)] = geometry
-            continue
-        fallback_geometry = _full_h3_geometry(str(hex_id))
-        if fallback_geometry is not None:
-            geometries[str(hex_id)] = fallback_geometry
+        if hex_id and geometry and geometry.get("coordinates"):
+            geometries[str(hex_id)] = _full_h3_geometry(str(hex_id)) or geometry
     return geometries
 
 
