@@ -39,6 +39,7 @@ WIND_GROUP_LAYER_DEFAULTS: dict[str, list[str]] = {
         "natura_habitat_areas",
         "natura_ramsar",
         "nature_wildlife_reserve",
+        "nature_area_forest",
     ],
     "coastal": ["coastal_zone_3km", "strand_protection"],
     "culture": [

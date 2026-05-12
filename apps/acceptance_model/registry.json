@@ -444,6 +444,22 @@
       "point_radius": 45
     },
     {
+      "id": "nature_area_forest",
+      "group_id": "protected",
+      "layer_key": "nature_area_forest_dk_sn_label_nature_area_bol_33",
+      "label": "Nature-area forest",
+      "note": "Danish nature-area label source filtered to naturareal = skovPlantage.",
+      "source_color": [
+        34,
+        112,
+        57
+      ],
+      "point_radius": 45,
+      "filter_field": "naturareal",
+      "filter_value": "skovPlantage",
+      "filter_mode": "field_equals"
+    },
+    {
       "id": "aviation_approach_zones",
       "group_id": "aviation_approach",
       "layer_key": "aviation_approach_zones_tst",

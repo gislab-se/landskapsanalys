@@ -246,6 +246,7 @@ LAYER_TRANSLATIONS_SV = {
     "natura_habitat_areas": {"label": "Natura habitatområden", "note": "Habitatområden inom Natura 2000."},
     "natura_ramsar": {"label": "Natura Ramsar", "note": "Ramsarrelaterat våtmarksskydd."},
     "nature_wildlife_reserve": {"label": "Natur- och viltreservat", "note": "Natur- och viltreservatsytor."},
+    "nature_area_forest": {"label": "Naturareal skog/plantage", "note": "Danskt naturareal-lager filtrerat till skovPlantage."},
     "aviation_approach_zones": {"label": "Inflygningszoner", "note": "Restriktionsytor för inflygning."},
     "aviation_bird_collision": {"label": "Fågelkollisionszoner", "note": "Känslighetszoner för fågelkollision."},
     "military_areas": {"label": "Militära områden", "note": "Militära tränings- eller skyddszoner."},
