@@ -1529,10 +1529,20 @@ def _h3_display_geometry_path(region: dict[str, Any], resolution: int) -> str | 
     return str(path)
 
 
+@st.cache_data(show_spinner=False)
+def _h3_display_hex_ids(display_geometry_path: str) -> frozenset[str]:
+    return frozenset(load_h3_display_geometries(display_geometry_path))
+
+
 def _h3_option_label(region: dict[str, Any], resolution: int) -> str:
-    display_geometry_path = _h3_display_geometry_path(region, resolution)
-    if display_geometry_path:
-        return f"R{resolution} ({len(load_h3_display_geometries(display_geometry_path))} landceller)"
+    counts = region.get("h3_display_geometry_counts") or {}
+    count_value = counts.get(str(resolution)) if isinstance(counts, dict) else None
+    if count_value is not None:
+        try:
+            count_int = int(count_value)
+            return f"R{resolution} ({count_int} landceller)"
+        except Exception:
+            return f"R{resolution} ({count_value} landceller)"
     return f"R{resolution}"
 
 
@@ -2219,7 +2229,11 @@ def _map_panel_controls(region: dict[str, Any], key_prefix: str, panel: Any | No
     available = _available_h3_resolutions(region)
     state_key = f"{key_prefix}_h3_resolution"
     display_mode_key = f"{key_prefix}_h3_display_mode"
-    preferred = _preferred_h3_resolution(region, 9)
+    try:
+        preferred_hint = int(region.get("default_display_h3_resolution") or 9)
+    except Exception:
+        preferred_hint = 9
+    preferred = _preferred_h3_resolution(region, preferred_hint)
     try:
         current_value = int(st.session_state.get(state_key, preferred))
     except Exception:
@@ -2276,7 +2290,7 @@ def _map_panel_controls(region: dict[str, Any], key_prefix: str, panel: Any | No
 def _filter_frame_to_display_geometries(frame: pd.DataFrame, display_geometry_path: str | None) -> pd.DataFrame:
     if not display_geometry_path or "hex_id" not in frame.columns:
         return frame
-    visible_hex_ids = set(load_h3_display_geometries(display_geometry_path))
+    visible_hex_ids = _h3_display_hex_ids(display_geometry_path)
     return frame[frame["hex_id"].astype(str).isin(visible_hex_ids)].copy()
 
 
@@ -3147,7 +3161,6 @@ def _solar_large_scale_frame(
     filter_configs: list[dict[str, Any]] | tuple[dict[str, Any], ...] | None = None,
 ) -> pd.DataFrame:
     target_resolution = int(resolution)
-    source_resolution = max(target_resolution, WIND_RUNTIME_BASE_RESOLUTION)
     landscape = _landscape_frame(region, landscape_manifest, target_resolution)
     columns = [
         "hex_id",
@@ -3163,17 +3176,6 @@ def _solar_large_scale_frame(
         "solar_color",
     ]
     if landscape.empty:
-        return pd.DataFrame(columns=columns)
-
-    source_landscape = _landscape_frame(region, landscape_manifest, source_resolution)
-    if source_landscape.empty and source_resolution != target_resolution:
-        source_resolution = target_resolution
-        source_landscape = landscape
-
-    source = source_landscape[["hex_id"]].copy()
-    work = source.copy()
-    work["potential_area_share_pct"] = 100.0
-    if work.empty:
         return pd.DataFrame(columns=columns)
 
     active_filter_configs: list[dict[str, Any]] = []
@@ -3197,6 +3199,32 @@ def _solar_large_scale_frame(
                 "label": PROTECTED_NATURE_LABEL,
             }
         )
+
+    if unfiltered_land_active and not active_filter_configs:
+        target_hex_area_m2 = float(h3_hex_area_km2(target_resolution) * 1_000_000.0)
+        work = landscape[["hex_id", "class_km", "landscape_type"]].copy()
+        work["potential_area_m2"] = target_hex_area_m2
+        work["potential_area_km2"] = target_hex_area_m2 / 1_000_000.0
+        work["potential_area_share_pct"] = 100.0
+        work["protected_buffer_share_pct"] = 0.0
+        work["solar_score"] = 100.0
+        classes = [_solar_score_class(float(value)) for value in work["solar_score"]]
+        work["solar_class"] = [item["id"] for item in classes]
+        work["solar_class_label"] = [item["label"] for item in classes]
+        work["solar_color"] = [item["color"] for item in classes]
+        return work.reindex(columns=columns)
+
+    source_resolution = max(target_resolution, WIND_RUNTIME_BASE_RESOLUTION)
+    source_landscape = _landscape_frame(region, landscape_manifest, source_resolution)
+    if source_landscape.empty and source_resolution != target_resolution:
+        source_resolution = target_resolution
+        source_landscape = landscape
+
+    source = source_landscape[["hex_id"]].copy()
+    work = source.copy()
+    work["potential_area_share_pct"] = 100.0
+    if work.empty:
+        return pd.DataFrame(columns=columns)
 
     work["protected_buffer_share_pct"] = 0.0
     if active_filter_configs:
