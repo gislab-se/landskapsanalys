@@ -131,6 +131,7 @@ MAP_STATE_VERSION = "establishment-start-v6"
 LEFT_PANEL_OPEN_KEY = "potential_left_panel_open"
 RIGHT_PANEL_OPEN_KEY = "potential_right_panel_open"
 RIGHT_PANEL_WIDTH_KEY = "potential_right_panel_width_pct"
+PERFORMANCE_HISTORY_KEY = "potential_performance_history_v1"
 REGION_SELECT_KEY = "potential_selected_region_id"
 WIND_LAYER_SELECTION_KEY = "wind_builder_selected_layers"
 WIND_RUNTIME_OVERLAY_KEY = "wind_builder_runtime_overlay_enabled"
@@ -1469,6 +1470,177 @@ def _add_perf_timing(performance_log: list[dict[str, Any]], step: str, started_a
             "detalj": detail,
         }
     )
+
+
+def _calculation_progress_steps(
+    show_user_solar: bool,
+    show_solar_v1: bool,
+    show_user_wind: bool,
+    energy_model_state: dict[str, Any],
+    show_landscape_layers: bool,
+) -> list[str]:
+    steps: list[str] = []
+    if show_user_solar:
+        steps.append("Sol storskalig")
+    if show_solar_v1:
+        steps.append("Sol småskalig")
+    if show_user_solar or show_solar_v1:
+        steps.append("Sol samlad etablering")
+    if show_user_wind:
+        steps.append("Vindpotential och vindetablering")
+    if (
+        energy_model_state.get("available")
+        and energy_model_state.get("show_proposal")
+        and energy_model_state.get("placement_mode") == "auto"
+    ):
+        steps.append("Gemensam etableringsyta")
+        steps.append("Etableringsstatistik")
+    if show_landscape_layers:
+        steps.append("Landskapslager")
+    steps.append("Karta HTML och rendering")
+    return steps
+
+
+def _median_seconds(values: list[float]) -> float | None:
+    clean = sorted(float(value) for value in values if float(value) > 0)
+    if not clean:
+        return None
+    midpoint = len(clean) // 2
+    if len(clean) % 2:
+        return float(clean[midpoint])
+    return float((clean[midpoint - 1] + clean[midpoint]) / 2.0)
+
+
+def _performance_history_bucket(region: dict[str, Any], h3_resolution: int, zoom_family_enabled: bool) -> str:
+    mode = "zoom" if bool(zoom_family_enabled) else "fast"
+    return f"{region.get('region_id', 'region')}:R{int(h3_resolution)}:{mode}"
+
+
+def _performance_step_estimates(bucket: str, steps: list[str]) -> dict[str, float]:
+    history = st.session_state.get(PERFORMANCE_HISTORY_KEY)
+    if not isinstance(history, dict):
+        return {}
+    estimates: dict[str, float] = {}
+    global_history = history.get("global") if isinstance(history.get("global"), dict) else {}
+    bucket_history = history.get(bucket) if isinstance(history.get(bucket), dict) else {}
+    for step in steps:
+        specific_values = bucket_history.get(step) if isinstance(bucket_history, dict) else None
+        global_values = global_history.get(step) if isinstance(global_history, dict) else None
+        median = _median_seconds([float(value) for value in specific_values]) if isinstance(specific_values, list) else None
+        if median is None and isinstance(global_values, list):
+            median = _median_seconds([float(value) for value in global_values])
+        if median is not None:
+            estimates[step] = median
+    return estimates
+
+
+def _record_performance_history(bucket: str, performance_log: list[dict[str, Any]]) -> None:
+    if not performance_log:
+        return
+    history = st.session_state.get(PERFORMANCE_HISTORY_KEY)
+    if not isinstance(history, dict):
+        history = {}
+    for scope in ("global", bucket):
+        scope_history = history.setdefault(scope, {})
+        if not isinstance(scope_history, dict):
+            scope_history = {}
+            history[scope] = scope_history
+        for row in performance_log:
+            step = str(row.get("steg", ""))
+            if not step:
+                continue
+            try:
+                seconds = float(row.get("tid_s", 0.0) or 0.0)
+            except Exception:
+                continue
+            if seconds <= 0:
+                continue
+            values = scope_history.setdefault(step, [])
+            if not isinstance(values, list):
+                values = []
+                scope_history[step] = values
+            values.append(round(seconds, 3))
+            del values[:-12]
+    st.session_state[PERFORMANCE_HISTORY_KEY] = history
+
+
+def _estimated_remaining_text(steps: list[str], completed: set[str], estimates: dict[str, float]) -> str:
+    remaining = [step for step in steps if step not in completed]
+    estimated_remaining = sum(float(estimates.get(step, 0.0) or 0.0) for step in remaining)
+    known_count = sum(1 for step in remaining if step in estimates)
+    if known_count <= 0:
+        return "Ingen historik ännu; mäter denna körning."
+    suffix = "" if known_count == len(remaining) else " plus omätta steg"
+    return f"Beräknad kvarvarande tid: ca {estimated_remaining:.1f} s{suffix}."
+
+
+def _start_calculation_progress(steps: list[str], estimates: dict[str, float] | None = None) -> dict[str, Any] | None:
+    if not steps:
+        return None
+    estimates = estimates or {}
+    estimated_total = sum(float(estimates.get(step, 0.0) or 0.0) for step in steps)
+    estimate_text = (
+        f"Historik: brukar ta ca {estimated_total:.1f} s för kända steg."
+        if estimated_total > 0
+        else "Ingen historik ännu; mäter denna körning."
+    )
+    status = st.status("Beräknar karta och potential...", expanded=False)
+    with status:
+        progress_bar = st.progress(0, text=f"0/{len(steps)} steg klara. {estimate_text}")
+        st.caption("Progressen uppdateras först när ett faktiskt beräkningsblock är färdigt. Kvarvarande tid bygger bara på tidigare uppmätta körningar.")
+    return {
+        "status": status,
+        "bar": progress_bar,
+        "steps": list(steps),
+        "estimates": dict(estimates),
+        "completed": set(),
+        "started_at": time.perf_counter(),
+    }
+
+
+def _advance_calculation_progress(progress: dict[str, Any] | None, step: str) -> None:
+    if not progress:
+        return
+    steps = list(progress.get("steps") or [])
+    if step not in steps:
+        return
+    completed = progress.setdefault("completed", set())
+    completed.add(step)
+    done = sum(1 for item in steps if item in completed)
+    total = max(1, len(steps))
+    elapsed = max(0.0, time.perf_counter() - float(progress.get("started_at", time.perf_counter())))
+    percent = int(round(done / total * 100.0))
+    remaining_text = _estimated_remaining_text(steps, completed, progress.get("estimates") if isinstance(progress.get("estimates"), dict) else {})
+    progress["bar"].progress(percent, text=f"{done}/{total} steg klara: {step} ({elapsed:.1f} s). {remaining_text}")
+    progress["status"].update(label=f"Beräknar karta och potential... {done}/{total} steg klara", state="running", expanded=False)
+
+
+def _finish_calculation_progress(progress: dict[str, Any] | None, performance_log: list[dict[str, Any]]) -> None:
+    if not progress:
+        return
+    elapsed = max(0.0, time.perf_counter() - float(progress.get("started_at", time.perf_counter())))
+    slowest = max(performance_log, key=lambda row: float(row.get("tid_s", 0.0) or 0.0)) if performance_log else None
+    suffix = f" Längsta steg: {slowest.get('steg')} {float(slowest.get('tid_s', 0.0) or 0.0):.1f} s." if slowest else ""
+    progress["bar"].progress(100, text=f"Klart på {elapsed:.1f} s.{suffix}")
+    progress["status"].update(label=f"Beräkning klar på {elapsed:.1f} s", state="complete", expanded=False)
+
+
+def _performance_diagnostic_rows(performance_log: list[dict[str, Any]], estimates: dict[str, float]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for row in performance_log:
+        step = str(row.get("steg", ""))
+        actual = float(row.get("tid_s", 0.0) or 0.0)
+        expected = estimates.get(step)
+        rows.append(
+            {
+                "steg": step,
+                "tid_s": round(actual, 3),
+                "historisk_median_s": round(float(expected), 3) if expected is not None else None,
+                "avvikelse_s": round(actual - float(expected), 3) if expected is not None else None,
+                "detalj": str(row.get("detalj", "")),
+            }
+        )
+    return sorted(rows, key=lambda item: float(item.get("tid_s", 0.0) or 0.0), reverse=True)
 
 
 def _short_hash(payload: dict[str, Any]) -> str:
@@ -5835,7 +6007,6 @@ def _outside_lp_need_family_layers(
             wind_area_km2,
             solar_area_km2,
         ),
-        family_resolutions=[int(selected_resolution)],
     )
 
 
@@ -6010,7 +6181,6 @@ def _scenario_allocation_marker_family_layers(
             ),
             int(resolution),
         ),
-        family_resolutions=[int(selected_resolution)],
     )
 
 
@@ -6948,7 +7118,7 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
             ]
             st.dataframe(pd.DataFrame(hex_rows), width="stretch", hide_index=True, height=246)
             st.caption(
-                "Ytbudgethex visar extra ytbehov i separata schematiska fält utanför ön. Child-hex är vita och visar scenarioyta inom lämpliga etableringshex; vid både vind och sol visas samnyttjande i samma större hex."
+                "Ytbudgethex visar extra ytbehov i separata schematiska fält utanför ön. Child-hex visar scenarioyta inom lämpliga etableringshex med teknikfärg: blå för vind, gul för sol och grön när båda samnyttjar samma större hex."
             )
         else:
             st.caption("Hexstatistik saknas för denna vy.")
@@ -7844,6 +8014,17 @@ def _unified_workspace_tab(
         energy_model_state["solar_large_protected_layer_count"] = int(len(solar_large_protected_layer_ids))
         energy_model_state["solar_large_filter_configs"] = list(solar_large_filter_configs)
 
+    calc_steps = _calculation_progress_steps(
+        show_user_solar,
+        show_solar_v1,
+        show_user_wind,
+        energy_model_state,
+        bool(show_v10 or show_cluster or show_factor),
+    )
+    performance_bucket = _performance_history_bucket(region, h3_resolution, zoom_family_enabled)
+    performance_estimates = _performance_step_estimates(performance_bucket, calc_steps)
+    calc_progress = _start_calculation_progress(calc_steps, performance_estimates)
+
     layers: list[dict[str, Any]] = []
     potential_frames: list[dict[str, Any]] = []
     unified_notes: list[str] = []
@@ -7940,6 +8121,7 @@ def _unified_workspace_tab(
             perf_started,
             f"visning R{h3_resolution}: {len(user_solar_frame)} hex; analys R{analysis_h3_resolution}: {len(user_solar_analysis_frame)} hex",
         )
+        _advance_calculation_progress(calc_progress, "Sol storskalig")
 
     if show_solar_v1:
         perf_started = _perf_start()
@@ -7991,6 +8173,7 @@ def _unified_workspace_tab(
             perf_started,
             f"visning R{h3_resolution}: {len(solar_v1_frame)} hex; analys R{analysis_h3_resolution}: {len(solar_v1_analysis_frame)} hex",
         )
+        _advance_calculation_progress(calc_progress, "Sol småskalig")
 
     if show_solar_v1 or show_user_solar:
         perf_started = _perf_start()
@@ -8073,6 +8256,7 @@ def _unified_workspace_tab(
             perf_started,
             f"visning R{h3_resolution}: {len(combined_solar_frame)} hex; analys R{analysis_h3_resolution}: {len(combined_solar_analysis_frame)} hex",
         )
+        _advance_calculation_progress(calc_progress, "Sol samlad etablering")
 
     custom_wind_preview_state: dict[str, Any] | None = None
     if show_user_wind:
@@ -8179,6 +8363,7 @@ def _unified_workspace_tab(
             perf_started,
             f"visning R{h3_resolution}, analys R{analysis_h3_resolution}; {int(custom_wind_preview_state.get('active_source_count', 0) or 0)} källager",
         )
+        _advance_calculation_progress(calc_progress, "Vindpotential och vindetablering")
 
     if (
         energy_model_state.get("available")
@@ -8284,11 +8469,13 @@ def _unified_workspace_tab(
             perf_started,
             f"visning R{h3_resolution}; analys R{analysis_h3_resolution}: {len(selected_establishment_frame)} hex",
         )
+        _advance_calculation_progress(calc_progress, "Gemensam etableringsyta")
 
     if energy_model_state.get("available") and energy_model_state.get("establishment_layer_visible"):
         perf_started = _perf_start()
         energy_model_state["combined_establishment_stats"] = _combined_establishment_stats(energy_model_state)
         _add_perf_timing(performance_log, "Etableringsstatistik", perf_started)
+        _advance_calculation_progress(calc_progress, "Etableringsstatistik")
 
     if show_v10 or show_cluster or show_factor:
         perf_started = _perf_start()
@@ -8310,6 +8497,7 @@ def _unified_workspace_tab(
                 )
             )
         _add_perf_timing(performance_log, "Landskapslager", perf_started, f"R{h3_resolution}; {len(landscape_frame)} hex")
+        _advance_calculation_progress(calc_progress, "Landskapslager")
         if show_cluster:
             layers.extend(
                 _hex_family_layers(
@@ -8410,6 +8598,10 @@ def _unified_workspace_tab(
         note_body=note_body,
     )
     _add_perf_timing(performance_log, "Karta HTML och rendering", perf_started, f"{len(layers)} lager")
+    _advance_calculation_progress(calc_progress, "Karta HTML och rendering")
+    _finish_calculation_progress(calc_progress, performance_log)
+    _record_performance_history(performance_bucket, performance_log)
+    energy_model_state["performance_diagnostics"] = _performance_diagnostic_rows(performance_log, performance_estimates)
 
     summary_target = right_panel or st.container()
     with summary_target:
@@ -8430,6 +8622,23 @@ def _unified_workspace_tab(
         )
         _render_performance_log(performance_log)
         with st.expander("Aktiva beräkningar", expanded=False):
+            performance_diagnostics = energy_model_state.get("performance_diagnostics") if isinstance(energy_model_state, dict) else None
+            if isinstance(performance_diagnostics, list) and performance_diagnostics:
+                diagnostic_frame = pd.DataFrame(performance_diagnostics)
+                st.caption(
+                    "Prestandadiagnostik för optimering. Faktisk tid visas per steg och jämförs med historisk median när appen har hunnit samla körhistorik."
+                )
+                st.dataframe(
+                    diagnostic_frame.head(8),
+                    width="stretch",
+                    hide_index=True,
+                    height=min(344, 72 + 32 * min(8, len(diagnostic_frame))),
+                )
+                slowest_step = performance_diagnostics[0]
+                st.caption(
+                    f"Långsammaste steg denna körning: {slowest_step.get('steg', '-')} "
+                    f"({float(slowest_step.get('tid_s', 0.0) or 0.0):.1f} s)."
+                )
             if isinstance(energy_model_state, dict) and energy_model_state.get("available"):
                 st.caption(
                     f"Senaste energiberäkning: {energy_model_state.get('debug_run_id', '-')} · "
