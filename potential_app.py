@@ -153,7 +153,7 @@ WIND_LAYER_SELECTION_KEY = "wind_builder_selected_layers"
 WIND_RUNTIME_OVERLAY_KEY = "wind_builder_runtime_overlay_enabled"
 SOLAR_APPLIED_CONFIG_KEY = "solar_applied_config"
 START_DEFAULT_VERSION_KEY = "potential_start_default_version"
-START_DEFAULT_VERSION = "trondelag_zoom_r7_establishment_start_v4"
+START_DEFAULT_VERSION = "establishment_area_unfiltered_v1"
 WIND_EMPTY_SELECTION_ACTIVE_KEY = "wind_empty_selection_active"
 WIND_CONTROL_LANGUAGE = "sv"
 WIND_RUNTIME_BASE_RESOLUTION = 10
@@ -1056,7 +1056,7 @@ def _region_options() -> dict[str, dict[str, Any]]:
         st.error(_t("Inga regionmanifest hittades."))
         st.stop()
     options = {str(region["region_id"]): region for region in regions}
-    default_id = "trondelag" if "trondelag" in options else "bornholm" if "bornholm" in options else next(iter(options))
+    default_id = "bornholm" if "bornholm" in options else "trondelag" if "trondelag" in options else next(iter(options))
     if st.session_state.get(REGION_SELECT_KEY) not in options:
         st.session_state[REGION_SELECT_KEY] = default_id
     return options
