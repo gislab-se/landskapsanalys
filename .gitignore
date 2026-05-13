@@ -18,6 +18,10 @@ __pycache__/
 *.pyc
 .venv/
 
+# Local app runtime/cache outputs
+.streamlit/*.log
+docs/geocontext/acceptance_framework/data/trondelag_prototype_assets/runtime_buffers/
+
 # VS Code local workspace artifacts
 .vscode/*.log
 

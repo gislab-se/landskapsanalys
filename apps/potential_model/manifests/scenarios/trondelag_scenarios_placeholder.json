@@ -1,12 +1,12 @@
 {
   "region_id": "trondelag",
-  "scenario_set_id": "trondelag_energy_model_placeholder",
+  "scenario_set_id": "trondelag_bornholm_energy_model_placeholder",
   "status": "placeholder",
   "scenario_levels": ["low", "medium", "high"],
   "layers": [],
   "energy_model": {
     "duckdb": {
-      "path": "data/processed/trondelag/trondelag_times.duckdb",
+      "path": "data/processed/speedlocal_times.duckdb",
       "source_tables": ["timesreport", "timesreport_raw"],
       "description_tables": ["scen_desc"],
       "columns": {
@@ -34,7 +34,7 @@
       }
     },
     "area_demand": {
-      "path": "data/raw/trondelag/AreaDemand.xlsx",
+      "path": "data/raw/AreaDemand.xlsx",
       "times_technology_map": {
         "NRG_WIN": {
           "energy_key": "wind",
@@ -70,34 +70,34 @@
         {
           "id": "low",
           "label": "Lag",
-          "source_scenario": "TRONDELAG2050",
+          "source_scenario": "ENERGYISLAND2050",
           "planning_year": 2050,
           "energy_scale": 0.65,
           "area_demand_scenario": "low",
-          "note": "Placeholder low scenario."
+          "note": "Trondelag placeholder using Bornholm ENERGYISLAND2050 source data until regional TIMES export is connected."
         },
         {
           "id": "medium",
           "label": "Mellan",
-          "source_scenario": "TRONDELAG2050",
+          "source_scenario": "ENERGYISLAND2050",
           "planning_year": 2050,
           "energy_scale": 1.0,
           "area_demand_scenario": "mid",
-          "note": "Placeholder medium scenario."
+          "note": "Trondelag placeholder using Bornholm ENERGYISLAND2050 source data until regional TIMES export is connected."
         },
         {
           "id": "high",
           "label": "Hog",
-          "source_scenario": "TRONDELAG2050",
+          "source_scenario": "ENERGYISLAND2050",
           "planning_year": 2050,
           "energy_scale": 1.25,
           "area_demand_scenario": "high",
-          "note": "Placeholder high scenario."
+          "note": "Trondelag placeholder using Bornholm ENERGYISLAND2050 source data until regional TIMES export is connected."
         }
       ],
       "placement_modes": ["auto", "manual"],
       "auto_min_potential_share_pct": 65.0
     }
   },
-  "note": "Placeholder paths. The UI can show region status before DuckDB and AreaDemand exist."
+  "note": "Temporary Trondelag placeholder: uses Bornholm TIMES/AreaDemand files so the potential app has a functioning energy-model scenario until regional inputs are delivered."
 }

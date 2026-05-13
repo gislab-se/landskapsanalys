@@ -9,6 +9,7 @@ import json
 import math
 import os
 from pathlib import Path
+import subprocess
 import sys
 import time
 from typing import Any
@@ -74,6 +75,7 @@ from potential_model.wind_acceptance import (  # noqa: E402
     wind_vector_feature_collection,
 )
 from acceptance_model.layers import (  # noqa: E402
+    distance_table_for_layer,
     layer_status_table as acceptance_layer_status_table,
     load_registry as load_acceptance_registry,
     ordered_groups,
@@ -151,7 +153,7 @@ WIND_LAYER_SELECTION_KEY = "wind_builder_selected_layers"
 WIND_RUNTIME_OVERLAY_KEY = "wind_builder_runtime_overlay_enabled"
 SOLAR_APPLIED_CONFIG_KEY = "solar_applied_config"
 START_DEFAULT_VERSION_KEY = "potential_start_default_version"
-START_DEFAULT_VERSION = "establishment_area_unfiltered_v1"
+START_DEFAULT_VERSION = "trondelag_zoom_r7_establishment_start_v4"
 WIND_EMPTY_SELECTION_ACTIVE_KEY = "wind_empty_selection_active"
 WIND_CONTROL_LANGUAGE = "sv"
 WIND_RUNTIME_BASE_RESOLUTION = 10
@@ -168,8 +170,8 @@ SOLAR_POTENTIAL_POLYGON_LABEL = "Landskapspotential Sol polygon"
 SOLAR_POTENTIAL_HEX_LABEL = "Landskapspotential Sol hexagon"
 SOLAR_ESTABLISHMENT_LAYER_LABEL = "Potentiell etableringsyta Sol"
 OUTSIDE_LP_NEED_LAYER_LABEL = "Ytbehov utanför landskapets potential"
-SOLAR_POPULATION_SOURCE_LABEL = "Källa: Befolkningspunkter"
-SOLAR_POPULATION_BUFFER_LABEL = "Buffert: Befolkningspunkter"
+SOLAR_POPULATION_SOURCE_LABEL = "Sol källa: Befolkningsunderlag"
+SOLAR_POPULATION_BUFFER_LABEL = "Solbuffert: Befolkningsunderlag"
 PROTECTED_NATURE_LABEL = "Skyddad natur"
 SOLAR_PROTECTED_SOURCE_LABEL = f"Källa: {PROTECTED_NATURE_LABEL}"
 SOLAR_PROTECTED_BUFFER_LABEL = f"Buffert: {PROTECTED_NATURE_LABEL}"
@@ -1054,7 +1056,7 @@ def _region_options() -> dict[str, dict[str, Any]]:
         st.error(_t("Inga regionmanifest hittades."))
         st.stop()
     options = {str(region["region_id"]): region for region in regions}
-    default_id = "bornholm" if "bornholm" in options else next(iter(options))
+    default_id = "trondelag" if "trondelag" in options else "bornholm" if "bornholm" in options else next(iter(options))
     if st.session_state.get(REGION_SELECT_KEY) not in options:
         st.session_state[REGION_SELECT_KEY] = default_id
     return options
@@ -2004,7 +2006,9 @@ def _ensure_default_start_state(region: dict[str, Any]) -> None:
     _apply_wind_layer_selection_state(_default_wind_layer_selection())
     st.session_state[WIND_EMPTY_SELECTION_ACTIVE_KEY] = True
     st.session_state[SOLAR_APPLIED_CONFIG_KEY] = dict(DEFAULT_SOLAR_APPLIED_CONFIG)
-    st.session_state["combined_h3_resolution"] = _preferred_h3_resolution(region, 9)
+    default_display_resolution = int(region.get("default_display_h3_resolution") or region.get("default_h3_resolution") or 8)
+    st.session_state["combined_h3_resolution"] = _preferred_h3_resolution(region, default_display_resolution)
+    st.session_state["combined_h3_display_mode"] = "zoom_family"
     st.session_state["show_landscape_v10"] = False
     st.session_state["show_landscape_pdf_types"] = False
     st.session_state["show_landscape_cluster"] = False
@@ -2328,30 +2332,36 @@ def _map_panel_controls(region: dict[str, Any], key_prefix: str, panel: Any | No
         current_value = preferred
     if current_value not in available:
         current_value = preferred
-    st.session_state[state_key] = current_value
+        if state_key in st.session_state:
+            del st.session_state[state_key]
 
     display_modes = ["selected", "zoom_family"]
     current_display_mode = str(st.session_state.get(display_mode_key, "selected"))
     if current_display_mode not in display_modes:
         current_display_mode = "selected"
-    st.session_state[display_mode_key] = current_display_mode
+        if display_mode_key in st.session_state:
+            del st.session_state[display_mode_key]
 
     if panel is not None:
         with panel.expander(_t("H3-upplösning"), expanded=False):
+            h3_index = None if state_key in st.session_state else available.index(current_value)
             h3_resolution = st.radio(
                 _t("H3-rollup"),
                 options=available,
-                index=available.index(current_value),
+                index=h3_index,
                 format_func=lambda value: _h3_option_label(region, value),
                 horizontal=False,
                 key=state_key,
             )
+            if h3_resolution is None:
+                h3_resolution = current_value
             zoom_family_min_resolution = min(_display_family_resolutions(region, int(h3_resolution)))
             zoom_family_label = f"Utforska: zoomanpassad R{int(h3_resolution)}-R{int(zoom_family_min_resolution)}"
+            display_mode_index = None if display_mode_key in st.session_state else display_modes.index(current_display_mode)
             display_mode = st.radio(
                 _t("Hexvisning"),
                 options=display_modes,
-                index=display_modes.index(current_display_mode),
+                index=display_mode_index,
                 format_func=lambda value: {
                     "selected": _t("Snabb visning: vald upplösning"),
                     "zoom_family": zoom_family_label,
@@ -2359,6 +2369,8 @@ def _map_panel_controls(region: dict[str, Any], key_prefix: str, panel: Any | No
                 horizontal=False,
                 key=display_mode_key,
             )
+            if display_mode is None:
+                display_mode = current_display_mode
             zoom_family_enabled = display_mode == "zoom_family"
             if zoom_family_enabled:
                 st.caption({"en": "Builds several H3 resolutions and switches layers by zoom level. Useful for review, but slower.", "da_no": "Bygger flere H3-oppløsninger og skifter lag efter zoomniveau. Nyttigt til granskning, men langsommere."}.get(_language(), "Bygger flera H3-upplösningar och växlar lager efter zoomnivå. Användbart för granskning, men långsammare."))
@@ -2828,15 +2840,17 @@ def _solar_population_source_layer() -> dict[str, Any] | None:
     if not geojson:
         return None
     source_color = _rgb_to_hex(layer_spec.source_color)
+    source_label = f"Sol källa: {layer_label(layer_spec, WIND_CONTROL_LANGUAGE, layer_spec.label)}"
+    is_trondelag = str(st.session_state.get(REGION_SELECT_KEY, "") or "").lower() == "trondelag"
     return {
-        "name": SOLAR_POPULATION_SOURCE_LABEL,
-        "source_layer_id": WIND_POPULATION_SOURCE_LAYER_ID,
+        "name": source_label,
+        "source_layer_id": f"solar:{WIND_POPULATION_SOURCE_LAYER_ID}",
         "feature_collection": geojson,
         "fill_property": "fill",
         "legend_items": [],
         "legend_id": "solar_population_source",
         "legend_title": "",
-        "default_visible": False,
+        "default_visible": bool(is_trondelag),
         "stroke_color": source_color,
         "fill_color": source_color,
         "stroke_opacity": 0.85,
@@ -2872,6 +2886,123 @@ def _solar_population_buffer_geojson(buffer_m: float) -> dict[str, Any] | None:
     return geojson if isinstance(geojson, dict) else None
 
 
+def _trondelag_population_proxy_rds_path() -> Path:
+    return ROOT / "docs/geocontext/acceptance_framework/data/trondelag_prototype_assets/analysis_rds/population_points.rds"
+
+
+def _trondelag_population_buffer_script_path() -> Path:
+    return ROOT / "script/acceptance/render_trondelag_population_buffer.R"
+
+
+def _trondelag_population_buffer_cache_path(buffer_m: float) -> Path:
+    buffer_value = int(round(max(0.0, float(buffer_m or 0.0))))
+    return (
+        ROOT
+        / "docs/geocontext/acceptance_framework/data/trondelag_prototype_assets/runtime_buffers"
+        / f"population_points_buffer_{buffer_value}m.geojson"
+    )
+
+
+@st.cache_data(show_spinner=False)
+def _load_trondelag_population_buffer_geojson(
+    buffer_value_m: int,
+    source_mtime_ns: int,
+    script_mtime_ns: int,
+) -> dict[str, Any] | None:
+    _ = source_mtime_ns, script_mtime_ns
+    output_path = _trondelag_population_buffer_cache_path(float(buffer_value_m))
+    source_path = _trondelag_population_proxy_rds_path()
+    script_path = _trondelag_population_buffer_script_path()
+    newest_source_mtime = max(source_path.stat().st_mtime, script_path.stat().st_mtime)
+    if not output_path.exists() or output_path.stat().st_mtime < newest_source_mtime:
+        try:
+            subprocess.run(
+                [
+                    "Rscript",
+                    str(script_path),
+                    str(ROOT),
+                    str(int(buffer_value_m)),
+                    str(output_path),
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=180,
+            )
+        except Exception:
+            return None
+    try:
+        return json.loads(output_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def _trondelag_population_buffer_geojson(buffer_m: float) -> dict[str, Any] | None:
+    source_path = _trondelag_population_proxy_rds_path()
+    script_path = _trondelag_population_buffer_script_path()
+    if not source_path.exists() or not script_path.exists():
+        return None
+    buffer_value = int(round(max(0.0, float(buffer_m or 0.0))))
+    return _load_trondelag_population_buffer_geojson(
+        buffer_value,
+        int(source_path.stat().st_mtime_ns),
+        int(script_path.stat().st_mtime_ns),
+    )
+
+
+def _trondelag_population_buffer_polygon_layer(
+    buffer_m: float,
+    prefix: str = "Buffert",
+    context_key: str = "shared",
+) -> dict[str, Any] | None:
+    _, layers, _ = load_acceptance_registry()
+    layer_spec = layers.get(WIND_POPULATION_SOURCE_LAYER_ID)
+    if layer_spec is None:
+        return None
+    geojson = _trondelag_population_buffer_geojson(float(buffer_m or 0.0))
+    features = geojson.get("features") if isinstance(geojson, dict) else None
+    if not isinstance(features, list) or not features:
+        return None
+    label = layer_label(layer_spec, WIND_CONTROL_LANGUAGE, layer_spec.label)
+    buffer_value = float(buffer_m or 0.0)
+    for feature in features:
+        props = feature.setdefault("properties", {})
+        props["fill"] = "#14b8a6"
+        props["stroke"] = "#0f766e"
+        props["fill_opacity"] = 0.22
+        props["tooltip_title"] = f"{prefix}: {label}"
+        props["tooltip_body"] = f"{buffer_value:.0f} m från upplöst 250 m befolkningsrutproxy"
+        props["popup"] = (
+            f"<strong>{prefix}: {label}</strong><br>"
+            f"Buffert: {buffer_value:.0f} m<br>"
+            "Källa: 250 m befolkningsrutor härledda från centroider. "
+            "Bufferten är en dissolvad polygon, inte individuella befolkningspunkter."
+        )
+    return {
+        "name": f"{prefix}: {label}",
+        "buffer_layer_id": f"{context_key}:{WIND_POPULATION_SOURCE_LAYER_ID}:polygon_buffer:{int(round(buffer_value))}",
+        "feature_collection": geojson,
+        "fill_property": "fill",
+        "fill_opacity_property": "fill_opacity",
+        "stroke_property": "stroke",
+        "legend_items": [{"label": f"{buffer_value:.0f} m från 250 m befolkningsrutor", "color": "#14b8a6"}],
+        "legend_id": f"population_polygon_buffer_{int(round(buffer_value))}",
+        "legend_title": "",
+        "default_visible": True,
+        "stroke_color": "#0f766e",
+        "fill_color": "#14b8a6",
+        "stroke_opacity": 0.55,
+        "fill_opacity": 0.22,
+        "weight": 0.65,
+        "point_radius": 4,
+        "use_global_opacity": False,
+        "z_index": 456,
+        "layer_kind": "vector",
+        "opacity_family": f"{prefix}: {label}",
+        "opacity_label": f"{prefix}: {label}",
+    }
+
+
 def _solar_population_buffer_frame(
     region: dict[str, Any],
     target_resolution: int,
@@ -2882,6 +3013,14 @@ def _solar_population_buffer_frame(
     display_geometry_path = _h3_display_geometry_path(region, int(target_resolution))
     if not display_geometry_path:
         return pd.DataFrame(columns=["hex_id", "population_buffer_m", "buffer_ring_count"])
+    if str(region.get("region_id", "")).lower() == "trondelag":
+        share = _population_buffer_share_frame(region, int(target_resolution), float(buffer_m or 0.0))
+        if share.empty:
+            return pd.DataFrame(columns=["hex_id", "population_buffer_m", "buffer_ring_count", "buffer_share_pct"])
+        share = share.rename(columns={"filter_buffer_share_pct": "buffer_share_pct"})
+        share["population_buffer_m"] = float(buffer_m or 0.0)
+        share["buffer_ring_count"] = 0
+        return share[["hex_id", "population_buffer_m", "buffer_ring_count", "buffer_share_pct"]].copy()
     buffer_geojson = _solar_population_buffer_geojson(float(buffer_m or 0.0))
     if not buffer_geojson:
         return pd.DataFrame(columns=["hex_id", "population_buffer_m", "buffer_ring_count"])
@@ -2904,8 +3043,13 @@ def _solar_population_buffer_layer(
     target_resolution: int,
     buffer_m: float,
 ) -> dict[str, Any] | None:
-    _ = region
-    _ = target_resolution
+    if str(region.get("region_id", "")).lower() == "trondelag":
+        _ = target_resolution
+        return _trondelag_population_buffer_polygon_layer(
+            float(buffer_m or 0.0),
+            prefix="Solbuffert",
+            context_key="solar",
+        )
     buffer_geojson = _solar_population_buffer_geojson(float(buffer_m or 0.0))
     if not buffer_geojson:
         return None
@@ -3161,6 +3305,11 @@ def _solar_filter_union_buffer_frame(
         layer_ids = filter_config.get("layer_ids") or []
         buffer_m = float(filter_config.get("buffer_m", 0.0) or 0.0)
         if group_id == "population":
+            if str(region.get("region_id", "")).lower() == "trondelag":
+                pop_share = _population_buffer_share_frame(region, int(target_resolution), buffer_m)
+                if not pop_share.empty:
+                    features.append({"__population_share_frame__": pop_share})
+                continue
             geojson = _solar_population_buffer_geojson(buffer_m)
         else:
             geojson = _solar_filter_buffer_geojson(group_id, buffer_m, layer_ids)
@@ -3169,6 +3318,16 @@ def _solar_filter_union_buffer_frame(
         for feature in geojson.get("features") or []:
             if isinstance(feature, dict) and feature.get("geometry"):
                 features.append(feature)
+    population_frames = [item["__population_share_frame__"] for item in features if isinstance(item, dict) and "__population_share_frame__" in item]
+    features = [item for item in features if not (isinstance(item, dict) and "__population_share_frame__" in item)]
+    if population_frames and not features:
+        combined = pd.concat(population_frames, ignore_index=True, sort=False)
+        combined = (
+            combined.groupby("hex_id", as_index=False)["filter_buffer_share_pct"]
+            .max()
+            .reset_index(drop=True)
+        )
+        return combined[["hex_id", "filter_buffer_share_pct"]]
     if not features:
         return pd.DataFrame(columns=["hex_id", "filter_buffer_share_pct"])
     combined_geojson = {"type": "FeatureCollection", "features": features}
@@ -3181,6 +3340,9 @@ def _solar_filter_union_buffer_frame(
     score_col = "wind_score" if "wind_score" in share.columns else "potential_area_share_pct"
     share["filter_buffer_share_pct"] = pd.to_numeric(share.get(score_col), errors="coerce").fillna(0.0).clip(lower=0.0, upper=100.0)
     share = share[share["filter_buffer_share_pct"].gt(0.0)].copy()
+    if population_frames:
+        share = pd.concat([share[["hex_id", "filter_buffer_share_pct"]], *population_frames], ignore_index=True, sort=False)
+        share = share.groupby("hex_id", as_index=False)["filter_buffer_share_pct"].max()
     return share[["hex_id", "filter_buffer_share_pct"]].copy()
 
 
@@ -3303,7 +3465,7 @@ def _solar_large_scale_frame(
         work["solar_color"] = [item["color"] for item in classes]
         return work.reindex(columns=columns)
 
-    source_resolution = max(target_resolution, WIND_RUNTIME_BASE_RESOLUTION)
+    source_resolution = target_resolution if str(region.get("region_id", "")).lower() == "trondelag" else max(target_resolution, WIND_RUNTIME_BASE_RESOLUTION)
     source_landscape = _landscape_frame(region, landscape_manifest, source_resolution)
     if source_landscape.empty and source_resolution != target_resolution:
         source_resolution = target_resolution
@@ -4759,6 +4921,10 @@ def _wind_layer_is_ready(layer_id: str, availability: dict[str, dict[str, Any]])
     )
 
 
+def _wind_group_has_ready_layers(group_id: str, group_layers: list[Any], availability: dict[str, dict[str, Any]]) -> bool:
+    return any(_wind_layer_is_ready(str(layer.id), availability) for layer in group_layers)
+
+
 def _default_wind_advanced_layer_ids(
     group_id: str,
     group_layers: list[Any],
@@ -4817,14 +4983,19 @@ def _wind_group_controls(
             is_protected_group = group.id == SOLAR_PROTECTED_GROUP_ID
             is_settlement_group = group.id == WIND_SETTLEMENT_GROUP_ID
             is_culture_group = group.id == WIND_CULTURE_GROUP_ID
+            group_layers = [item for item in ordered_layers() if item.group_id == group.id]
+            group_available = _wind_group_has_ready_layers(group.id, group_layers, availability)
             if is_protected_group:
                 display_group_label = _protected_group_label()
             elif is_settlement_group:
                 display_group_label = _settlement_group_label()
             else:
                 display_group_label = group_label(group, language, group.label)
-            with st.expander(display_group_label, expanded=group.id in {"settlement", "transport", "electrical"}):
+            expander_label = display_group_label if group_available else f"{display_group_label} - ej tillgänglig"
+            with st.expander(expander_label, expanded=group.id in {"settlement", "transport", "electrical"}):
                 st.caption(group_interpretation(group, language, group.interpretation))
+                if not group_available:
+                    st.caption("Ej tillgängligt för vald region ännu. Källager/assets behöver kopplas innan gruppen kan användas.")
                 st.slider(
                     group_analysis_label(group, language, group.analysis_label),
                     min_value=int(group.analysis_min_m),
@@ -4832,11 +5003,12 @@ def _wind_group_controls(
                     step=int(group.analysis_step_m),
                     key=_wind_control_key("analysis", group.id),
                     help=ui_text("analysis_slider_help", language),
+                    disabled=not group_available,
                 )
                 group_enabled = True
-                group_layers = [item for item in ordered_layers() if item.group_id == group.id]
                 if is_protected_group or is_settlement_group or is_culture_group:
-                    _seed_wind_advanced_layer_defaults(group.id, group_layers, availability)
+                    if group_available:
+                        _seed_wind_advanced_layer_defaults(group.id, group_layers, availability)
                     group_layer_keys = [
                         _wind_control_key("layer", layer.id)
                         for layer in group_layers
@@ -4845,6 +5017,8 @@ def _wind_group_controls(
                         _wind_control_key("group", group.id),
                         any(bool(st.session_state.get(key, False)) for key in group_layer_keys),
                     )
+                    if not group_available:
+                        st.session_state[_wind_control_key("group", group.id)] = False
                     group_help = (
                         "Befolkningspunkter används som standard. Övriga bebyggelselager kan slås på under avancerade inställningar."
                         if is_settlement_group
@@ -4861,6 +5035,7 @@ def _wind_group_controls(
                         group_checkbox_label,
                         key=_wind_control_key("group", group.id),
                         help=group_help,
+                        disabled=not group_available,
                     )
                 main_layers = group_layers
                 advanced_layers: list[Any] = []
@@ -4875,7 +5050,7 @@ def _wind_group_controls(
                     checked = st.checkbox(
                         layer_label(layer, language, layer.label),
                         key=_wind_control_key("layer", layer.id),
-                        disabled=not ready,
+                        disabled=(not group_available) or (not ready),
                         help=message,
                     )
                     if checked and ready and group_enabled:
@@ -4893,9 +5068,13 @@ def _wind_group_controls(
                         st.caption(f"Välj vilka del-lager som ingår i {PROTECTED_NATURE_LABEL}.")
                     for layer in advanced_layers:
                         render_layer_checkbox(layer)
+                    if not advanced_layers:
+                        st.caption("Inga del-lager är kopplade ännu.")
 
                 if not selected[group.id]:
-                    if (is_protected_group or is_settlement_group or is_culture_group) and not group_enabled:
+                    if not group_available:
+                        st.caption("Gruppen är gråmarkerad och ej valbar tills data finns.")
+                    elif (is_protected_group or is_settlement_group or is_culture_group) and not group_enabled:
                         st.caption("Gruppen är avstängd. Del-lager kan väljas, men används först när gruppen är aktiv.")
                     else:
                         st.caption(ui_text("group_inactive", language))
@@ -5074,15 +5253,15 @@ def _wind_polygon_source_layers(
                     copied = json.loads(json.dumps(feature))
                     props = copied.setdefault("properties", {})
                     props["fill"] = source_color
-                    props["tooltip_title"] = f"Källa: {PROTECTED_NATURE_LABEL}"
+                    props["tooltip_title"] = f"Vind källa: {PROTECTED_NATURE_LABEL}"
                     props["tooltip_body"] = label
-                    props.setdefault("popup", f"<strong>Källa: {PROTECTED_NATURE_LABEL}</strong><br>{label}")
+                    props.setdefault("popup", f"<strong>Vind källa: {PROTECTED_NATURE_LABEL}</strong><br>{label}")
                     protected_features.append(copied)
             if protected_features:
                 color = protected_colors[0] if protected_colors else "#15803d"
                 map_layers.append(
                     {
-                        "name": f"Källa: {PROTECTED_NATURE_LABEL}",
+                        "name": f"Vind källa: {PROTECTED_NATURE_LABEL}",
                         "feature_collection": {"type": "FeatureCollection", "features": protected_features},
                         "fill_property": "fill",
                         "legend_items": [],
@@ -5096,7 +5275,7 @@ def _wind_polygon_source_layers(
                         "weight": 2.0,
                         "point_radius": 4,
                         "use_global_opacity": False,
-                        "source_layer_id": SOLAR_PROTECTED_GROUP_ID,
+                        "source_layer_id": f"wind:{SOLAR_PROTECTED_GROUP_ID}",
                         "layer_kind": "vector",
                     }
                 )
@@ -5108,15 +5287,20 @@ def _wind_polygon_source_layers(
             geojson = source_geojson_for_layer(registry_meta, layer_id)
             if geojson is None:
                 continue
+            is_trondelag_population = (
+                str(st.session_state.get(REGION_SELECT_KEY, "") or "").lower() == "trondelag"
+                and group_id == WIND_SETTLEMENT_GROUP_ID
+                and layer_id == WIND_POPULATION_SOURCE_LAYER_ID
+            )
             map_layers.append(
                 {
-                    "name": f"Källa: {layer_label(layer_spec, WIND_CONTROL_LANGUAGE, layer_spec.label)} ({translated_group_label})",
+                    "name": f"Vind källa: {layer_label(layer_spec, WIND_CONTROL_LANGUAGE, layer_spec.label)} ({translated_group_label})",
                     "feature_collection": geojson,
                     "fill_property": "fill",
                     "legend_items": [],
                     "legend_id": f"wind_polygon_source_{layer_id}",
                     "legend_title": "",
-                    "default_visible": False,
+                    "default_visible": bool(is_trondelag_population),
                     "stroke_color": _rgb_to_hex(layer_spec.source_color),
                     "fill_color": _rgb_to_hex(layer_spec.source_color),
                     "stroke_opacity": max(min(opacity, 1.0), 0.0),
@@ -5124,7 +5308,7 @@ def _wind_polygon_source_layers(
                     "weight": 2.0,
                     "point_radius": int(layer_spec.point_radius),
                     "use_global_opacity": False,
-                    "source_layer_id": layer_id,
+                    "source_layer_id": f"wind:{layer_id}",
                     "layer_kind": "vector",
                 }
             )
@@ -5408,11 +5592,198 @@ def _build_wind_runtime_hex_layer_data(
     return frame.sort_values("hex_id").reset_index(drop=True)
 
 
+def _target_resolution_distance_frame(
+    distance_frame: pd.DataFrame,
+    target_resolution: int,
+    display_geometry_path: str,
+) -> pd.DataFrame:
+    if distance_frame.empty or "hex_id" not in distance_frame.columns:
+        return pd.DataFrame(columns=["hex_id", "distance_m", "intersects"])
+    work = distance_frame[["hex_id", "distance_m", "intersects"]].copy()
+    work["hex_id"] = work["hex_id"].astype(str)
+    try:
+        source_resolution = int(h3.get_resolution(str(work["hex_id"].iloc[0])))
+    except Exception:
+        source_resolution = int(target_resolution)
+    if source_resolution > int(target_resolution):
+        work["hex_id"] = work["hex_id"].map(lambda value: str(h3.cell_to_parent(str(value), int(target_resolution))))
+        work = (
+            work.groupby("hex_id", as_index=False)
+            .agg(distance_m=("distance_m", "min"), intersects=("intersects", "max"))
+        )
+    elif source_resolution < int(target_resolution):
+        work["source_hex_id"] = work["hex_id"].astype(str)
+        display_geometries = load_h3_display_geometries(display_geometry_path)
+        target = pd.DataFrame({"hex_id": list(display_geometries.keys())})
+        if not target.empty:
+            target["source_hex_id"] = target["hex_id"].map(lambda value: str(h3.cell_to_parent(str(value), source_resolution)))
+            work = target.merge(work, on="source_hex_id", how="left")[["hex_id", "distance_m", "intersects"]]
+    work["distance_m"] = pd.to_numeric(work["distance_m"], errors="coerce")
+    work["intersects"] = work["intersects"].fillna(False).astype(bool)
+    return work[["hex_id", "distance_m", "intersects"]].copy()
+
+
+def _population_buffer_share_frame(
+    region: dict[str, Any],
+    target_resolution: int,
+    buffer_m: float,
+) -> pd.DataFrame:
+    display_geometry_path = _h3_display_geometry_path(region, int(target_resolution))
+    if not display_geometry_path:
+        return pd.DataFrame(columns=["hex_id", "filter_buffer_share_pct"])
+    _, layers, registry_meta = load_acceptance_registry()
+    if WIND_POPULATION_SOURCE_LAYER_ID not in layers:
+        return pd.DataFrame(columns=["hex_id", "filter_buffer_share_pct"])
+    distance_frame = _target_resolution_distance_frame(
+        distance_table_for_layer(registry_meta, WIND_POPULATION_SOURCE_LAYER_ID),
+        int(target_resolution),
+        display_geometry_path,
+    )
+    if distance_frame.empty:
+        return pd.DataFrame(columns=["hex_id", "filter_buffer_share_pct"])
+    distance = pd.to_numeric(distance_frame["distance_m"], errors="coerce")
+    in_buffer = distance.le(float(buffer_m or 0.0)).fillna(False) | distance_frame["intersects"].fillna(False).astype(bool)
+    out = distance_frame.loc[in_buffer, ["hex_id"]].copy()
+    out["filter_buffer_share_pct"] = 100.0
+    return out[["hex_id", "filter_buffer_share_pct"]]
+
+
+def _acceptance_series_for_group(
+    analysis_kind: str,
+    min_distance_m: pd.Series,
+    any_intersection: pd.Series,
+    threshold_m: float,
+) -> pd.Series:
+    distance = pd.to_numeric(min_distance_m, errors="coerce")
+    intersects = any_intersection.fillna(False).astype(bool)
+    threshold = float(threshold_m or 0.0)
+    if str(analysis_kind) == "proximity_feasibility":
+        capped = max(threshold, 1.0)
+        acceptance = (1.0 - (distance / capped)).clip(lower=0.0, upper=1.0).fillna(0.0)
+        acceptance.loc[intersects] = 1.0
+        return acceptance
+    if str(analysis_kind) == "hard_exclusion":
+        blocked = intersects if threshold <= 0 else (intersects | distance.le(threshold).fillna(False))
+        return (~blocked).astype(float)
+    if threshold <= 0:
+        return (~intersects).astype(float)
+    ramp_end = max(float(threshold * 2.0), float(threshold + 1.0))
+    acceptance = ((distance - threshold) / (ramp_end - threshold)).clip(lower=0.0, upper=1.0).fillna(0.0)
+    acceptance.loc[intersects] = 0.0
+    return acceptance
+
+
+def _finalize_fast_wind_share_frame(
+    frame: pd.DataFrame,
+    display_geometry_path: str,
+    compute_core: bool = True,
+) -> pd.DataFrame:
+    work = frame.copy()
+    work["potential_area_share_pct"] = pd.to_numeric(work["potential_area_share_pct"], errors="coerce").fillna(0.0).clip(
+        lower=0.0,
+        upper=100.0,
+    )
+    if "potential_area_km2" not in work.columns:
+        work["potential_area_km2"] = work["potential_area_share_pct"].div(100.0) * float(h3_hex_area_km2(WIND_RUNTIME_BASE_RESOLUTION))
+    work["potential_area_km2"] = pd.to_numeric(work["potential_area_km2"], errors="coerce").fillna(0.0).clip(lower=0.0)
+    work["potential_area_share"] = work["potential_area_share_pct"].div(100.0).round(4)
+    class_specs = [_wind_share_class_spec(float(value)) for value in work["potential_area_share_pct"]]
+    work["share_class_id"] = [str(item["id"]) for item in class_specs]
+    work["share_class_label"] = [str(item["label"]) for item in class_specs]
+    work["share_class_index"] = [WIND_SHARE_CLASS_SPECS.index(item) for item in class_specs]
+    if compute_core:
+        work = _wind_runtime_hex_core_scores(work, _wind_runtime_hex_neighbor_map(display_geometry_path))
+    else:
+        work["core_score"] = 0.0
+        work["zone_size"] = 1
+        work["center_mass_rank"] = 1
+    work["fill"] = [
+        _wind_runtime_hex_color(share_value, core_value, zone_size)
+        for share_value, core_value, zone_size in zip(work["potential_area_share_pct"], work["core_score"], work["zone_size"])
+    ]
+    work["core_label"] = [_wind_core_label(core_value, zone_size) for core_value, zone_size in zip(work["core_score"], work["zone_size"])]
+    work["stroke"] = work["fill"].map(lambda value: _mix_hex_colors(str(value), "#3a3a3a", 0.28))
+    return work.sort_values("hex_id").reset_index(drop=True)
+
+
+def _wind_fast_distance_runtime_result(
+    region: dict[str, Any],
+    ui_params: dict[str, float],
+    layer_selection: dict[str, list[str]],
+    target_resolution: int,
+) -> dict[str, Any] | None:
+    if str(region.get("region_id", "")).lower() != "trondelag":
+        return None
+    selected = normalize_group_layer_map(layer_selection)
+    if not any(selected.values()):
+        return None
+    groups, _, registry_meta = load_acceptance_registry()
+    display_geometry_path = _h3_display_geometry_path(region, int(target_resolution))
+    if not display_geometry_path:
+        return None
+    display_geometries = load_h3_display_geometries(display_geometry_path)
+    frame = pd.DataFrame({"hex_id": list(display_geometries.keys())})
+    if frame.empty:
+        return None
+    frame["potential_area_share_pct"] = 100.0
+    active_groups: list[str] = []
+    for group_id, layer_ids in selected.items():
+        group = groups.get(group_id)
+        if group is None or not layer_ids:
+            continue
+        distance_parts: list[pd.DataFrame] = []
+        for layer_id in layer_ids:
+            layer_df = _target_resolution_distance_frame(
+                distance_table_for_layer(registry_meta, layer_id),
+                int(target_resolution),
+                display_geometry_path,
+            )
+            if not layer_df.empty:
+                distance_parts.append(layer_df)
+        if not distance_parts:
+            continue
+        merged = frame[["hex_id"]].copy()
+        distance_cols: list[str] = []
+        intersect_cols: list[str] = []
+        for idx, part in enumerate(distance_parts):
+            distance_col = f"distance_{idx}"
+            intersect_col = f"intersects_{idx}"
+            renamed = part.rename(columns={"distance_m": distance_col, "intersects": intersect_col})
+            merged = merged.merge(renamed, on="hex_id", how="left")
+            distance_cols.append(distance_col)
+            intersect_cols.append(intersect_col)
+        min_distance = merged[distance_cols].min(axis=1, skipna=True)
+        any_intersection = merged[intersect_cols].fillna(False).astype(bool).any(axis=1)
+        threshold_key = GROUP_PARAM_MAP.get(group_id)
+        threshold_m = float(ui_params.get(threshold_key, group.analysis_default_m)) if threshold_key else float(group.analysis_default_m)
+        group_acceptance = _acceptance_series_for_group(group.analysis_kind, min_distance, any_intersection, threshold_m)
+        frame["potential_area_share_pct"] = frame["potential_area_share_pct"].combine(
+            group_acceptance.mul(100.0),
+            min,
+        )
+        active_groups.append(group_id)
+    if not active_groups:
+        return None
+    hex_area = float(h3_hex_area_km2(int(target_resolution)))
+    frame["potential_area_km2"] = frame["potential_area_share_pct"].div(100.0) * hex_area
+    frame = _finalize_fast_wind_share_frame(frame, display_geometry_path, compute_core=False)
+    return {
+        "cache_key": f"trondelag_fast_distance_r{int(target_resolution)}",
+        "groups": {},
+        "combined": {"land_share_pct": float(frame["potential_area_share_pct"].mean())},
+        "fast_distance_frame": frame,
+        "fast_distance": True,
+    }
+
+
 def _wind_runtime_hex_layer_frame(
     region: dict[str, Any],
     runtime_result: dict[str, Any],
     target_resolution: int,
 ) -> pd.DataFrame:
+    fast_frame = runtime_result.get("fast_distance_frame")
+    if isinstance(fast_frame, pd.DataFrame):
+        return fast_frame.copy()
     combined = runtime_result.get("combined")
     if not isinstance(combined, dict) or combined.get("geojson") is None:
         return pd.DataFrame()
@@ -6440,6 +6811,7 @@ def _scenario_allocation_marker_feature_collection(
 def _scenario_allocation_marker_layer(
     frame: pd.DataFrame,
     target_resolution: int,
+    default_visible: bool | None = None,
 ) -> dict[str, Any] | None:
     if frame.empty:
         return None
@@ -6460,7 +6832,7 @@ def _scenario_allocation_marker_layer(
         ],
         "legend_id": "scenario_allocation",
         "legend_title": SCENARIO_ALLOCATION_LAYER_LABEL,
-        "default_visible": int(target_resolution) <= 9 and feature_count <= 12000,
+        "default_visible": bool(default_visible) if default_visible is not None else int(target_resolution) <= 9 and feature_count <= 12000,
         "stroke": True,
         "stroke_opacity": 0.86,
         "fill_opacity": 0.88,
@@ -6483,6 +6855,7 @@ def _scenario_allocation_marker_family_layers(
     if wind_selected.empty and solar_selected.empty:
         return []
     source_resolution = int(source_resolution or selected_resolution)
+    default_visible = False if str(region.get("region_id", "")).lower() == "trondelag" else None
     return _hex_family_layers(
         region,
         int(selected_resolution),
@@ -6498,6 +6871,7 @@ def _scenario_allocation_marker_family_layers(
                 int(source_resolution),
             ),
             int(resolution),
+            default_visible=default_visible,
         ),
     )
 
@@ -6816,16 +7190,45 @@ def _wind_polygon_preview_state(
     else:
         runtime_result = {"groups": {}, "combined": None, "cache_key": None}
         try:
-            runtime_result = _wind_runtime_result(ui_params, layer_selection=selected)
+            runtime_result = _wind_fast_distance_runtime_result(region, ui_params, selected, int(target_resolution))
+            if runtime_result is None:
+                runtime_result = _wind_runtime_result(ui_params, layer_selection=selected)
         except Exception as exc:
             runtime_error = str(exc)
 
     layers: list[dict[str, Any]] = []
     hex_layers: list[dict[str, Any]] = []
-    combined_layer = None if runtime_error else _wind_polygon_combined_layer(runtime_result)
-    if combined_layer is not None:
-        layers.append(combined_layer)
+    if not runtime_error and bool(runtime_result.get("fast_distance")):
+        fast_hex_layer = _wind_runtime_hex_layer(region, runtime_result, int(target_resolution), control_name)
+        if fast_hex_layer is not None:
+            hex_layers.append(fast_hex_layer)
+            layers.append(fast_hex_layer)
+    else:
+        combined_layer = None if runtime_error else _wind_polygon_combined_layer(runtime_result)
+        if combined_layer is not None:
+            layers.append(combined_layer)
     layers.extend(_wind_polygon_source_layers(ui_params, layer_selection=selected))
+    if (
+        str(region.get("region_id", "")).lower() == "trondelag"
+        and WIND_POPULATION_SOURCE_LAYER_ID in selected.get(WIND_SETTLEMENT_GROUP_ID, [])
+    ):
+        settlement_group = load_acceptance_registry()[0].get(WIND_SETTLEMENT_GROUP_ID)
+        threshold_key = GROUP_PARAM_MAP.get(WIND_SETTLEMENT_GROUP_ID)
+        threshold_m = float(
+            ui_params.get(
+                threshold_key,
+                settlement_group.analysis_default_m if settlement_group is not None else 0.0,
+            )
+            if threshold_key
+            else 0.0
+        )
+        population_buffer_layer = _trondelag_population_buffer_polygon_layer(
+            threshold_m,
+            prefix="Vindbuffert",
+            context_key="wind",
+        )
+        if population_buffer_layer is not None:
+            layers.append(population_buffer_layer)
     if not runtime_error:
         layers.extend(_wind_polygon_group_layers(runtime_result))
 
@@ -6834,7 +7237,7 @@ def _wind_polygon_preview_state(
         "runtime_error": runtime_error,
         "runtime_result": runtime_result,
         "active_source_count": sum(len(layer_ids) for layer_ids in selected.values()),
-        "active_group_count": len(runtime_result.get("groups") or {}),
+        "active_group_count": len(runtime_result.get("groups") or {}) or sum(1 for layer_ids in selected.values() if layer_ids),
         "combined_land_share_pct": (runtime_result.get("combined") or {}).get("land_share_pct"),
         "hex_layer_available": bool(hex_layers),
         "unfiltered_land": bool(runtime_result.get("unfiltered_land")),
@@ -7258,7 +7661,7 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
     if isinstance(solar_v1_stats, dict):
         map_summary_parts.append(f"{SOLAR_SMALL_SCALE_LABEL} visas som gula schablonhexar")
     if outside_total > 1e-6:
-        map_summary_parts.append(f"{OUTSIDE_LP_NEED_LAYER_LABEL} visar bristen utanför ön")
+        map_summary_parts.append(f"{OUTSIDE_LP_NEED_LAYER_LABEL} visar bristen ute till havs")
     st.markdown(f"**{_t('Sammanfattning')}**")
     st.caption(result_sentence)
     st.caption("Karta: " + "; ".join(map_summary_parts) + ".")
@@ -7436,7 +7839,7 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
             ]
             st.dataframe(pd.DataFrame(hex_rows), width="stretch", hide_index=True, height=246)
             st.caption(
-                "Ytbudgethex visar extra ytbehov i separata schematiska fält utanför ön. Child-hex visar scenarioyta inom lämpliga etableringshex med teknikfärg: blå för vind, gul för sol och grön när båda samnyttjar samma större hex."
+                "Ytbudgethex visar extra ytbehov i separata schematiska fält ute till havs. Child-hex visar scenarioyta inom lämpliga etableringshex med teknikfärg: blå för vind, gul för sol och grön när båda samnyttjar samma större hex."
             )
         else:
             st.caption("Hexstatistik saknas för denna vy.")
@@ -8166,7 +8569,8 @@ def _unified_workspace_tab(
     solar_defaults = _default_solar_params(solar_rules)
     _prime_solar_builder_state(solar_defaults, saved_solar_params)
     _prime_wind_builder_state(_default_wind_params(), _selected_wind_layers())
-    h3_resolution = int(st.session_state.get("combined_h3_resolution", _preferred_h3_resolution(region, 9)))
+    default_display_resolution = int(region.get("default_display_h3_resolution") or region.get("default_h3_resolution") or 8)
+    h3_resolution = int(st.session_state.get("combined_h3_resolution", _preferred_h3_resolution(region, default_display_resolution)))
     zoom_family_enabled = str(st.session_state.get("combined_h3_display_mode", "selected")) == "zoom_family"
     opacity = _current_opacity("combined")
     preserve_map_view = True
@@ -8209,6 +8613,12 @@ def _unified_workspace_tab(
     active_landscape_count = _count_enabled(show_v10, show_pdf_types, show_cluster, show_factor)
     active_wind_count = _count_enabled(show_user_wind)
     active_solar_count = _count_enabled(show_user_solar, show_solar_v1)
+    _, acceptance_layers_for_labels, _ = load_acceptance_registry()
+    population_layer_label = layer_label(
+        acceptance_layers_for_labels[WIND_POPULATION_SOURCE_LAYER_ID],
+        WIND_CONTROL_LANGUAGE,
+        acceptance_layers_for_labels[WIND_POPULATION_SOURCE_LAYER_ID].label,
+    ) if WIND_POPULATION_SOURCE_LAYER_ID in acceptance_layers_for_labels else _t("Befolkningspunkter")
 
     wind_selected_layers = _selected_wind_layers()
     wind_ui_params = _default_wind_params()
@@ -8288,9 +8698,9 @@ def _unified_workspace_tab(
                     )
                     with st.expander(_t(SOLAR_SMALL_SCALE_LABEL), expanded=False):
                         draft_small_population_active = st.checkbox(
-                            _t("Befolkningspunkter"),
+                            population_layer_label,
                             key="solar_draft_small_population_active",
-                            help="Källan visas som aggregerade H3-centroider, inte som individpunkter.",
+                            help="Trøndelag-källan visas som 250 m befolkningsrutor från centroider, inte som individpunkter.",
                         )
                         if draft_small_population_active and not SOLAR_V1_POPULATION_LAYER_PATH.exists():
                             st.warning(_solar_v1_population_source_status())
@@ -8311,7 +8721,7 @@ def _unified_workspace_tab(
                     with st.expander(_t(SOLAR_LARGE_SCALE_LABEL), expanded=False):
                         with st.expander(_t("Befolkning"), expanded=False):
                             draft_large_population_active = st.checkbox(
-                                _t("Befolkningspunkter"),
+                                population_layer_label,
                                 key="solar_draft_large_population_active",
                             )
                             st.slider(
@@ -8320,9 +8730,9 @@ def _unified_workspace_tab(
                                 max_value=500.0,
                                 step=25.0,
                                 key="solar_draft_population_buffer_m",
-                                help="Totalt avstånd från befolkningspunkter. 250 m betyder 250 m totalt, inte 100 + 250 m.",
+                                help="Totalt avstånd från valt befolkningsunderlag. För Trøndelag är källan 250 m befolkningsrutor från centroider.",
                             )
-                            st.caption("Avståndet är totalt från befolkningspunkter. Solpolygonen och etableringsytan använder samma kandidatmarksunderlag.")
+                            st.caption("Avståndet är totalt från befolkningsunderlaget. Trøndelag använder 250 m befolkningsrutor från centroider som proxy.")
                         for solar_filter_group_id in (
                             SOLAR_PROTECTED_GROUP_ID,
                             SOLAR_ROAD_GROUP_ID,
@@ -8686,7 +9096,15 @@ def _unified_workspace_tab(
             family_key="user_wind_landscape_potential",
             control_name=WIND_POTENTIAL_POLYGON_LABEL,
         )
-        layers.extend(custom_wind_preview_state["layers"])
+        wind_preview_layers = list(custom_wind_preview_state["layers"])
+        if str(region.get("region_id", "")).lower() == "trondelag" and energy_model_state.get("available"):
+            wind_preview_layers = [
+                layer
+                for layer in wind_preview_layers
+                if str(layer.get("source_layer_id", "") or "").startswith("wind:")
+                or str(layer.get("buffer_layer_id", "") or "").startswith("wind:")
+            ]
+        layers.extend(wind_preview_layers)
         if custom_wind_preview_state["runtime_error"]:
             unified_notes.append(f"Vindruntime kunde inte köras: {custom_wind_preview_state['runtime_error']}")
         else:
@@ -8728,6 +9146,10 @@ def _unified_workspace_tab(
             else:
                 unified_notes.append(
                     f"{WIND_LANDSCAPE_POTENTIAL_LABEL} beräknas i R{WIND_RUNTIME_BASE_RESOLUTION}. Kartan visar snabb vald upplösning."
+                )
+            if str(region.get("region_id", "")).lower() == "trondelag" and energy_model_state.get("available"):
+                unified_notes.append(
+                    f"I Trøndelag visas vindberäkningen i första hand genom {COMBINED_ESTABLISHMENT_LAYER_LABEL}, inte som separat vind-hexlager."
                 )
             unified_notes.append(
                 "Vindens interna hexberäkning används för att prioritera kärnområden i den gemensamma etableringsytan."
@@ -8861,9 +9283,14 @@ def _unified_workspace_tab(
         )
         if allocation_marker_layers:
             layers.extend(allocation_marker_layers)
-            unified_notes.append(
-                f"{SCENARIO_ALLOCATION_LAYER_LABEL} visar scenariots placering som mörkare teknikfärgade child-hex ovanpå potentiallagret."
-            )
+            if str(region.get("region_id", "")).lower() == "trondelag":
+                unified_notes.append(
+                    f"{SCENARIO_ALLOCATION_LAYER_LABEL} finns i lagerkontrollen men är släckt från start för snabbare Trøndelag-visning."
+                )
+            else:
+                unified_notes.append(
+                    f"{SCENARIO_ALLOCATION_LAYER_LABEL} visar scenariots placering som mörkare teknikfärgade child-hex ovanpå potentiallagret."
+                )
         outside_lp_need_layers = _outside_lp_need_family_layers(
             region,
             energy_model_state.get("proposal_frame", pd.DataFrame()),
@@ -8877,7 +9304,7 @@ def _unified_workspace_tab(
         if outside_lp_need_layers:
             layers.extend(outside_lp_need_layers)
             unified_notes.append(
-                f"{OUTSIDE_LP_NEED_LAYER_LABEL} visas som separata schematiska fält utanför ön när scenariot inte ryms inom landskapets potential."
+                f"{OUTSIDE_LP_NEED_LAYER_LABEL} visas som separata schematiska fält ute till havs när scenariot inte ryms inom landskapets potential."
             )
         _add_perf_timing(
             performance_log,
@@ -9162,8 +9589,14 @@ def main() -> None:
     scenario_state = _scenario_state(region, None)
     context = _load_context(region)
 
-    st.session_state.setdefault("combined_h3_resolution", _preferred_h3_resolution(region, 9))
-    h3_resolution = int(st.session_state.get("combined_h3_resolution", _preferred_h3_resolution(region, 9)))
+    default_display_resolution = int(region.get("default_display_h3_resolution") or region.get("default_h3_resolution") or 8)
+    preferred_h3_resolution = _preferred_h3_resolution(region, default_display_resolution)
+    try:
+        h3_resolution = int(st.session_state.get("combined_h3_resolution", preferred_h3_resolution))
+    except Exception:
+        h3_resolution = int(preferred_h3_resolution)
+    if h3_resolution not in _available_h3_resolutions(region):
+        h3_resolution = int(preferred_h3_resolution)
     with main_panel:
         _workspace_header(region, scenario_state, h3_resolution)
         _unified_workspace_tab(region, scenario_state, context, left_panel, right_panel)

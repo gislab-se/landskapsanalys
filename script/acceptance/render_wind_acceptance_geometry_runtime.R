@@ -15,7 +15,10 @@ output_dir <- normalizePath(args[[2]], winslash = "/", mustWork = FALSE)
 dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
 repo_root <- Sys.getenv("LANDSKAPSANALYS_REPO_ROOT", unset = "C:/gislab/landskapsanalys")
-registry_path <- file.path(repo_root, "apps", "acceptance_model", "registry.json")
+registry_path <- Sys.getenv(
+  "ACCEPTANCE_REGISTRY_PATH",
+  unset = file.path(repo_root, "apps", "acceptance_model", "registry.json")
+)
 source(file.path(repo_root, "script", "semi_manual_r9", "lib", "subcategory_splits.R"))
 registry <- jsonlite::fromJSON(registry_path, simplifyVector = TRUE)
 config <- jsonlite::fromJSON(config_path, simplifyVector = TRUE)

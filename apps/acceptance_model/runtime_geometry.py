@@ -9,6 +9,7 @@ from typing import Any
 
 import streamlit as st
 
+from .layers import registry_path as active_registry_path
 from .layers import repo_root
 
 
@@ -31,7 +32,7 @@ def _load_json(path: Path) -> dict[str, Any]:
 @st.cache_data(show_spinner=False)
 def run_geometry_runtime(config_json: str) -> dict[str, Any]:
     render_path = repo_root() / RENDER_SCRIPT
-    registry_path = repo_root() / REGISTRY_PATH
+    registry_path = active_registry_path()
     revision_token = "|".join(
         [
             config_json,
@@ -56,6 +57,7 @@ def run_geometry_runtime(config_json: str) -> dict[str, Any]:
         ]
         env = os.environ.copy()
         env["LANDSKAPSANALYS_REPO_ROOT"] = str(repo_root())
+        env["ACCEPTANCE_REGISTRY_PATH"] = str(registry_path)
         result = subprocess.run(
             command,
             cwd=str(repo_root()),
