@@ -10,4 +10,4 @@ for candidate in (ROOT, APPS_DIR):
     if candidate_str not in sys.path:
         sys.path.insert(0, candidate_str)
 
-runpy.run_path(str(APPS_DIR / "acceptance_app.py"), run_name="__main__")
+runpy.run_path(str(ROOT / "potential_app.py"), run_name="__main__")
