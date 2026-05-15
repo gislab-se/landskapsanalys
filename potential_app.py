@@ -1896,6 +1896,16 @@ def _start_calculation_progress(steps: list[str], estimates: dict[str, float] | 
     }
 
 
+def _safe_status_update(status: Any, **kwargs: Any) -> None:
+    update = getattr(status, "update", None)
+    if not callable(update):
+        return
+    try:
+        update(**kwargs)
+    except Exception:
+        return
+
+
 def _advance_calculation_progress(progress: dict[str, Any] | None, step: str) -> None:
     if not progress:
         return
@@ -1910,7 +1920,7 @@ def _advance_calculation_progress(progress: dict[str, Any] | None, step: str) ->
     percent = int(round(done / total * 100.0))
     remaining_text = _estimated_remaining_text(steps, completed, progress.get("estimates") if isinstance(progress.get("estimates"), dict) else {})
     progress["bar"].progress(percent, text=f"{done}/{total} steg klara: {step} ({elapsed:.1f} s). {remaining_text}")
-    progress["status"].update(label=f"Beräknar karta och potential... {done}/{total} steg klara", state="running", expanded=False)
+    _safe_status_update(progress.get("status"), label=f"Beräknar karta och potential... {done}/{total} steg klara", state="running", expanded=False)
 
 
 def _finish_calculation_progress(progress: dict[str, Any] | None, performance_log: list[dict[str, Any]]) -> None:
@@ -1920,7 +1930,7 @@ def _finish_calculation_progress(progress: dict[str, Any] | None, performance_lo
     slowest = max(performance_log, key=lambda row: float(row.get("tid_s", 0.0) or 0.0)) if performance_log else None
     suffix = f" Längsta steg: {slowest.get('steg')} {float(slowest.get('tid_s', 0.0) or 0.0):.1f} s." if slowest else ""
     progress["bar"].progress(100, text=f"Klart på {elapsed:.1f} s.{suffix}")
-    progress["status"].update(label=f"Beräkning klar på {elapsed:.1f} s", state="complete", expanded=False)
+    _safe_status_update(progress.get("status"), label=f"Beräkning klar på {elapsed:.1f} s", state="complete", expanded=False)
 
 
 def _performance_diagnostic_rows(performance_log: list[dict[str, Any]], estimates: dict[str, float]) -> list[dict[str, Any]]:
