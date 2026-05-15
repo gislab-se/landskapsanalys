@@ -2,7 +2,7 @@
   "region_id": "trondelag",
   "display_name": "Trondelag",
   "country": "Norway",
-  "status": "active",
+  "status": "planned",
   "native_crs": "EPSG:25832",
   "web_crs": "EPSG:4326",
   "nominal_scale": "N500 preliminary non-sea mask",
