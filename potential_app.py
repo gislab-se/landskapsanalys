@@ -2018,7 +2018,7 @@ def _ensure_default_start_state(region: dict[str, Any]) -> None:
     st.session_state[SOLAR_APPLIED_CONFIG_KEY] = dict(DEFAULT_SOLAR_APPLIED_CONFIG)
     default_display_resolution = int(region.get("default_display_h3_resolution") or region.get("default_h3_resolution") or 8)
     st.session_state["combined_h3_resolution"] = _preferred_h3_resolution(region, default_display_resolution)
-    st.session_state["combined_h3_display_mode"] = "zoom_family"
+    st.session_state["combined_h3_display_mode"] = "selected"
     st.session_state["show_landscape_v10"] = False
     st.session_state["show_landscape_pdf_types"] = False
     st.session_state["show_landscape_cluster"] = False
@@ -8572,7 +8572,7 @@ def _unified_workspace_tab(
         _render_missing_data_workspace(region, scenario_state, context, left_panel, right_panel)
         return
 
-    factors = factor_columns(landscape_manifest, load_factor_scores(landscape_manifest))
+    factors = factor_columns(landscape_manifest)
     _ensure_default_start_state(region)
 
     saved_solar_params = _saved_solar_params()
