@@ -49,6 +49,15 @@ Forsta naturkopplingen i Potential App v2 ar medvetet smal: `TRL_NATURE_PROTECTI
 
 Skog, jordbruksmark, myr och andra Arealdekke-klasser ska inte blandas in i `protected`-gruppen. De hor till en senare markanvandnings-controller dar anvandaren kan valja bort separata markslag, exempelvis skog, jordbruksmark eller myr.
 
+## Kulturmiljo-appkoppling 2026-05-18
+
+Kulturmiljo ar kopplat enligt Bornholm-monstret som hard-exclusion/optional-buffer i bade vind och sol. Trondelag anvander Bornholms app-id:n for att undvika region-specifik UI-logik:
+
+- `cultural_preservation` pekar pa `TRL_CULTURAL_HERITAGE` (`RA_Kulturminner-Culture_NW_32`) och motsvarar kulturmiljoer/kulturminnen.
+- `valuable_cultural_environment` pekar pa `TRL_CULTURAL_LANDSCAPES` (`NEA_CulturalLandscapes_Area_TRL_32`) och motsvarar vardefulla kulturlandskap.
+
+`TRL_CULTURAL_HERITAGE_MERGED_NW` ligger kvar som QA/backup for att undvika dubbelrakning. `TRL_SELECTED_AGRI_CULTURAL_LANDSCAPES` ar inte appkopplat annu eftersom FileGDB-kallan behover separat extraktion och verifiering.
+
 ## Endast QA/context
 
 `TRL_NATIONAL_PARKS_N500`, `TRL_N2000_NATURE_OVERVIEW`, `TRL_CULTURAL_HERITAGE_MERGED_NW`, `TRL_HOLIDAY_HOUSES_CENTROIDS`, `TRL_CONTOUR_LINES`, `TRL_OCEAN_MASK`, `TRL_ADMIN_KOMMUNER` och `TRL_NATIONAL_BORDER` bor i forsta hand anvandas for QA, bakgrund eller kartorientering. De kan bli skarpa inputs senare om pipeline-agenten verifierar tackning, attribut och dubbelrakning.

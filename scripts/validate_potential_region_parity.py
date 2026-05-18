@@ -50,11 +50,14 @@ WIND_TEST_SELECTION = {
 WIND_TEST_SELECTION[app.WIND_SETTLEMENT_GROUP_ID] = [app.WIND_POPULATION_SOURCE_LAYER_ID]
 ROAD_TEST_LAYER_ID = "roads_large"
 PROTECTED_TEST_LAYER_ID = "protected_areas"
+CULTURE_TEST_LAYER_IDS = ["cultural_preservation", "valuable_cultural_environment"]
 SOLAR_ROAD_BUFFER_M = 100.0
 WIND_ROAD_BUFFER_M = 1000.0
 PROTECTED_BUFFER_M = 0.0
+CULTURE_BUFFER_M = 0.0
 WIND_TEST_SELECTION[app.SOLAR_ROAD_GROUP_ID] = [ROAD_TEST_LAYER_ID]
 WIND_TEST_SELECTION[app.SOLAR_PROTECTED_GROUP_ID] = [PROTECTED_TEST_LAYER_ID]
+WIND_TEST_SELECTION[app.WIND_CULTURE_GROUP_ID] = CULTURE_TEST_LAYER_IDS
 
 
 def _force_acceptance_registry(region_id: str) -> None:
@@ -299,6 +302,7 @@ def _region_workspace_contract(region_id: str) -> dict[str, Any]:
     wind_runtime_groups = (wind_preview.get("runtime_result") or {}).get("groups") or {}
     wind_has_transport_rule = app.SOLAR_ROAD_GROUP_ID in wind_runtime_groups
     wind_has_protected_rule = app.SOLAR_PROTECTED_GROUP_ID in wind_runtime_groups
+    wind_has_culture_rule = app.WIND_CULTURE_GROUP_ID in wind_runtime_groups
 
     solar_population_buffer_m = 250.0
     solar_road_filter_configs = [
@@ -369,6 +373,35 @@ def _region_workspace_contract(region_id: str) -> dict[str, Any]:
         for layer in solar_protected_source_layers
     )
     solar_protected_buffer_features = _feature_count(solar_protected_buffer_layer)
+    solar_culture_filter_configs = [
+        {
+            "group_id": app.SOLAR_CULTURE_GROUP_ID,
+            "layer_ids": CULTURE_TEST_LAYER_IDS,
+            "buffer_m": CULTURE_BUFFER_M,
+            "label": "Kulturmiljö",
+        }
+    ]
+    solar_culture = app._solar_large_scale_frame(
+        region,
+        landscape_manifest,
+        analysis_resolution,
+        0.0,
+        None,
+        [],
+        False,
+        solar_culture_filter_configs,
+    )
+    solar_has_culture_filter_effect = pd.to_numeric(
+        solar_culture.get("protected_buffer_share_pct", pd.Series(dtype=float)),
+        errors="coerce",
+    ).fillna(0.0).gt(0.0).any()
+    solar_culture_source_layers = app._solar_filter_source_layers(app.SOLAR_CULTURE_GROUP_ID, CULTURE_TEST_LAYER_IDS)
+    solar_culture_buffer_layer = app._solar_filter_buffer_layer(app.SOLAR_CULTURE_GROUP_ID, CULTURE_BUFFER_M, CULTURE_TEST_LAYER_IDS)
+    solar_culture_source_features = sum(
+        _feature_count(layer)
+        for layer in solar_culture_source_layers
+    )
+    solar_culture_buffer_features = _feature_count(solar_culture_buffer_layer)
     solar_potential = app._combined_solar_hex_frame(
         region,
         landscape_manifest,
@@ -500,14 +533,18 @@ def _region_workspace_contract(region_id: str) -> dict[str, Any]:
         "wind_potential_rows": len(wind_potential),
         "wind_has_transport_rule": bool(wind_has_transport_rule),
         "wind_has_protected_rule": bool(wind_has_protected_rule),
+        "wind_has_culture_rule": bool(wind_has_culture_rule),
         "solar_potential_rows": len(solar_potential),
         "solar_has_road_filter_effect": bool(solar_has_road_filter_effect),
         "solar_road_establishment_class_changes": int(solar_road_establishment_class_changes),
         "solar_has_protected_filter_effect": bool(solar_has_protected_filter_effect),
+        "solar_has_culture_filter_effect": bool(solar_has_culture_filter_effect),
         "solar_road_source_features": int(solar_road_source_features),
         "solar_road_buffer_features": int(solar_road_buffer_features),
         "solar_protected_source_features": int(solar_protected_source_features),
         "solar_protected_buffer_features": int(solar_protected_buffer_features),
+        "solar_culture_source_features": int(solar_culture_source_features),
+        "solar_culture_buffer_features": int(solar_culture_buffer_features),
         "wind_road_buffer_m": WIND_ROAD_BUFFER_M,
         "solar_road_buffer_m": SOLAR_ROAD_BUFFER_M,
         "road_ui_contract": road_ui_contract,
@@ -539,6 +576,11 @@ def _check_region_contract(report: ParityReport, result: dict[str, Any], referen
         f"{region_id}: wind protected-nature layer did not produce a protected rule.",
     )
     report.check(
+        bool(result.get("wind_has_culture_rule", False)),
+        f"{region_id}: wind culture layer participates in the potential calculation.",
+        f"{region_id}: wind culture layer did not produce a culture rule.",
+    )
+    report.check(
         result["solar_potential_rows"] > 0,
         f"{region_id}: active solar layer produces solar potential rows.",
         f"{region_id}: active solar layer produced no solar potential rows.",
@@ -559,6 +601,11 @@ def _check_region_contract(report: ParityReport, result: dict[str, Any], referen
         f"{region_id}: solar protected-nature filter had no measurable area effect.",
     )
     report.check(
+        bool(result.get("solar_has_culture_filter_effect", False)),
+        f"{region_id}: solar culture filter removes or buffers candidate area.",
+        f"{region_id}: solar culture filter had no measurable area effect.",
+    )
+    report.check(
         int(result.get("solar_road_source_features", 0) or 0) > 0,
         f"{region_id}: solar UI can render the road source layer.",
         f"{region_id}: solar UI cannot render the road source layer.",
@@ -577,6 +624,16 @@ def _check_region_contract(report: ParityReport, result: dict[str, Any], referen
         int(result.get("solar_protected_buffer_features", 0) or 0) > 0,
         f"{region_id}: solar UI can render the protected-nature buffer layer.",
         f"{region_id}: solar UI cannot render the protected-nature buffer layer.",
+    )
+    report.check(
+        int(result.get("solar_culture_source_features", 0) or 0) > 0,
+        f"{region_id}: solar UI can render the culture source layer.",
+        f"{region_id}: solar UI cannot render the culture source layer.",
+    )
+    report.check(
+        int(result.get("solar_culture_buffer_features", 0) or 0) > 0,
+        f"{region_id}: solar UI can render the culture buffer layer.",
+        f"{region_id}: solar UI cannot render the culture buffer layer.",
     )
     road_ui = result.get("road_ui_contract") or {}
     report.check(
@@ -662,9 +719,19 @@ def _check_region_contract(report: ParityReport, result: dict[str, Any], referen
             f"{region_id}: wind protected-nature participation differs from Bornholm.",
         )
         report.check(
+            bool(reference.get("wind_has_culture_rule")) == bool(result.get("wind_has_culture_rule")),
+            f"{region_id}: matches Bornholm wind culture participation.",
+            f"{region_id}: wind culture participation differs from Bornholm.",
+        )
+        report.check(
             bool(reference.get("solar_has_protected_filter_effect")) == bool(result.get("solar_has_protected_filter_effect")),
             f"{region_id}: matches Bornholm solar protected-nature filter behavior.",
             f"{region_id}: solar protected-nature filter behavior differs from Bornholm.",
+        )
+        report.check(
+            bool(reference.get("solar_has_culture_filter_effect")) == bool(result.get("solar_has_culture_filter_effect")),
+            f"{region_id}: matches Bornholm solar culture filter behavior.",
+            f"{region_id}: solar culture filter behavior differs from Bornholm.",
         )
         reference_road_ui = reference.get("road_ui_contract") or {}
         report.check(

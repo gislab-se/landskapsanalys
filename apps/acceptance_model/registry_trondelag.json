@@ -58,7 +58,7 @@
       "analysis_default_m": 0,
       "blend_default": 60,
       "group_color": [132, 78, 148],
-      "interpretation": "Culture layers are not wired for the Trondelag prototype yet."
+      "interpretation": "Culture layers mirror the Bornholm hard-exclusion pattern. Trondelag wires RA cultural heritage environments and NEA cultural landscapes as separate selectable sources; the merged NW layer remains QA-only to avoid duplicate scoring."
     },
     {
       "id": "protected",
@@ -177,6 +177,24 @@
       "filter_field": "vegkategor",
       "filter_value": ["E", "R"],
       "filter_mode": "field_in"
+    },
+    {
+      "id": "cultural_preservation",
+      "group_id": "culture",
+      "layer_key": "trl_cultural_heritage",
+      "label": "Kulturmiljoer och kulturminnen",
+      "note": "Norwegian RA cultural heritage environments. Mirrors Bornholm cultural_preservation as a culture hard-exclusion source.",
+      "source_color": [132, 78, 148],
+      "point_radius": 45
+    },
+    {
+      "id": "valuable_cultural_environment",
+      "group_id": "culture",
+      "layer_key": "trl_cultural_landscapes",
+      "label": "Vardefulla kulturlandskap",
+      "note": "Norwegian NEA cultural landscapes. Mirrors Bornholm valuable_cultural_environment as a culture hard-exclusion source.",
+      "source_color": [156, 101, 171],
+      "point_radius": 45
     },
     {
       "id": "protected_areas",
