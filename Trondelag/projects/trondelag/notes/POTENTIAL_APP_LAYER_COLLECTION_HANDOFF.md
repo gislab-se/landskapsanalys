@@ -69,6 +69,20 @@ Forsta skarpa kopplingen anvander tva appklara, hogprioriterade UTM33-shapefiler
 
 `TRL_REINDEER_RESTRICTION_AREAS` ar fortsatt hog prioritet, men katalogens inkommande GDB-sokvag kunde inte oppnas direkt i denna appkoppling. Den ska extraheras/verifieras separat innan den blir ett skarpt lager. Reinbeitedistrikt gick att lasa fran FileGDB, men ar bredare distriktskontext och kopplas inte in som hard exclusion i forsta steget for att undvika overblockering.
 
+## Elinfrastruktur-appkoppling 2026-05-18
+
+Elinfrastruktur ar kopplad enligt Bornholms etablerade monster: `electrical` ar inte ett hard-exclusion-filter utan en proximity-feasibility-regel dar for langt fran nat ar daligt. Samma grupp anvands nu for vind och for storskalig sol. For sol betyder det att "nara nat" begransar kandidatytan till platser inom valt maxavstand till valda natobjekt, i stallet for att dra bort buffert som vagar/natur/kultur gor.
+
+Forsta Trondelag-kopplingen anvander tre NVE-kallor:
+
+- `high_voltage_lines` pekar pa `TRL_TRANSMISSION_NETWORK` via den renare UTM32-filen `NVE1_Kraftnett_Transmission_TRL_32.shp`.
+- `underground_cables` pekar pa `TRL_UNDERWATER_CABLE` via `NVE-PKG1_Kraftnett_Sjokabel-Underwater-Cable_TRL_32.shp`.
+- `existing_wind_turbines` pekar pa `TRL_WIND_TURBINES` via `NVE_WindTurbine_Point_TRL_32.shp`.
+
+Den tidigare katalogiserade transmissionsfilen `Transmission NetworNVE-PKG1_Transmission_CLIP_TRL_32.shp` anvands inte i app-assetsen eftersom dess `.prj` anger UTM33 trots att filen ligger i UTM32-mappen. Den renare `NVE1_Kraftnett_Transmission_TRL_32.shp` anger ETRS89 / UTM zone 32N och matchar Trondelags runtime-CRS `EPSG:25832`.
+
+Inget verifierat transformatorstations-/substationslager ar kopplat annu. Vattenkraftverk och dammar ar sparade som energikontext-kandidater, men ingar inte i forsta grid-connection-feasibility-regeln for att inte blanda produktionsanlaggningar med natanslutningsnara objekt.
+
 ## Endast QA/context
 
 `TRL_NATIONAL_PARKS_N500`, `TRL_N2000_NATURE_OVERVIEW`, `TRL_CULTURAL_HERITAGE_MERGED_NW`, `TRL_HOLIDAY_HOUSES_CENTROIDS`, `TRL_CONTOUR_LINES`, `TRL_OCEAN_MASK`, `TRL_ADMIN_KOMMUNER` och `TRL_NATIONAL_BORDER` bor i forsta hand anvandas for QA, bakgrund eller kartorientering. De kan bli skarpa inputs senare om pipeline-agenten verifierar tackning, attribut och dubbelrakning.
@@ -78,7 +92,7 @@ Forsta skarpa kopplingen anvander tva appklara, hogprioriterade UTM33-shapefiler
 - DEM/hillshade/terrangraster hittades inte som tydligt appklart lager i de prioriterade utgaende mapparna. Endast topolinjer identifierades.
 - Hamnar/farjeleder hittades inte som tydligt hamnlager. `Hurtigruten` finns och ar katalogiserat som lagprioriterat kusttransport-context.
 - Reinbeitedistrikt och reindriftens restriksjonsomrader finns i inkommande FileGDB-kallor men verkar inte vara lyfta till appklar shapefile/GPKG i utkommande. De ar markerade med `needs_processing=TRUE`.
-- `TRL_TRANSMISSION_NETWORK` har ett trunkerat filnamn och metadata som anger UTM33 trots placering i UTM32-mappen. CRS och faktisk geometri bor verifieras innan scoring.
+- Ett aldre `TRL_TRANSMISSION_NETWORK`-kandidatspår har trunkerat filnamn och metadata som anger UTM33 trots placering i UTM32-mappen. Appkopplingen ovan anvander i stallet den verifierade UTM32-filen `NVE1_Kraftnett_Transmission_TRL_32.shp`.
 - Vissa SSB-lager har CRS-namnet `UTM_Zone_32_Northern_Hemisphere` i stallet for explicit EPSG. Pipeline bor verifiera detta mot `.prj`.
 - Kommunlagret `N500_AO_Kommun_ORK_32` kan vara delomrade; kontrollera att det tacker hela Trondelag innan det anvands for appfilter.
 

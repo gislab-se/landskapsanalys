@@ -45,7 +45,7 @@
       "analysis_default_m": 2000,
       "blend_default": 50,
       "group_color": [34, 115, 113],
-      "interpretation": "Electrical layers are not wired for the Trondelag prototype yet."
+      "interpretation": "Too far is bad. Trondelag mirrors Bornholm's grid-connection feasibility pattern with verified UTM32 NVE transmission lines, underwater cables and existing wind turbines. Substations are not wired until a verified Trondelag source is found."
     },
     {
       "id": "culture",
@@ -190,6 +190,33 @@
       "filter_field": "vegkategor",
       "filter_value": ["E", "R"],
       "filter_mode": "field_in"
+    },
+    {
+      "id": "high_voltage_lines",
+      "group_id": "electrical",
+      "layer_key": "trl_transmission_network",
+      "label": "Kraftnät - transmission",
+      "note": "NVE transmission network from the cleaner UTM32 source NVE1_Kraftnett_Transmission_TRL_32. Used as the primary grid-connection feasibility source for wind and solar.",
+      "source_color": [17, 108, 106],
+      "point_radius": 40
+    },
+    {
+      "id": "underground_cables",
+      "group_id": "electrical",
+      "layer_key": "trl_underwater_cable",
+      "label": "Sjö-/undervattenskabel",
+      "note": "NVE underwater cable source. Kept as an optional grid-connection source; the runtime clips its feasibility buffer back to the Trondelag landmass.",
+      "source_color": [57, 152, 150],
+      "point_radius": 40
+    },
+    {
+      "id": "existing_wind_turbines",
+      "group_id": "electrical",
+      "layer_key": "trl_wind_turbines",
+      "label": "Befintliga vindturbiner",
+      "note": "NVE wind turbine points. Mirrors Bornholm's optional existing-wind-turbine electrical source.",
+      "source_color": [30, 170, 150],
+      "point_radius": 85
     },
     {
       "id": "cultural_preservation",

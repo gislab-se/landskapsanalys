@@ -52,8 +52,11 @@ ROAD_TEST_LAYER_ID = "roads_large"
 PROTECTED_TEST_LAYER_ID = "protected_areas"
 CULTURE_TEST_LAYER_IDS = ["cultural_preservation", "valuable_cultural_environment"]
 REINDEER_TEST_LAYER_IDS = ["reindeer_grazing_merged", "reindeer_migration_routes"]
+ELECTRICAL_TEST_LAYER_IDS = ["high_voltage_lines", "underground_cables", "existing_wind_turbines"]
+BORNHOLM_ELECTRICAL_TEST_LAYER_IDS = ["high_voltage_lines", "underground_cables", "power_substations", "existing_wind_turbines"]
 SOLAR_ROAD_BUFFER_M = 100.0
 WIND_ROAD_BUFFER_M = 1000.0
+ELECTRICAL_MAX_DISTANCE_M = 2000.0
 PROTECTED_BUFFER_M = 0.0
 CULTURE_BUFFER_M = 0.0
 REINDEER_BUFFER_M = 0.0
@@ -61,6 +64,12 @@ WIND_TEST_SELECTION[app.SOLAR_ROAD_GROUP_ID] = [ROAD_TEST_LAYER_ID]
 WIND_TEST_SELECTION[app.SOLAR_PROTECTED_GROUP_ID] = [PROTECTED_TEST_LAYER_ID]
 WIND_TEST_SELECTION[app.WIND_CULTURE_GROUP_ID] = CULTURE_TEST_LAYER_IDS
 WIND_TEST_SELECTION[app.WIND_REINDEER_GROUP_ID] = REINDEER_TEST_LAYER_IDS
+
+
+def _electrical_test_layer_ids(region_id: str) -> list[str]:
+    if str(region_id).lower() == "bornholm":
+        return list(BORNHOLM_ELECTRICAL_TEST_LAYER_IDS)
+    return list(ELECTRICAL_TEST_LAYER_IDS)
 
 
 def _force_acceptance_registry(region_id: str) -> None:
@@ -272,13 +281,18 @@ def _region_workspace_contract(region_id: str) -> dict[str, Any]:
     analysis_display_geometry_path = app._h3_display_geometry_path(region, analysis_resolution)
 
     energy_state = _energy_state(region, scenario_manifest, analysis_resolution)
+    electrical_layer_ids = _electrical_test_layer_ids(region_id)
     wind_selection = app.normalize_group_layer_map(WIND_TEST_SELECTION)
+    wind_selection[app.SOLAR_ELECTRICAL_GROUP_ID] = electrical_layer_ids
     if region_id != "trondelag":
         wind_selection[app.WIND_REINDEER_GROUP_ID] = []
     wind_params = app._default_wind_params()
     road_param_key = app.GROUP_PARAM_MAP.get(app.SOLAR_ROAD_GROUP_ID)
     if road_param_key:
         wind_params[road_param_key] = WIND_ROAD_BUFFER_M
+    electrical_param_key = app.GROUP_PARAM_MAP.get(app.SOLAR_ELECTRICAL_GROUP_ID)
+    if electrical_param_key:
+        wind_params[electrical_param_key] = ELECTRICAL_MAX_DISTANCE_M
     wind_preview = app._wind_polygon_preview_state(
         region,
         wind_params,
@@ -309,6 +323,7 @@ def _region_workspace_contract(region_id: str) -> dict[str, Any]:
     wind_has_protected_rule = app.SOLAR_PROTECTED_GROUP_ID in wind_runtime_groups
     wind_has_culture_rule = app.WIND_CULTURE_GROUP_ID in wind_runtime_groups
     wind_has_reindeer_rule = app.WIND_REINDEER_GROUP_ID in wind_runtime_groups
+    wind_has_electrical_rule = app.SOLAR_ELECTRICAL_GROUP_ID in wind_runtime_groups
 
     solar_population_buffer_m = 250.0
     solar_road_filter_configs = [
@@ -350,6 +365,57 @@ def _region_workspace_contract(region_id: str) -> dict[str, Any]:
         False,
         [],
     )
+    solar_electrical_filter_configs = [
+        {
+            "group_id": app.SOLAR_ELECTRICAL_GROUP_ID,
+            "layer_ids": electrical_layer_ids,
+            "buffer_m": ELECTRICAL_MAX_DISTANCE_M,
+            "label": "Elinfrastruktur",
+            "effect": "feasibility",
+        }
+    ]
+    solar_electrical = app._solar_large_scale_frame(
+        region,
+        landscape_manifest,
+        analysis_resolution,
+        0.0,
+        None,
+        [],
+        False,
+        solar_electrical_filter_configs,
+    )
+    solar_without_electrical = app._solar_large_scale_frame(
+        region,
+        landscape_manifest,
+        analysis_resolution,
+        0.0,
+        None,
+        [],
+        False,
+        [],
+    )
+    solar_electrical_area_m2 = float(
+        pd.to_numeric(solar_electrical.get("potential_area_m2", pd.Series(dtype=float)), errors="coerce")
+        .fillna(0.0)
+        .sum()
+    )
+    solar_without_electrical_area_m2 = float(
+        pd.to_numeric(solar_without_electrical.get("potential_area_m2", pd.Series(dtype=float)), errors="coerce")
+        .fillna(0.0)
+        .sum()
+    )
+    solar_has_electrical_feasibility_effect = (
+        solar_electrical_area_m2 > 0.0
+        and solar_without_electrical_area_m2 > 0.0
+        and solar_electrical_area_m2 < solar_without_electrical_area_m2
+    )
+    solar_electrical_source_layers = app._solar_filter_source_layers(app.SOLAR_ELECTRICAL_GROUP_ID, electrical_layer_ids)
+    solar_electrical_buffer_layer = app._solar_filter_buffer_layer(app.SOLAR_ELECTRICAL_GROUP_ID, ELECTRICAL_MAX_DISTANCE_M, electrical_layer_ids)
+    solar_electrical_source_features = sum(
+        _feature_count(layer)
+        for layer in solar_electrical_source_layers
+    )
+    solar_electrical_buffer_features = _feature_count(solar_electrical_buffer_layer)
     solar_protected_filter_configs = [
         {
             "group_id": app.SOLAR_PROTECTED_GROUP_ID,
@@ -570,12 +636,14 @@ def _region_workspace_contract(region_id: str) -> dict[str, Any]:
         "wind_has_protected_rule": bool(wind_has_protected_rule),
         "wind_has_culture_rule": bool(wind_has_culture_rule),
         "wind_has_reindeer_rule": bool(wind_has_reindeer_rule),
+        "wind_has_electrical_rule": bool(wind_has_electrical_rule),
         "solar_potential_rows": len(solar_potential),
         "solar_has_road_filter_effect": bool(solar_has_road_filter_effect),
         "solar_road_establishment_class_changes": int(solar_road_establishment_class_changes),
         "solar_has_protected_filter_effect": bool(solar_has_protected_filter_effect),
         "solar_has_culture_filter_effect": bool(solar_has_culture_filter_effect),
         "solar_has_reindeer_filter_effect": bool(solar_has_reindeer_filter_effect),
+        "solar_has_electrical_feasibility_effect": bool(solar_has_electrical_feasibility_effect),
         "solar_road_source_features": int(solar_road_source_features),
         "solar_road_buffer_features": int(solar_road_buffer_features),
         "solar_protected_source_features": int(solar_protected_source_features),
@@ -584,6 +652,10 @@ def _region_workspace_contract(region_id: str) -> dict[str, Any]:
         "solar_culture_buffer_features": int(solar_culture_buffer_features),
         "solar_reindeer_source_features": int(solar_reindeer_source_features),
         "solar_reindeer_buffer_features": int(solar_reindeer_buffer_features),
+        "solar_electrical_source_features": int(solar_electrical_source_features),
+        "solar_electrical_buffer_features": int(solar_electrical_buffer_features),
+        "solar_electrical_area_m2": solar_electrical_area_m2,
+        "solar_without_electrical_area_m2": solar_without_electrical_area_m2,
         "wind_road_buffer_m": WIND_ROAD_BUFFER_M,
         "solar_road_buffer_m": SOLAR_ROAD_BUFFER_M,
         "road_ui_contract": road_ui_contract,
@@ -620,6 +692,11 @@ def _check_region_contract(report: ParityReport, result: dict[str, Any], referen
         f"{region_id}: wind culture layer did not produce a culture rule.",
     )
     report.check(
+        bool(result.get("wind_has_electrical_rule", False)),
+        f"{region_id}: wind electrical-infrastructure layer participates as proximity feasibility.",
+        f"{region_id}: wind electrical-infrastructure layer did not produce an electrical rule.",
+    )
+    report.check(
         result["solar_potential_rows"] > 0,
         f"{region_id}: active solar layer produces solar potential rows.",
         f"{region_id}: active solar layer produced no solar potential rows.",
@@ -643,6 +720,14 @@ def _check_region_contract(report: ParityReport, result: dict[str, Any], referen
         bool(result.get("solar_has_culture_filter_effect", False)),
         f"{region_id}: solar culture filter removes or buffers candidate area.",
         f"{region_id}: solar culture filter had no measurable area effect.",
+    )
+    report.check(
+        bool(result.get("solar_has_electrical_feasibility_effect", False)),
+        f"{region_id}: solar electrical layer limits candidate area to near-grid locations.",
+        (
+            f"{region_id}: solar electrical near-grid rule had no measurable feasibility effect "
+            f"(with={result.get('solar_electrical_area_m2')}, without={result.get('solar_without_electrical_area_m2')})."
+        ),
     )
     report.check(
         int(result.get("solar_road_source_features", 0) or 0) > 0,
@@ -673,6 +758,16 @@ def _check_region_contract(report: ParityReport, result: dict[str, Any], referen
         int(result.get("solar_culture_buffer_features", 0) or 0) > 0,
         f"{region_id}: solar UI can render the culture buffer layer.",
         f"{region_id}: solar UI cannot render the culture buffer layer.",
+    )
+    report.check(
+        int(result.get("solar_electrical_source_features", 0) or 0) > 0,
+        f"{region_id}: solar UI can render the electrical source layer.",
+        f"{region_id}: solar UI cannot render the electrical source layer.",
+    )
+    report.check(
+        int(result.get("solar_electrical_buffer_features", 0) or 0) > 0,
+        f"{region_id}: solar UI can render the near-grid feasibility layer.",
+        f"{region_id}: solar UI cannot render the near-grid feasibility layer.",
     )
     road_ui = result.get("road_ui_contract") or {}
     report.check(
@@ -763,6 +858,11 @@ def _check_region_contract(report: ParityReport, result: dict[str, Any], referen
             f"{region_id}: wind culture participation differs from Bornholm.",
         )
         report.check(
+            bool(reference.get("wind_has_electrical_rule")) == bool(result.get("wind_has_electrical_rule")),
+            f"{region_id}: matches Bornholm wind electrical proximity participation.",
+            f"{region_id}: wind electrical proximity participation differs from Bornholm.",
+        )
+        report.check(
             bool(reference.get("solar_has_protected_filter_effect")) == bool(result.get("solar_has_protected_filter_effect")),
             f"{region_id}: matches Bornholm solar protected-nature filter behavior.",
             f"{region_id}: solar protected-nature filter behavior differs from Bornholm.",
@@ -771,6 +871,11 @@ def _check_region_contract(report: ParityReport, result: dict[str, Any], referen
             bool(reference.get("solar_has_culture_filter_effect")) == bool(result.get("solar_has_culture_filter_effect")),
             f"{region_id}: matches Bornholm solar culture filter behavior.",
             f"{region_id}: solar culture filter behavior differs from Bornholm.",
+        )
+        report.check(
+            bool(reference.get("solar_has_electrical_feasibility_effect")) == bool(result.get("solar_has_electrical_feasibility_effect")),
+            f"{region_id}: matches Bornholm solar near-grid feasibility behavior.",
+            f"{region_id}: solar near-grid feasibility behavior differs from Bornholm.",
         )
         reference_road_ui = reference.get("road_ui_contract") or {}
         report.check(

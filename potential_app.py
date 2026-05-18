@@ -187,6 +187,7 @@ WIND_REINDEER_GROUP_LABEL = "rennäring / reindrift"
 SOLAR_PROTECTED_GROUP_ID = "protected"
 SOLAR_PROTECTED_LAYER_IDS = tuple(WIND_GROUP_LAYER_DEFAULTS.get(SOLAR_PROTECTED_GROUP_ID, []))
 SOLAR_ROAD_GROUP_ID = "transport"
+SOLAR_ELECTRICAL_GROUP_ID = "electrical"
 SOLAR_CULTURE_GROUP_ID = "culture"
 SOLAR_REINDEER_GROUP_ID = "reindeer"
 SOLAR_COASTAL_GROUP_ID = "coastal"
@@ -226,6 +227,29 @@ SOLAR_FILTER_GROUP_SPECS: dict[str, dict[str, Any]] = {
         "source_color": "#b45309",
         "buffer_color": "#f97316",
         "caption": "Vägfiltret prövar respektavstånd till större vägar och allmänna vägstråk.",
+    },
+    SOLAR_ELECTRICAL_GROUP_ID: {
+        "label": "Elinfrastruktur / nätanslutning",
+        "source_label": "Sol källa: Elinfrastruktur",
+        "buffer_label": "Sol nära nät: Elinfrastruktur",
+        "layer_ids": tuple(WIND_GROUP_LAYER_DEFAULTS.get(SOLAR_ELECTRICAL_GROUP_ID, [])),
+        "active_key": "large_electrical_active",
+        "layer_ids_key": "large_electrical_layer_ids",
+        "buffer_key": "solar_grid_max_distance_m",
+        "draft_active_key": "solar_draft_electrical_active",
+        "draft_buffer_key": "solar_draft_grid_max_distance_m",
+        "buffer_default_m": 2000.0,
+        "buffer_min_m": 500.0,
+        "buffer_max_m": 15000.0,
+        "buffer_step_m": 250.0,
+        "source_color": "#0f766e",
+        "buffer_color": "#14b8a6",
+        "effect": "feasibility",
+        "slider_label": "Max avstånd till elinfrastruktur",
+        "slider_help": "Yta räknas som storskalig solpotential bara inom valt avstånd till valda nätobjekt.",
+        "active_help": f"Valda nätlager används som positiv närhetsregel i {SOLAR_LARGE_SCALE_LABEL}.",
+        "buffer_legend_label": "Inom maxavstånd till elinfrastruktur",
+        "caption": "Nära nät används som en positiv mask: yta räknas som solpotential bara inom valt avstånd till elinfrastruktur.",
     },
     SOLAR_CULTURE_GROUP_ID: {
         "label": "Kulturmiljö",
@@ -300,6 +324,8 @@ DEFAULT_SOLAR_APPLIED_CONFIG = {
     "large_protected_active": False,
     "large_road_layer_ids": [],
     "large_road_active": False,
+    "large_electrical_layer_ids": [],
+    "large_electrical_active": False,
     "large_culture_layer_ids": [],
     "large_culture_active": False,
     "large_reindeer_layer_ids": [],
@@ -310,6 +336,7 @@ DEFAULT_SOLAR_APPLIED_CONFIG = {
     "population_buffer_m": 250.0,
     "protected_buffer_m": 0.0,
     "road_buffer_m": 100.0,
+    "solar_grid_max_distance_m": 2000.0,
     "culture_buffer_m": 0.0,
     "reindeer_buffer_m": 0.0,
     "coastal_buffer_m": 0.0,
@@ -2165,6 +2192,7 @@ def _solar_active_filter_configs(config: dict[str, Any]) -> list[dict[str, Any]]
                 "layer_labels": _solar_filter_layer_labels(layer_ids),
                 "buffer_m": float(config.get(str(spec["buffer_key"]), spec.get("buffer_default_m", 0.0)) or 0.0),
                 "label": str(spec["label"]),
+                "effect": str(spec.get("effect", "exclusion")),
             }
         )
     return active
@@ -2345,7 +2373,7 @@ def _render_solar_filter_control(group_id: str) -> list[str]:
         active = st.checkbox(
             f"Använd {label}",
             key=str(spec["draft_active_key"]),
-            help=f"Valda lager används som avdrag i {SOLAR_LARGE_SCALE_LABEL}.",
+            help=str(spec.get("active_help") or f"Valda lager används som avdrag i {SOLAR_LARGE_SCALE_LABEL}."),
         )
         options = _solar_filter_layer_options(group_id)
         with st.expander("Avancerade inställningar", expanded=False):
@@ -2369,12 +2397,12 @@ def _render_solar_filter_control(group_id: str) -> list[str]:
         else:
             st.caption(str(spec.get("caption", "")))
         st.slider(
-            f"Buffert {label.lower()}",
+            str(spec.get("slider_label") or f"Buffert {label.lower()}"),
             min_value=float(spec.get("buffer_min_m", 0.0)),
             max_value=float(spec.get("buffer_max_m", 1000.0)),
             step=float(spec.get("buffer_step_m", 50.0)),
             key=str(spec["draft_buffer_key"]),
-            help="0 m tar bort själva källgeometrin. Högre värden lägger till buffert.",
+            help=str(spec.get("slider_help") or "0 m tar bort själva källgeometrin. Högre värden lägger till buffert."),
         )
     return selected_layer_ids
 
@@ -3427,16 +3455,31 @@ def _solar_filter_buffer_layer(
     if not isinstance(features, list) or not features:
         return None
     buffer_color = str(spec.get("buffer_color", "#16a34a"))
+    is_feasibility = str(spec.get("effect", "exclusion")) == "feasibility"
+    measure_label = "Max avstånd" if is_feasibility else "Buffert"
+    tooltip_body = (
+        f"Inom {float(buffer_m or 0.0):.0f} m"
+        if is_feasibility
+        else f"{float(buffer_m or 0.0):.0f} m buffert"
+    )
+    legend_label = str(
+        spec.get("buffer_legend_label")
+        or (
+            f"Inom maxavstånd till {str(spec['label']).lower()}"
+            if is_feasibility
+            else f"Buffert runt {str(spec['label']).lower()}"
+        )
+    )
     for feature in features:
         props = feature.setdefault("properties", {})
         props["fill"] = buffer_color
         props["popup"] = (
             f"<strong>{spec['buffer_label']}</strong><br>"
-            f"Buffert: {float(buffer_m or 0.0):.0f} m<br>"
+            f"{measure_label}: {float(buffer_m or 0.0):.0f} m<br>"
             f"{spec['caption']}"
         )
         props["tooltip_title"] = str(spec["buffer_label"])
-        props["tooltip_body"] = f"{float(buffer_m or 0.0):.0f} m buffert"
+        props["tooltip_body"] = tooltip_body
     return {
         "name": str(spec["buffer_label"]),
         "buffer_layer_id": (
@@ -3445,7 +3488,7 @@ def _solar_filter_buffer_layer(
         ),
         "feature_collection": buffer_geojson,
         "fill_property": "fill",
-        "legend_items": [{"label": f"Buffert runt {str(spec['label']).lower()}", "color": buffer_color}],
+        "legend_items": [{"label": legend_label, "color": buffer_color}],
         "legend_id": f"solar_{group_id}_buffer",
         "legend_title": "",
         "default_visible": False,
@@ -3487,17 +3530,34 @@ def _wind_filter_buffer_layer(
     )
     group_color = _rgb_to_hex(group_meta.group_color) if group_meta is not None else str(spec.get("buffer_color", "#c4322b"))
     buffer_color = group_color
-    layer_name = f"Vindbuffert: {label}"
+    is_feasibility = str(spec.get("effect", "exclusion")) == "feasibility"
+    layer_name = f"Vind nära nät: {label}" if is_feasibility else f"Vindbuffert: {label}"
+    measure_label = "Max avstånd" if is_feasibility else "Buffert"
+    tooltip_body = (
+        f"Inom {float(buffer_m or 0.0):.0f} m"
+        if is_feasibility
+        else f"{float(buffer_m or 0.0):.0f} m buffert"
+    )
+    legend_label = (
+        f"Inom maxavstånd till {label.lower()}"
+        if is_feasibility
+        else f"Vindbuffert runt {label.lower()}"
+    )
+    caption = (
+        "Nära nät används som en positiv mask: yta räknas som vindpotential bara inom valt avstånd till elinfrastruktur."
+        if is_feasibility
+        else str(spec["caption"])
+    )
     for feature in features:
         props = feature.setdefault("properties", {})
         props["fill"] = buffer_color
         props["popup"] = (
             f"<strong>{layer_name}</strong><br>"
-            f"Buffert: {float(buffer_m or 0.0):.0f} m<br>"
-            f"{spec['caption']}"
+            f"{measure_label}: {float(buffer_m or 0.0):.0f} m<br>"
+            f"{caption}"
         )
         props["tooltip_title"] = layer_name
-        props["tooltip_body"] = f"{float(buffer_m or 0.0):.0f} m buffert"
+        props["tooltip_body"] = tooltip_body
     return {
         "name": layer_name,
         "buffer_layer_id": (
@@ -3506,7 +3566,7 @@ def _wind_filter_buffer_layer(
         ),
         "feature_collection": buffer_geojson,
         "fill_property": "fill",
-        "legend_items": [{"label": f"Vindbuffert runt {label.lower()}", "color": buffer_color}],
+        "legend_items": [{"label": legend_label, "color": buffer_color}],
         "legend_id": f"wind_{group_id}_buffer",
         "legend_title": "",
         "default_visible": False,
@@ -3565,6 +3625,7 @@ def _solar_large_scale_frame(
                 "layer_ids": [WIND_POPULATION_SOURCE_LAYER_ID],
                 "buffer_m": float(population_buffer_m or 0.0),
                 "label": "Befolkning",
+                "effect": "exclusion",
             }
         )
     if filter_configs:
@@ -3576,6 +3637,7 @@ def _solar_large_scale_frame(
                 "layer_ids": list(protected_layer_ids or []),
                 "buffer_m": float(protected_buffer_m or 0.0),
                 "label": PROTECTED_NATURE_LABEL,
+                "effect": "exclusion",
             }
         )
 
@@ -3606,8 +3668,18 @@ def _solar_large_scale_frame(
         return pd.DataFrame(columns=columns)
 
     work["protected_buffer_share_pct"] = 0.0
-    if active_filter_configs:
-        filters = _solar_filter_union_buffer_frame(region, source_resolution, active_filter_configs)
+    exclusion_filter_configs = [
+        dict(config)
+        for config in active_filter_configs
+        if str(config.get("effect", "exclusion")) != "feasibility"
+    ]
+    feasibility_filter_configs = [
+        dict(config)
+        for config in active_filter_configs
+        if str(config.get("effect", "exclusion")) == "feasibility"
+    ]
+    if exclusion_filter_configs:
+        filters = _solar_filter_union_buffer_frame(region, source_resolution, exclusion_filter_configs)
         if not filters.empty:
             filters = filters[["hex_id", "filter_buffer_share_pct"]].copy()
             work = work.merge(filters, on="hex_id", how="left")
@@ -3619,6 +3691,24 @@ def _solar_large_scale_frame(
                 work = work.drop(columns=["filter_buffer_share_pct"])
         work["potential_area_share_pct"] = (
             work["potential_area_share_pct"] - work["protected_buffer_share_pct"]
+        ).clip(lower=0.0, upper=100.0)
+    if feasibility_filter_configs:
+        work["feasibility_share_pct"] = 0.0
+        feasible = _solar_filter_union_buffer_frame(region, source_resolution, feasibility_filter_configs)
+        if not feasible.empty:
+            feasible = feasible[["hex_id", "filter_buffer_share_pct"]].rename(
+                columns={"filter_buffer_share_pct": "feasibility_share_pct"}
+            )
+            work = work.merge(feasible, on="hex_id", how="left", suffixes=("", "_from_filter"))
+            work["feasibility_share_pct"] = pd.to_numeric(
+                work.get("feasibility_share_pct_from_filter", work.get("feasibility_share_pct")),
+                errors="coerce",
+            ).fillna(0.0).clip(lower=0.0, upper=100.0)
+            for extra_col in ["feasibility_share_pct_from_filter"]:
+                if extra_col in work.columns:
+                    work = work.drop(columns=[extra_col])
+        work["potential_area_share_pct"] = (
+            work["potential_area_share_pct"] * work["feasibility_share_pct"] / 100.0
         ).clip(lower=0.0, upper=100.0)
 
     source_hex_area_m2 = float(h3_hex_area_km2(source_resolution) * 1_000_000.0)
@@ -7881,9 +7971,14 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
                 label = str(spec.get("label", filter_config.get("label", group_id)))
                 layer_labels = [str(value) for value in (filter_config.get("layer_labels") or [])]
                 layer_text = f" ({', '.join(layer_labels[:3])}{'...' if len(layer_labels) > 3 else ''})" if layer_labels else ""
-                active_filter_notes.append(
-                    f"sol: {label.lower()} {float(filter_config.get('buffer_m', 0.0) or 0.0):.0f} m{layer_text}"
-                )
+                if str(filter_config.get("effect", spec.get("effect", "exclusion"))) == "feasibility":
+                    active_filter_notes.append(
+                        f"sol: nära {label.lower()} max {float(filter_config.get('buffer_m', 0.0) or 0.0):.0f} m{layer_text}"
+                    )
+                else:
+                    active_filter_notes.append(
+                        f"sol: {label.lower()} {float(filter_config.get('buffer_m', 0.0) or 0.0):.0f} m{layer_text}"
+                    )
 
     shortage_driver = ""
     if outside_total > 1e-6:
@@ -8637,7 +8732,7 @@ def _missing_solar_controls(status_rows: list[dict[str, Any]]) -> None:
                 with st.expander(label, expanded=False):
                     st.checkbox(f"Använd {label}", value=False, key=f"missing_solar_filter_{group_id}", disabled=True)
                     st.slider(
-                        f"Buffert {label.lower()}",
+                        str(spec.get("slider_label") or f"Buffert {label.lower()}"),
                         min_value=float(spec.get("buffer_min_m", 0.0)),
                         max_value=float(spec.get("buffer_max_m", 1000.0)),
                         value=float(spec.get("buffer_default_m", 0.0)),
@@ -8984,6 +9079,7 @@ def _unified_workspace_tab(
                         for solar_filter_group_id in (
                             SOLAR_PROTECTED_GROUP_ID,
                             SOLAR_ROAD_GROUP_ID,
+                            SOLAR_ELECTRICAL_GROUP_ID,
                             SOLAR_CULTURE_GROUP_ID,
                             SOLAR_REINDEER_GROUP_ID,
                             SOLAR_COASTAL_GROUP_ID,
@@ -8993,7 +9089,7 @@ def _unified_workspace_tab(
                                 or _solar_filter_layer_options(solar_filter_group_id)
                             ):
                                 _render_solar_filter_control(solar_filter_group_id)
-                        st.caption("Storskalig sol använder hela landskapsunderlaget som kandidatbas. Valda filter drar bort yta från den basen.")
+                        st.caption("Storskalig sol använder hela landskapsunderlaget som kandidatbas. Valda skydds-/avståndsfilter drar bort yta, medan nära nät begränsar ytan till platser inom valt maxavstånd.")
                         st.caption("Ingen bonitets- eller jordklassvariabel finns i nuvarande solunderlag; jordart/prekvartär beskriver geologi, inte jordbruksmarkens kvalitet.")
                     apply_solar = st.form_submit_button(_t("Använd ändringar"), type="primary", width="stretch")
                 if apply_solar:
@@ -9187,12 +9283,18 @@ def _unified_workspace_tab(
             )
         for filter_config in solar_large_filter_configs:
             group_id = str(filter_config.get("group_id", ""))
-            label = str(SOLAR_FILTER_GROUP_SPECS.get(group_id, {}).get("label", filter_config.get("label", group_id)))
+            spec = SOLAR_FILTER_GROUP_SPECS.get(group_id, {})
+            label = str(spec.get("label", filter_config.get("label", group_id)))
             layer_labels = [str(value) for value in (filter_config.get("layer_labels") or [])]
             layer_text = f" ({', '.join(layer_labels[:3])}{'...' if len(layer_labels) > 3 else ''})" if layer_labels else ""
-            unified_notes.append(
-                f"{label}{layer_text} drar av potential med {float(filter_config.get('buffer_m', 0.0) or 0.0):.0f} m buffert."
-            )
+            if str(filter_config.get("effect", spec.get("effect", "exclusion"))) == "feasibility":
+                unified_notes.append(
+                    f"{label}{layer_text} begränsar solpotentialen till yta inom {float(filter_config.get('buffer_m', 0.0) or 0.0):.0f} m från nätobjekt."
+                )
+            else:
+                unified_notes.append(
+                    f"{label}{layer_text} drar av potential med {float(filter_config.get('buffer_m', 0.0) or 0.0):.0f} m buffert."
+                )
         if solar_controls_applied:
             unified_notes.append(f"{SOLAR_LANDSCAPE_POTENTIAL_LABEL}: ändringar tillämpade.")
         _add_perf_timing(
