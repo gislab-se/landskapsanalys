@@ -51,13 +51,16 @@ WIND_TEST_SELECTION[app.WIND_SETTLEMENT_GROUP_ID] = [app.WIND_POPULATION_SOURCE_
 ROAD_TEST_LAYER_ID = "roads_large"
 PROTECTED_TEST_LAYER_ID = "protected_areas"
 CULTURE_TEST_LAYER_IDS = ["cultural_preservation", "valuable_cultural_environment"]
+REINDEER_TEST_LAYER_IDS = ["reindeer_grazing_merged", "reindeer_migration_routes"]
 SOLAR_ROAD_BUFFER_M = 100.0
 WIND_ROAD_BUFFER_M = 1000.0
 PROTECTED_BUFFER_M = 0.0
 CULTURE_BUFFER_M = 0.0
+REINDEER_BUFFER_M = 0.0
 WIND_TEST_SELECTION[app.SOLAR_ROAD_GROUP_ID] = [ROAD_TEST_LAYER_ID]
 WIND_TEST_SELECTION[app.SOLAR_PROTECTED_GROUP_ID] = [PROTECTED_TEST_LAYER_ID]
 WIND_TEST_SELECTION[app.WIND_CULTURE_GROUP_ID] = CULTURE_TEST_LAYER_IDS
+WIND_TEST_SELECTION[app.WIND_REINDEER_GROUP_ID] = REINDEER_TEST_LAYER_IDS
 
 
 def _force_acceptance_registry(region_id: str) -> None:
@@ -270,6 +273,8 @@ def _region_workspace_contract(region_id: str) -> dict[str, Any]:
 
     energy_state = _energy_state(region, scenario_manifest, analysis_resolution)
     wind_selection = app.normalize_group_layer_map(WIND_TEST_SELECTION)
+    if region_id != "trondelag":
+        wind_selection[app.WIND_REINDEER_GROUP_ID] = []
     wind_params = app._default_wind_params()
     road_param_key = app.GROUP_PARAM_MAP.get(app.SOLAR_ROAD_GROUP_ID)
     if road_param_key:
@@ -303,6 +308,7 @@ def _region_workspace_contract(region_id: str) -> dict[str, Any]:
     wind_has_transport_rule = app.SOLAR_ROAD_GROUP_ID in wind_runtime_groups
     wind_has_protected_rule = app.SOLAR_PROTECTED_GROUP_ID in wind_runtime_groups
     wind_has_culture_rule = app.WIND_CULTURE_GROUP_ID in wind_runtime_groups
+    wind_has_reindeer_rule = app.WIND_REINDEER_GROUP_ID in wind_runtime_groups
 
     solar_population_buffer_m = 250.0
     solar_road_filter_configs = [
@@ -402,6 +408,35 @@ def _region_workspace_contract(region_id: str) -> dict[str, Any]:
         for layer in solar_culture_source_layers
     )
     solar_culture_buffer_features = _feature_count(solar_culture_buffer_layer)
+    solar_reindeer_filter_configs = [
+        {
+            "group_id": app.SOLAR_REINDEER_GROUP_ID,
+            "layer_ids": REINDEER_TEST_LAYER_IDS,
+            "buffer_m": REINDEER_BUFFER_M,
+            "label": "Rennäring / reindrift",
+        }
+    ]
+    solar_reindeer = app._solar_large_scale_frame(
+        region,
+        landscape_manifest,
+        analysis_resolution,
+        0.0,
+        None,
+        [],
+        False,
+        solar_reindeer_filter_configs,
+    )
+    solar_has_reindeer_filter_effect = pd.to_numeric(
+        solar_reindeer.get("protected_buffer_share_pct", pd.Series(dtype=float)),
+        errors="coerce",
+    ).fillna(0.0).gt(0.0).any()
+    solar_reindeer_source_layers = app._solar_filter_source_layers(app.SOLAR_REINDEER_GROUP_ID, REINDEER_TEST_LAYER_IDS)
+    solar_reindeer_buffer_layer = app._solar_filter_buffer_layer(app.SOLAR_REINDEER_GROUP_ID, REINDEER_BUFFER_M, REINDEER_TEST_LAYER_IDS)
+    solar_reindeer_source_features = sum(
+        _feature_count(layer)
+        for layer in solar_reindeer_source_layers
+    )
+    solar_reindeer_buffer_features = _feature_count(solar_reindeer_buffer_layer)
     solar_potential = app._combined_solar_hex_frame(
         region,
         landscape_manifest,
@@ -534,17 +569,21 @@ def _region_workspace_contract(region_id: str) -> dict[str, Any]:
         "wind_has_transport_rule": bool(wind_has_transport_rule),
         "wind_has_protected_rule": bool(wind_has_protected_rule),
         "wind_has_culture_rule": bool(wind_has_culture_rule),
+        "wind_has_reindeer_rule": bool(wind_has_reindeer_rule),
         "solar_potential_rows": len(solar_potential),
         "solar_has_road_filter_effect": bool(solar_has_road_filter_effect),
         "solar_road_establishment_class_changes": int(solar_road_establishment_class_changes),
         "solar_has_protected_filter_effect": bool(solar_has_protected_filter_effect),
         "solar_has_culture_filter_effect": bool(solar_has_culture_filter_effect),
+        "solar_has_reindeer_filter_effect": bool(solar_has_reindeer_filter_effect),
         "solar_road_source_features": int(solar_road_source_features),
         "solar_road_buffer_features": int(solar_road_buffer_features),
         "solar_protected_source_features": int(solar_protected_source_features),
         "solar_protected_buffer_features": int(solar_protected_buffer_features),
         "solar_culture_source_features": int(solar_culture_source_features),
         "solar_culture_buffer_features": int(solar_culture_buffer_features),
+        "solar_reindeer_source_features": int(solar_reindeer_source_features),
+        "solar_reindeer_buffer_features": int(solar_reindeer_buffer_features),
         "wind_road_buffer_m": WIND_ROAD_BUFFER_M,
         "solar_road_buffer_m": SOLAR_ROAD_BUFFER_M,
         "road_ui_contract": road_ui_contract,
@@ -751,6 +790,26 @@ def _check_region_contract(report: ParityReport, result: dict[str, Any], referen
             f"{region_id}: differs from Bornholm road buffer context behavior; Bornholm={reference_road_ui}, current={road_ui}.",
         )
     if region_id == "trondelag":
+        report.check(
+            bool(result.get("wind_has_reindeer_rule", False)),
+            "trondelag: wind reindeer-husbandry layer participates in the potential calculation.",
+            "trondelag: wind reindeer-husbandry layer did not produce a reindeer rule.",
+        )
+        report.check(
+            bool(result.get("solar_has_reindeer_filter_effect", False)),
+            "trondelag: solar reindeer-husbandry filter removes or buffers candidate area.",
+            "trondelag: solar reindeer-husbandry filter had no measurable area effect.",
+        )
+        report.check(
+            int(result.get("solar_reindeer_source_features", 0) or 0) > 0,
+            "trondelag: solar UI can render the reindeer-husbandry source layer.",
+            "trondelag: solar UI cannot render the reindeer-husbandry source layer.",
+        )
+        report.check(
+            int(result.get("solar_reindeer_buffer_features", 0) or 0) > 0,
+            "trondelag: solar UI can render the reindeer-husbandry buffer layer.",
+            "trondelag: solar UI cannot render the reindeer-husbandry buffer layer.",
+        )
         report.check(
             result["display_resolution"] == 7 and result["analysis_resolution"] == 7,
             "trondelag: establishment parity runs in R7 light mode.",

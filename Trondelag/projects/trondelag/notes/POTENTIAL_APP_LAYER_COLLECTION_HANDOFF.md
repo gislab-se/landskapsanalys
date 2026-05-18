@@ -58,6 +58,17 @@ Kulturmiljo ar kopplat enligt Bornholm-monstret som hard-exclusion/optional-buff
 
 `TRL_CULTURAL_HERITAGE_MERGED_NW` ligger kvar som QA/backup for att undvika dubbelrakning. `TRL_SELECTED_AGRI_CULTURAL_LANDSCAPES` ar inte appkopplat annu eftersom FileGDB-kallan behover separat extraktion och verifiering.
 
+## Reindrift-appkoppling 2026-05-18
+
+Reindrift/rennaring ar Trondelag-specifik och saknar Bornholm-motsvarighet. Appen avviker darfor dokumenterat fran Bornholm genom en egen controllergrupp, men den foljer samma tekniska monster som skyddad natur och kulturmiljo: hard-exclusion med valfri buffert i bade vind och sol.
+
+Forsta skarpa kopplingen anvander tva appklara, hogprioriterade UTM33-shapefiler som transformeras till Trondelags runtime-CRS `EPSG:25832`:
+
+- `reindeer_grazing_merged` pekar pa `TRL_REINDEER_GRAZING_MERGED` (`LBD_Reindeer_Season-Grazing_Merged_NW_33`) och visar samlat arstidsbete.
+- `reindeer_migration_routes` pekar pa `TRL_REINDEER_MIGRATION_ROUTES` (`LDB_Reindrift-Flyttlei_NW_33`) och behandlas som breda flyttkorridorer, inte mittlinjer.
+
+`TRL_REINDEER_RESTRICTION_AREAS` ar fortsatt hog prioritet, men katalogens inkommande GDB-sokvag kunde inte oppnas direkt i denna appkoppling. Den ska extraheras/verifieras separat innan den blir ett skarpt lager. Reinbeitedistrikt gick att lasa fran FileGDB, men ar bredare distriktskontext och kopplas inte in som hard exclusion i forsta steget for att undvika overblockering.
+
 ## Endast QA/context
 
 `TRL_NATIONAL_PARKS_N500`, `TRL_N2000_NATURE_OVERVIEW`, `TRL_CULTURAL_HERITAGE_MERGED_NW`, `TRL_HOLIDAY_HOUSES_CENTROIDS`, `TRL_CONTOUR_LINES`, `TRL_OCEAN_MASK`, `TRL_ADMIN_KOMMUNER` och `TRL_NATIONAL_BORDER` bor i forsta hand anvandas for QA, bakgrund eller kartorientering. De kan bli skarpa inputs senare om pipeline-agenten verifierar tackning, attribut och dubbelrakning.

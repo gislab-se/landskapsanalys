@@ -47,6 +47,10 @@ WIND_GROUP_LAYER_DEFAULTS: dict[str, list[str]] = {
         "valuable_cultural_environment",
         "cultural_conservation_values",
     ],
+    "reindeer": [
+        "reindeer_grazing_merged",
+        "reindeer_migration_routes",
+    ],
     "aviation_approach": ["aviation_approach_zones"],
     "aviation_bird": ["aviation_bird_collision"],
     "military": ["military_areas"],
@@ -59,6 +63,7 @@ GROUP_PARAM_MAP = {
     "protected": "protected_buffer_m",
     "coastal": "coastal_buffer_m",
     "culture": "culture_buffer_m",
+    "reindeer": "reindeer_buffer_m",
     "aviation_approach": "aviation_approach_buffer_m",
     "aviation_bird": "aviation_bird_distance_m",
     "military": "military_buffer_m",
@@ -71,12 +76,13 @@ GROUP_LABELS = {
     "protected": "Skyddad natur",
     "coastal": "Kust och strand",
     "culture": "Kulturmiljo",
+    "reindeer": "Rennaring / reindrift",
     "aviation_approach": "Inflygning",
     "aviation_bird": "Fagelkollision",
     "military": "Militara omraden",
 }
 
-HARD_EXCLUSION_GROUPS = {"protected", "coastal", "culture", "aviation_approach", "military"}
+HARD_EXCLUSION_GROUPS = {"protected", "coastal", "culture", "reindeer", "aviation_approach", "military"}
 ALWAYS_ACTIVE_GROUPS = {"settlement", "transport", "electrical"}
 
 
@@ -244,7 +250,9 @@ def wind_acceptance_group_summary() -> pd.DataFrame:
     groups, layers, _ = load_registry()
     rows: list[dict[str, Any]] = []
     for group_id, layer_ids in WIND_GROUP_LAYER_DEFAULTS.items():
-        group = groups[group_id]
+        group = groups.get(group_id)
+        if group is None:
+            continue
         rows.append(
             {
                 "regelgrupp": GROUP_LABELS.get(group_id, group.label),

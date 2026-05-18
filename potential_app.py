@@ -182,10 +182,13 @@ WIND_SETTLEMENT_GROUP_LABEL = "Befolkning och bebyggelse"
 WIND_POPULATION_SOURCE_LAYER_ID = "population_points"
 WIND_CULTURE_GROUP_ID = "culture"
 WIND_CULTURE_GROUP_LABEL = "kulturmiljöer"
+WIND_REINDEER_GROUP_ID = "reindeer"
+WIND_REINDEER_GROUP_LABEL = "rennäring / reindrift"
 SOLAR_PROTECTED_GROUP_ID = "protected"
 SOLAR_PROTECTED_LAYER_IDS = tuple(WIND_GROUP_LAYER_DEFAULTS.get(SOLAR_PROTECTED_GROUP_ID, []))
 SOLAR_ROAD_GROUP_ID = "transport"
 SOLAR_CULTURE_GROUP_ID = "culture"
+SOLAR_REINDEER_GROUP_ID = "reindeer"
 SOLAR_COASTAL_GROUP_ID = "coastal"
 SOLAR_FILTER_GROUP_SPECS: dict[str, dict[str, Any]] = {
     SOLAR_PROTECTED_GROUP_ID: {
@@ -242,6 +245,24 @@ SOLAR_FILTER_GROUP_SPECS: dict[str, dict[str, Any]] = {
         "buffer_color": "#a855f7",
         "caption": "Kulturmiljöfiltret tar bort ytor som träffar valda kulturmiljölager och eventuell buffert.",
     },
+    SOLAR_REINDEER_GROUP_ID: {
+        "label": "Rennäring / reindrift",
+        "source_label": "Sol källa: Rennäring",
+        "buffer_label": "Solbuffert: Rennäring",
+        "layer_ids": tuple(WIND_GROUP_LAYER_DEFAULTS.get(SOLAR_REINDEER_GROUP_ID, [])),
+        "active_key": "large_reindeer_active",
+        "layer_ids_key": "large_reindeer_layer_ids",
+        "buffer_key": "reindeer_buffer_m",
+        "draft_active_key": "solar_draft_reindeer_active",
+        "draft_buffer_key": "solar_draft_reindeer_buffer_m",
+        "buffer_default_m": 0.0,
+        "buffer_min_m": 0.0,
+        "buffer_max_m": 5000.0,
+        "buffer_step_m": 100.0,
+        "source_color": "#be4952",
+        "buffer_color": "#dc645d",
+        "caption": "Rennäringsfiltret tar bort ytor som träffar valda reindriftslager och eventuell buffert.",
+    },
     SOLAR_COASTAL_GROUP_ID: {
         "label": "Strandskydd / kust",
         "source_label": "Sol källa: Strandskydd / kust",
@@ -268,6 +289,7 @@ DEFAULT_WIND_ADVANCED_LAYER_SELECTION = {
     WIND_SETTLEMENT_GROUP_ID: [WIND_POPULATION_SOURCE_LAYER_ID],
     SOLAR_PROTECTED_GROUP_ID: list(SOLAR_PROTECTED_LAYER_IDS),
     WIND_CULTURE_GROUP_ID: list(WIND_GROUP_LAYER_DEFAULTS.get(WIND_CULTURE_GROUP_ID, [])),
+    WIND_REINDEER_GROUP_ID: list(WIND_GROUP_LAYER_DEFAULTS.get(WIND_REINDEER_GROUP_ID, [])),
 }
 DEFAULT_SOLAR_APPLIED_CONFIG = {
     "small_population_active": False,
@@ -280,6 +302,8 @@ DEFAULT_SOLAR_APPLIED_CONFIG = {
     "large_road_active": False,
     "large_culture_layer_ids": [],
     "large_culture_active": False,
+    "large_reindeer_layer_ids": [],
+    "large_reindeer_active": False,
     "large_coastal_layer_ids": [],
     "large_coastal_active": False,
     "panel_area_m2_per_person": 10.0,
@@ -287,6 +311,7 @@ DEFAULT_SOLAR_APPLIED_CONFIG = {
     "protected_buffer_m": 0.0,
     "road_buffer_m": 100.0,
     "culture_buffer_m": 0.0,
+    "reindeer_buffer_m": 0.0,
     "coastal_buffer_m": 0.0,
 }
 ENERGY_PROPOSAL_LAYER_LABEL = WIND_ESTABLISHMENT_LAYER_LABEL
@@ -2007,6 +2032,9 @@ def _apply_wind_layer_selection_state(layer_selection: dict[str, list[str]]) -> 
     )
     st.session_state[_wind_control_key("group", WIND_CULTURE_GROUP_ID)] = bool(
         selected.get(WIND_CULTURE_GROUP_ID)
+    )
+    st.session_state[_wind_control_key("group", WIND_REINDEER_GROUP_ID)] = bool(
+        selected.get(WIND_REINDEER_GROUP_ID)
     )
     st.session_state[_wind_control_key("group", SOLAR_PROTECTED_GROUP_ID)] = bool(
         selected.get(SOLAR_PROTECTED_GROUP_ID)
@@ -4602,6 +4630,7 @@ def _default_wind_params() -> dict[str, float]:
         "protected_buffer_m": 0.0,
         "coastal_buffer_m": 0.0,
         "culture_buffer_m": 0.0,
+        "reindeer_buffer_m": 0.0,
         "aviation_approach_buffer_m": 0.0,
         "aviation_bird_distance_m": 0.0,
         "military_buffer_m": 0.0,
@@ -4631,6 +4660,7 @@ def _reference_default_wind_layer_selection() -> dict[str, list[str]]:
             "protected": list(WIND_GROUP_LAYER_DEFAULTS.get("protected", [])),
             "coastal": [],
             "culture": [],
+            "reindeer": [],
             "aviation_approach": [],
             "aviation_bird": [],
             "military": [],
@@ -4650,7 +4680,12 @@ def _apply_reference_default_wind_to_controls() -> None:
         selected_ids = set(selected.get(group_id, []))
         for layer_id in layer_ids:
             st.session_state[_wind_control_key("layer", layer_id)] = layer_id in selected_ids
-    for group_id in (WIND_SETTLEMENT_GROUP_ID, WIND_CULTURE_GROUP_ID, SOLAR_PROTECTED_GROUP_ID):
+    for group_id in (
+        WIND_SETTLEMENT_GROUP_ID,
+        WIND_CULTURE_GROUP_ID,
+        WIND_REINDEER_GROUP_ID,
+        SOLAR_PROTECTED_GROUP_ID,
+    ):
         st.session_state[_wind_control_key("group", group_id)] = bool(selected.get(group_id))
 
 
@@ -5095,6 +5130,7 @@ def _wind_group_controls(
             is_protected_group = group.id == SOLAR_PROTECTED_GROUP_ID
             is_settlement_group = group.id == WIND_SETTLEMENT_GROUP_ID
             is_culture_group = group.id == WIND_CULTURE_GROUP_ID
+            is_reindeer_group = group.id == WIND_REINDEER_GROUP_ID
             group_layers = [item for item in ordered_layers() if item.group_id == group.id]
             group_available = _wind_group_has_ready_layers(group.id, group_layers, availability)
             if is_protected_group:
@@ -5118,7 +5154,7 @@ def _wind_group_controls(
                     disabled=not group_available,
                 )
                 group_enabled = True
-                if is_protected_group or is_settlement_group or is_culture_group:
+                if is_protected_group or is_settlement_group or is_culture_group or is_reindeer_group:
                     if group_available:
                         _seed_wind_advanced_layer_defaults(group.id, group_layers, availability)
                     group_layer_keys = [
@@ -5136,11 +5172,15 @@ def _wind_group_controls(
                         if is_settlement_group
                         else "Samlar valda kulturmiljölager till en gemensam restriktion i vindpotentialen."
                         if is_culture_group
+                        else "Samlar valda reindriftslager till en gemensam restriktion i vindpotentialen."
+                        if is_reindeer_group
                         else "Samlar valda naturskyddslager till en gemensam restriktion i vindpotentialen."
                     )
                     group_checkbox_label = (
                         f"Använd {WIND_CULTURE_GROUP_LABEL}"
                         if is_culture_group
+                        else f"Använd {WIND_REINDEER_GROUP_LABEL}"
+                        if is_reindeer_group
                         else f"Använd {display_group_label}"
                     )
                     group_enabled = st.checkbox(
@@ -5151,7 +5191,7 @@ def _wind_group_controls(
                     )
                 main_layers = group_layers
                 advanced_layers: list[Any] = []
-                if is_protected_group or is_settlement_group or is_culture_group:
+                if is_protected_group or is_settlement_group or is_culture_group or is_reindeer_group:
                     main_layers = []
                     advanced_layers = group_layers
 
@@ -5176,6 +5216,8 @@ def _wind_group_controls(
                         st.caption("Befolkningspunkter är standard. Välj fler bebyggelseproxyer om de behövs för analysen.")
                     elif is_culture_group:
                         st.caption("Välj vilka kulturmiljölager som ska ingå i gruppen.")
+                    elif is_reindeer_group:
+                        st.caption("Välj vilka reindriftslager som ska ingå i gruppen.")
                     elif is_protected_group:
                         st.caption(f"Välj vilka del-lager som ingår i {PROTECTED_NATURE_LABEL}.")
                     for layer in advanced_layers:
@@ -5186,7 +5228,7 @@ def _wind_group_controls(
                 if not selected[group.id]:
                     if not group_available:
                         st.caption("Gruppen är gråmarkerad och ej valbar tills data finns.")
-                    elif (is_protected_group or is_settlement_group or is_culture_group) and not group_enabled:
+                    elif (is_protected_group or is_settlement_group or is_culture_group or is_reindeer_group) and not group_enabled:
                         st.caption("Gruppen är avstängd. Del-lager kan väljas, men används först när gruppen är aktiv.")
                     else:
                         st.caption(ui_text("group_inactive", language))
@@ -8924,9 +8966,14 @@ def _unified_workspace_tab(
                             SOLAR_PROTECTED_GROUP_ID,
                             SOLAR_ROAD_GROUP_ID,
                             SOLAR_CULTURE_GROUP_ID,
+                            SOLAR_REINDEER_GROUP_ID,
                             SOLAR_COASTAL_GROUP_ID,
                         ):
-                            _render_solar_filter_control(solar_filter_group_id)
+                            if (
+                                solar_filter_group_id != SOLAR_REINDEER_GROUP_ID
+                                or _solar_filter_layer_options(solar_filter_group_id)
+                            ):
+                                _render_solar_filter_control(solar_filter_group_id)
                         st.caption("Storskalig sol använder hela landskapsunderlaget som kandidatbas. Valda filter drar bort yta från den basen.")
                         st.caption("Ingen bonitets- eller jordklassvariabel finns i nuvarande solunderlag; jordart/prekvartär beskriver geologi, inte jordbruksmarkens kvalitet.")
                     apply_solar = st.form_submit_button(_t("Använd ändringar"), type="primary", width="stretch")

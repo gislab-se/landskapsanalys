@@ -74,6 +74,19 @@
       "interpretation": "Protected nature is treated as a hard exclusion following the Bornholm controller pattern. Trondelag currently wires the NEA Naturvern layer as the first protected-nature source; protected watercourses and water protection remain next-step candidates. Land-use classes such as forest, agriculture and wetland are intentionally kept out of this group for a later land-use controller."
     },
     {
+      "id": "reindeer",
+      "label": "Reindeer husbandry / reindrift",
+      "analysis_kind": "hard_exclusion",
+      "analysis_label": "Optional buffer",
+      "analysis_min_m": 0,
+      "analysis_max_m": 5000,
+      "analysis_step_m": 100,
+      "analysis_default_m": 0,
+      "blend_default": 65,
+      "group_color": [190, 73, 82],
+      "interpretation": "Trondelag-specific controller for reindeer husbandry interests. There is no Bornholm equivalent; this follows the same hard-exclusion/optional-buffer pattern used for protected nature and culture, while documenting the regional deviation explicitly."
+    },
+    {
       "id": "aviation_approach",
       "label": "Airport approach / aviation restrictions",
       "analysis_kind": "hard_exclusion",
@@ -203,6 +216,24 @@
       "label": "Naturvernområden",
       "note": "Norwegian NEA Naturvern layer clipped and dissolved as the first Trondelag protected-nature controller. Forest, agriculture, wetland and other land-use classes are deliberately reserved for a later land-use controller.",
       "source_color": [64, 119, 73],
+      "point_radius": 45
+    },
+    {
+      "id": "reindeer_grazing_merged",
+      "group_id": "reindeer",
+      "layer_key": "trl_reindeer_grazing_merged",
+      "label": "Reindrift - arstidsbete sammanlagt",
+      "note": "Landbruksdirektoratet seasonal grazing polygons, merged NW source. Trondelag-specific reindeer husbandry controller; no Bornholm equivalent exists.",
+      "source_color": [190, 73, 82],
+      "point_radius": 45
+    },
+    {
+      "id": "reindeer_migration_routes",
+      "group_id": "reindeer",
+      "layer_key": "trl_reindeer_migration_routes",
+      "label": "Reindrift - flyttleier",
+      "note": "Landbruksdirektoratet migration-route polygons. Treated as broad corridors, not center lines.",
+      "source_color": [216, 100, 93],
       "point_radius": 45
     }
   ],
