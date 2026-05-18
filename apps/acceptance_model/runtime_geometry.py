@@ -29,15 +29,31 @@ def _load_json(path: Path) -> dict[str, Any]:
         return json.load(handle)
 
 
-@st.cache_data(show_spinner=False)
+def _runtime_revision_token() -> str:
+    render_path = repo_root() / RENDER_SCRIPT
+    registry_path = active_registry_path()
+    return "|".join(
+        [
+            str(render_path),
+            str(render_path.stat().st_mtime_ns if render_path.exists() else 0),
+            str(registry_path),
+            str(registry_path.stat().st_mtime_ns if registry_path.exists() else 0),
+        ]
+    )
+
+
 def run_geometry_runtime(config_json: str) -> dict[str, Any]:
+    return _run_geometry_runtime_cached(config_json, _runtime_revision_token())
+
+
+@st.cache_data(show_spinner=False)
+def _run_geometry_runtime_cached(config_json: str, revision_token: str) -> dict[str, Any]:
     render_path = repo_root() / RENDER_SCRIPT
     registry_path = active_registry_path()
     revision_token = "|".join(
         [
             config_json,
-            str(render_path.stat().st_mtime_ns if render_path.exists() else 0),
-            str(registry_path.stat().st_mtime_ns if registry_path.exists() else 0),
+            revision_token,
         ]
     )
     cache_key = hashlib.sha1(revision_token.encode("utf-8")).hexdigest()[:16]

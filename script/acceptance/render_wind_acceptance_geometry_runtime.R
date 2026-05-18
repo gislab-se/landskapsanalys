@@ -25,6 +25,8 @@ config <- jsonlite::fromJSON(config_path, simplifyVector = TRUE)
 layer_config <- read.csv(file.path(repo_root, registry$source_config_csv), stringsAsFactors = FALSE)
 asset_manifest_path <- file.path(repo_root, registry$asset_dir, "asset_manifest.csv")
 asset_manifest <- if (file.exists(asset_manifest_path)) read.csv(asset_manifest_path, stringsAsFactors = FALSE) else data.frame()
+working_epsg <- if (!is.null(registry$native_crs_epsg)) as.integer(registry$native_crs_epsg[[1]]) else 32633L
+landmask_label <- if (!is.null(registry$landmask_label)) as.character(registry$landmask_label[[1]]) else "Bornholm landmass"
 landmask_asset_candidates <- c(
   file.path(repo_root, registry$asset_dir, "landmask", "bornholm_landmass.rds"),
   file.path(repo_root, registry$asset_dir, "landmask", "bornholm_landmask.rds")
@@ -50,11 +52,11 @@ manifest_row_for_layer <- function(layer_id) {
 }
 
 empty_sfc <- function() {
-  st_sfc(crs = 32633)
+  st_sfc(crs = working_epsg)
 }
 
 repair_sfc <- function(geom, grid_size = 0.1) {
-  geom_sfc <- if (inherits(geom, "sfc")) geom else st_sfc(geom, crs = 32633)
+  geom_sfc <- if (inherits(geom, "sfc")) geom else st_sfc(geom, crs = working_epsg)
   if (length(geom_sfc) == 0) {
     return(empty_sfc())
   }
@@ -119,11 +121,11 @@ load_landmask <- function() {
   landmask_asset_path <- landmask_asset_candidates[file.exists(landmask_asset_candidates)][1]
   if (!is.na(landmask_asset_path) && nzchar(landmask_asset_path) && file.exists(landmask_asset_path)) {
     landmask_sf <- readRDS(landmask_asset_path)
-    landmask_sf <- st_transform(landmask_sf, 32633)
+    landmask_sf <- st_transform(landmask_sf, working_epsg)
     landmask_sf <- repair_sf(landmask_sf)
     landmask_sf <- landmask_sf[!st_is_empty(landmask_sf), ]
     if (nrow(landmask_sf) > 0) {
-      return(st_sf(mask_id = "bornholm_landmass", geometry = repair_sfc(st_union(st_geometry(landmask_sf)))))
+      return(st_sf(mask_id = landmask_label, geometry = repair_sfc(st_union(st_geometry(landmask_sf)))))
     }
   }
 
@@ -135,10 +137,13 @@ load_landmask <- function() {
 
   landmask_sf <- st_read(landmask_path, quiet = TRUE) |>
     suppressWarnings(st_zm(drop = TRUE, what = "ZM"))
+  if (is.na(st_crs(landmask_sf))) {
+    st_crs(landmask_sf) <- working_epsg
+  }
   landmask_sf <- repair_sf(landmask_sf)
-  landmask_sf <- st_transform(landmask_sf, 32633)
+  landmask_sf <- st_transform(landmask_sf, working_epsg)
   landmask_union <- repair_sfc(st_union(st_geometry(landmask_sf)))
-  st_sf(mask_id = "bornholm_landmass", geometry = landmask_union)
+  st_sf(mask_id = landmask_label, geometry = landmask_union)
 }
 
 landmask_sf <- load_landmask()
@@ -192,10 +197,10 @@ apply_registry_filter <- function(source_sf, layer_row) {
   }
 
   filter_field <- as.character(layer_row$filter_field[[1]])
-  filter_value <- as.character(layer_row$filter_value[[1]])
+  filter_value <- unlist(layer_row$filter_value[[1]], use.names = FALSE)
   filter_mode <- if ("filter_mode" %in% names(layer_row)) as.character(layer_row$filter_mode[[1]]) else "field_equals"
 
-  if (is.na(filter_field) || !nzchar(filter_field) || is.na(filter_value) || !nzchar(filter_value)) {
+  if (is.na(filter_field) || !nzchar(filter_field) || length(filter_value) == 0 || all(is.na(filter_value) | !nzchar(filter_value))) {
     return(source_sf)
   }
 
@@ -214,7 +219,7 @@ read_layer_input <- function(layer_id) {
     analysis_abs <- file.path(repo_root, analysis_rel)
     if (!is.na(analysis_rel) && nzchar(analysis_rel) && file.exists(analysis_abs)) {
       obj <- readRDS(analysis_abs)
-      obj <- st_transform(obj, 32633)
+      obj <- st_transform(obj, working_epsg)
       obj <- repair_sf(obj)
       obj <- obj[!st_is_empty(obj), ]
       base_buffer_m <- if ("analysis_base_buffer_m" %in% names(manifest_row)) suppressWarnings(as.numeric(manifest_row$analysis_base_buffer_m[[1]])) else 0
@@ -232,8 +237,11 @@ read_layer_input <- function(layer_id) {
 
   obj <- st_read(layer_path(layer_row$layer_key[[1]]), quiet = TRUE) |>
     suppressWarnings(st_zm(drop = TRUE, what = "ZM"))
+  if (is.na(st_crs(obj))) {
+    st_crs(obj) <- working_epsg
+  }
   obj <- repair_sf(obj)
-  obj <- st_transform(obj, 32633)
+  obj <- st_transform(obj, working_epsg)
   obj <- apply_registry_filter(obj, layer_row)
   obj <- clip_to_landmass(obj)
   obj <- repair_sf(obj)
@@ -394,7 +402,7 @@ for (group_id in names(config_groups)) {
         "<br>Threshold: ", analysis_value_m, " m",
         "<br>Geometry role: ", role,
         "<br>Land share on map: ", land_share_pct, "%",
-        ifelse(group_id == "aviation_approach", "<br>Display buffer is not clipped at coastline.", "<br>Clipped to Bornholm landmass.")
+        ifelse(group_id == "aviation_approach", "<br>Display buffer is not clipped at coastline.", paste0("<br>Clipped to ", landmask_label, "."))
       )
     ),
     geometry = group_geom
@@ -461,7 +469,7 @@ if (length(active_group_ids) > 0) {
           "Active groups: ", paste(active_group_ids, collapse = ", "),
           "<br>Semantics: ", combined_semantics,
           "<br>Land share on map: ", combined_land_share_pct, "%",
-          "<br>Clipped to Bornholm landmass."
+          "<br>Clipped to ", landmask_label, "."
         )
       ),
       geometry = single_feature_polygonal(combined_geom)

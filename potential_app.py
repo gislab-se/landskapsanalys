@@ -174,8 +174,8 @@ OUTSIDE_LP_NEED_LAYER_LABEL = "Ytbehov utanför landskapets potential"
 SOLAR_POPULATION_SOURCE_LABEL = "Sol källa: Befolkningsunderlag"
 SOLAR_POPULATION_BUFFER_LABEL = "Solbuffert: Befolkningsunderlag"
 PROTECTED_NATURE_LABEL = "Skyddad natur"
-SOLAR_PROTECTED_SOURCE_LABEL = f"Källa: {PROTECTED_NATURE_LABEL}"
-SOLAR_PROTECTED_BUFFER_LABEL = f"Buffert: {PROTECTED_NATURE_LABEL}"
+SOLAR_PROTECTED_SOURCE_LABEL = f"Sol källa: {PROTECTED_NATURE_LABEL}"
+SOLAR_PROTECTED_BUFFER_LABEL = f"Solbuffert: {PROTECTED_NATURE_LABEL}"
 WIND_SETTLEMENT_GROUP_ID = "settlement"
 WIND_SETTLEMENT_GROUP_LABEL = "Befolkning och bebyggelse"
 WIND_POPULATION_SOURCE_LAYER_ID = "population_points"
@@ -207,8 +207,8 @@ SOLAR_FILTER_GROUP_SPECS: dict[str, dict[str, Any]] = {
     },
     SOLAR_ROAD_GROUP_ID: {
         "label": "Vägar",
-        "source_label": "Källa: Vägar",
-        "buffer_label": "Buffert: Vägar",
+        "source_label": "Sol källa: Vägar",
+        "buffer_label": "Solbuffert: Vägar",
         "layer_ids": tuple(WIND_GROUP_LAYER_DEFAULTS.get(SOLAR_ROAD_GROUP_ID, [])),
         "active_key": "large_road_active",
         "layer_ids_key": "large_road_layer_ids",
@@ -225,8 +225,8 @@ SOLAR_FILTER_GROUP_SPECS: dict[str, dict[str, Any]] = {
     },
     SOLAR_CULTURE_GROUP_ID: {
         "label": "Kulturmiljö",
-        "source_label": "Källa: Kulturmiljö",
-        "buffer_label": "Buffert: Kulturmiljö",
+        "source_label": "Sol källa: Kulturmiljö",
+        "buffer_label": "Solbuffert: Kulturmiljö",
         "layer_ids": tuple(WIND_GROUP_LAYER_DEFAULTS.get(SOLAR_CULTURE_GROUP_ID, [])),
         "active_key": "large_culture_active",
         "layer_ids_key": "large_culture_layer_ids",
@@ -243,8 +243,8 @@ SOLAR_FILTER_GROUP_SPECS: dict[str, dict[str, Any]] = {
     },
     SOLAR_COASTAL_GROUP_ID: {
         "label": "Strandskydd / kust",
-        "source_label": "Källa: Strandskydd / kust",
-        "buffer_label": "Buffert: Strandskydd / kust",
+        "source_label": "Sol källa: Strandskydd / kust",
+        "buffer_label": "Solbuffert: Strandskydd / kust",
         "layer_ids": tuple(WIND_GROUP_LAYER_DEFAULTS.get(SOLAR_COASTAL_GROUP_ID, [])),
         "default_layer_ids": ("strand_protection",),
         "active_key": "large_coastal_active",
@@ -3405,6 +3405,67 @@ def _solar_filter_buffer_layer(
     }
 
 
+def _wind_filter_buffer_layer(
+    group_id: str,
+    buffer_m: float,
+    layer_ids: list[str] | tuple[str, ...] | None = None,
+) -> dict[str, Any] | None:
+    if str(group_id) not in SOLAR_FILTER_GROUP_SPECS:
+        return None
+    spec = _solar_filter_spec(group_id)
+    selected_layer_ids = _solar_available_filter_layer_ids(group_id, layer_ids)
+    if not selected_layer_ids:
+        return None
+    buffer_geojson = _solar_filter_buffer_geojson(group_id, float(buffer_m or 0.0), selected_layer_ids)
+    if not buffer_geojson:
+        return None
+    features = buffer_geojson.get("features") if isinstance(buffer_geojson, dict) else None
+    if not isinstance(features, list) or not features:
+        return None
+    groups, _, _ = load_acceptance_registry()
+    group_meta = groups.get(group_id)
+    label = (
+        group_label(group_meta, WIND_CONTROL_LANGUAGE, group_meta.label)
+        if group_meta is not None
+        else str(spec.get("label") or group_id)
+    )
+    group_color = _rgb_to_hex(group_meta.group_color) if group_meta is not None else str(spec.get("buffer_color", "#c4322b"))
+    buffer_color = group_color
+    layer_name = f"Vindbuffert: {label}"
+    for feature in features:
+        props = feature.setdefault("properties", {})
+        props["fill"] = buffer_color
+        props["popup"] = (
+            f"<strong>{layer_name}</strong><br>"
+            f"Buffert: {float(buffer_m or 0.0):.0f} m<br>"
+            f"{spec['caption']}"
+        )
+        props["tooltip_title"] = layer_name
+        props["tooltip_body"] = f"{float(buffer_m or 0.0):.0f} m buffert"
+    return {
+        "name": layer_name,
+        "buffer_layer_id": (
+            f"wind:{group_id}:buffer:{int(round(float(buffer_m or 0.0)))}:"
+            f"{'_'.join(selected_layer_ids) if selected_layer_ids else 'none'}"
+        ),
+        "feature_collection": buffer_geojson,
+        "fill_property": "fill",
+        "legend_items": [{"label": f"Vindbuffert runt {label.lower()}", "color": buffer_color}],
+        "legend_id": f"wind_{group_id}_buffer",
+        "legend_title": "",
+        "default_visible": False,
+        "stroke_color": group_color,
+        "fill_color": buffer_color,
+        "stroke_opacity": 0.56,
+        "fill_opacity": 0.18,
+        "weight": 0.75,
+        "point_radius": 4,
+        "use_global_opacity": False,
+        "z_index": 459,
+        "layer_kind": "vector",
+    }
+
+
 def _solar_protected_buffer_layer(
     buffer_m: float,
     layer_ids: list[str] | tuple[str, ...] | None = None,
@@ -5337,18 +5398,18 @@ def _wind_polygon_group_layers(runtime_result: dict[str, Any]) -> list[dict[str,
         selected_sources = str(runtime_group.get("selected_sources", "") or "")
         analysis_value = int(round(float(runtime_group.get("analysis_value_m", 0.0) or 0.0)))
         buffer_layer_id = (
-            f"{WIND_POPULATION_SOURCE_LAYER_ID}:buffer:{analysis_value}"
+            f"wind:{WIND_SETTLEMENT_GROUP_ID}:buffer:{analysis_value}:{WIND_POPULATION_SOURCE_LAYER_ID}"
             if group.id == WIND_SETTLEMENT_GROUP_ID and selected_sources.strip().lower() == "population points"
-            else f"{group.id}:buffer:{analysis_value}"
+            else f"wind:{group.id}:buffer:{analysis_value}"
         )
         map_layers.append(
             {
                 "name": (
-                    f"Buffert: {_protected_group_label()}"
+                    f"Vindbuffert: {_protected_group_label()}"
                     if group.id == SOLAR_PROTECTED_GROUP_ID
-                    else f"Buffert: {_settlement_group_label()}"
+                    else f"Vindbuffert: {_settlement_group_label()}"
                     if group.id == WIND_SETTLEMENT_GROUP_ID
-                    else f"Buffert: {group_label(groups[group.id], WIND_CONTROL_LANGUAGE, groups[group.id].label)}"
+                    else f"Vindbuffert: {group_label(groups[group.id], WIND_CONTROL_LANGUAGE, groups[group.id].label)}"
                 ),
                 "buffer_layer_id": buffer_layer_id,
                 "feature_collection": runtime_group["geojson"],
@@ -5728,7 +5789,7 @@ def _wind_fast_distance_runtime_result(
     selected = normalize_group_layer_map(layer_selection)
     if not any(selected.values()):
         return None
-    groups, _, registry_meta = load_acceptance_registry()
+    groups, layers, registry_meta = load_acceptance_registry()
     display_geometry_path = _h3_display_geometry_path(region, int(target_resolution))
     if not display_geometry_path:
         return None
@@ -5738,6 +5799,7 @@ def _wind_fast_distance_runtime_result(
         return None
     frame["potential_area_share_pct"] = 100.0
     active_groups: list[str] = []
+    group_meta: dict[str, dict[str, Any]] = {}
     for group_id, layer_ids in selected.items():
         group = groups.get(group_id)
         if group is None or not layer_ids:
@@ -5773,6 +5835,21 @@ def _wind_fast_distance_runtime_result(
             min,
         )
         active_groups.append(group_id)
+        role = "feasible" if group.analysis_kind == "proximity_feasibility" else "conflict"
+        share_series = group_acceptance.mul(100.0) if role == "feasible" else (1.0 - group_acceptance).mul(100.0)
+        selected_labels = [
+            layer_label(layers[layer_id], WIND_CONTROL_LANGUAGE, layers[layer_id].label)
+            for layer_id in layer_ids
+            if layer_id in layers
+        ]
+        group_meta[group_id] = {
+            "label": group.label,
+            "analysis_kind": group.analysis_kind,
+            "role": role,
+            "selected_sources": selected_labels,
+            "analysis_value_m": float(threshold_m),
+            "land_share_pct": float(share_series.fillna(0.0).mean()),
+        }
     if not active_groups:
         return None
     hex_area = float(h3_hex_area_km2(int(target_resolution)))
@@ -5780,7 +5857,7 @@ def _wind_fast_distance_runtime_result(
     frame = _finalize_fast_wind_share_frame(frame, display_geometry_path, compute_core=False)
     return {
         "cache_key": f"trondelag_fast_distance_r{int(target_resolution)}",
-        "groups": {},
+        "groups": group_meta,
         "combined": {"land_share_pct": float(frame["potential_area_share_pct"].mean())},
         "fast_distance_frame": frame,
         "fast_distance": True,
@@ -7219,6 +7296,24 @@ def _wind_polygon_preview_state(
         if combined_layer is not None:
             layers.append(combined_layer)
     layers.extend(_wind_polygon_source_layers(ui_params, layer_selection=selected))
+    if str(region.get("region_id", "")).lower() == "trondelag" and bool(runtime_result.get("fast_distance")):
+        groups, _, _ = load_acceptance_registry()
+        for group_id in _wind_active_group_ids(ui_params, layer_selection=selected):
+            if group_id == WIND_SETTLEMENT_GROUP_ID:
+                continue
+            group = groups.get(group_id)
+            if group is None:
+                continue
+            threshold_key = GROUP_PARAM_MAP.get(group_id)
+            threshold_m = float(ui_params.get(threshold_key, group.analysis_default_m)) if threshold_key else float(group.analysis_default_m)
+            _append_unique_layer(
+                layers,
+                _wind_filter_buffer_layer(
+                    group_id,
+                    threshold_m,
+                    selected.get(group_id, []),
+                ),
+            )
     if (
         str(region.get("region_id", "")).lower() == "trondelag"
         and WIND_POPULATION_SOURCE_LAYER_ID in selected.get(WIND_SETTLEMENT_GROUP_ID, [])

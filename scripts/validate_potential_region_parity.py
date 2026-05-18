@@ -25,6 +25,7 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 import streamlit as st  # noqa: E402
 
 import potential_app as app  # noqa: E402
+import acceptance_model.layers as acceptance_layers  # noqa: E402
 from acceptance_model import runtime_geometry  # noqa: E402
 from potential_model.energy_modeling import (  # noqa: E402
     calculate_area_demand,
@@ -47,6 +48,17 @@ WIND_TEST_SELECTION = {
     for group_id in app.WIND_GROUP_LAYER_DEFAULTS
 }
 WIND_TEST_SELECTION[app.WIND_SETTLEMENT_GROUP_ID] = [app.WIND_POPULATION_SOURCE_LAYER_ID]
+ROAD_TEST_LAYER_ID = "roads_large"
+SOLAR_ROAD_BUFFER_M = 100.0
+WIND_ROAD_BUFFER_M = 1000.0
+WIND_TEST_SELECTION[app.SOLAR_ROAD_GROUP_ID] = [ROAD_TEST_LAYER_ID]
+
+
+def _force_acceptance_registry(region_id: str) -> None:
+    registry_name = "registry_trondelag.json" if str(region_id).lower() == "trondelag" else "registry.json"
+    path = ROOT / "apps" / "acceptance_model" / registry_name
+    acceptance_layers.registry_path = lambda path=path: path
+    runtime_geometry.active_registry_path = lambda path=path: path
 
 
 class ParityReport:
@@ -158,9 +170,60 @@ def _energy_state(region: dict[str, Any], scenario_manifest: dict[str, Any], h3_
     }
 
 
+def _feature_count(layer: dict[str, Any] | None) -> int:
+    if not isinstance(layer, dict):
+        return 0
+    features = ((layer.get("feature_collection") or {}).get("features") or [])
+    return len(features) if isinstance(features, list) else 0
+
+
+def _road_ui_layer_contract(layers: list[dict[str, Any]]) -> dict[str, Any]:
+    solar_sources: list[dict[str, Any]] = []
+    wind_sources: list[dict[str, Any]] = []
+    solar_buffers: list[dict[str, Any]] = []
+    wind_buffers: list[dict[str, Any]] = []
+    for layer in layers:
+        source_id = str(layer.get("source_layer_id", "") or "")
+        buffer_id = str(layer.get("buffer_layer_id", "") or "")
+        name = str(layer.get("name", "") or "")
+        if source_id.startswith(f"solar:{app.SOLAR_ROAD_GROUP_ID}:"):
+            solar_sources.append(layer)
+        if source_id == f"wind:{ROAD_TEST_LAYER_ID}" or source_id.startswith(f"wind:{ROAD_TEST_LAYER_ID}:"):
+            wind_sources.append(layer)
+        if buffer_id.startswith(f"solar:{app.SOLAR_ROAD_GROUP_ID}:buffer:"):
+            solar_buffers.append(layer)
+        if buffer_id.startswith(f"wind:{app.SOLAR_ROAD_GROUP_ID}:buffer:"):
+            wind_buffers.append(layer)
+        elif name.startswith("Vindbuffert:") and app.SOLAR_ROAD_GROUP_ID in buffer_id:
+            wind_buffers.append(layer)
+    road_layers = [*solar_sources, *wind_sources, *solar_buffers, *wind_buffers]
+    road_names = [str(layer.get("name", "") or "") for layer in road_layers]
+    road_ids = [
+        str(layer.get("source_layer_id", "") or layer.get("buffer_layer_id", "") or layer.get("name", "") or "")
+        for layer in road_layers
+    ]
+    return {
+        "solar_source_count": len(solar_sources),
+        "wind_source_count": len(wind_sources),
+        "solar_buffer_count": len(solar_buffers),
+        "wind_buffer_count": len(wind_buffers),
+        "solar_source_features": sum(_feature_count(layer) for layer in solar_sources),
+        "wind_source_features": sum(_feature_count(layer) for layer in wind_sources),
+        "solar_buffer_features": sum(_feature_count(layer) for layer in solar_buffers),
+        "wind_buffer_features": sum(_feature_count(layer) for layer in wind_buffers),
+        "road_layer_names": road_names,
+        "road_layer_ids": road_ids,
+        "road_layer_names_are_distinct": len(road_names) == len(set(road_names)),
+        "road_layer_ids_are_distinct": len(road_ids) == len(set(road_ids)),
+        "solar_buffer_ids": [str(layer.get("buffer_layer_id", "") or "") for layer in solar_buffers],
+        "wind_buffer_ids": [str(layer.get("buffer_layer_id", "") or "") for layer in wind_buffers],
+    }
+
+
 def _region_workspace_contract(region_id: str) -> dict[str, Any]:
     st.session_state.clear()
     st.session_state[app.REGION_SELECT_KEY] = region_id
+    _force_acceptance_registry(region_id)
     region = load_region(region_id)
     context = load_region_context(region)
     landscape_manifest = context["landscape_manifest"]
@@ -180,6 +243,9 @@ def _region_workspace_contract(region_id: str) -> dict[str, Any]:
     energy_state = _energy_state(region, scenario_manifest, analysis_resolution)
     wind_selection = app.normalize_group_layer_map(WIND_TEST_SELECTION)
     wind_params = app._default_wind_params()
+    road_param_key = app.GROUP_PARAM_MAP.get(app.SOLAR_ROAD_GROUP_ID)
+    if road_param_key:
+        wind_params[road_param_key] = WIND_ROAD_BUFFER_M
     wind_preview = app._wind_polygon_preview_state(
         region,
         wind_params,
@@ -205,8 +271,18 @@ def _region_workspace_contract(region_id: str) -> dict[str, Any]:
         wind_preview["runtime_result"],
         analysis_resolution,
     )
+    wind_runtime_groups = (wind_preview.get("runtime_result") or {}).get("groups") or {}
+    wind_has_transport_rule = app.SOLAR_ROAD_GROUP_ID in wind_runtime_groups
 
     solar_population_buffer_m = 250.0
+    solar_road_filter_configs = [
+        {
+            "group_id": app.SOLAR_ROAD_GROUP_ID,
+            "layer_ids": [ROAD_TEST_LAYER_ID],
+            "buffer_m": SOLAR_ROAD_BUFFER_M,
+            "label": "Vägar",
+        }
+    ]
     solar_large = app._solar_large_scale_frame(
         region,
         landscape_manifest,
@@ -215,8 +291,19 @@ def _region_workspace_contract(region_id: str) -> dict[str, Any]:
         None,
         [],
         False,
-        [],
+        solar_road_filter_configs,
     )
+    solar_road_source_layers = app._solar_filter_source_layers(app.SOLAR_ROAD_GROUP_ID, [ROAD_TEST_LAYER_ID])
+    solar_road_buffer_layer = app._solar_filter_buffer_layer(app.SOLAR_ROAD_GROUP_ID, SOLAR_ROAD_BUFFER_M, [ROAD_TEST_LAYER_ID])
+    solar_road_buffer_features = _feature_count(solar_road_buffer_layer)
+    solar_road_source_features = sum(
+        _feature_count(layer)
+        for layer in solar_road_source_layers
+    )
+    solar_has_road_filter_effect = pd.to_numeric(
+        solar_large.get("protected_buffer_share_pct", pd.Series(dtype=float)),
+        errors="coerce",
+    ).fillna(0.0).gt(0.0).any()
     solar_potential = app._combined_solar_hex_frame(
         region,
         landscape_manifest,
@@ -278,7 +365,13 @@ def _region_workspace_contract(region_id: str) -> dict[str, Any]:
         False,
         analysis_resolution,
     )
-    all_layers = [*wind_preview_layers, *establishment_layers]
+    road_ui_layers = [
+        *wind_preview_layers,
+        *solar_road_source_layers,
+        *([solar_road_buffer_layer] if solar_road_buffer_layer is not None else []),
+    ]
+    all_layers = app._dedupe_layers([*road_ui_layers, *establishment_layers])
+    road_ui_contract = _road_ui_layer_contract(app._dedupe_layers(road_ui_layers))
     establishment_layer = next(
         (
             layer
@@ -292,7 +385,14 @@ def _region_workspace_contract(region_id: str) -> dict[str, Any]:
         "display_resolution": display_resolution,
         "analysis_resolution": analysis_resolution,
         "wind_potential_rows": len(wind_potential),
+        "wind_has_transport_rule": bool(wind_has_transport_rule),
         "solar_potential_rows": len(solar_potential),
+        "solar_has_road_filter_effect": bool(solar_has_road_filter_effect),
+        "solar_road_source_features": int(solar_road_source_features),
+        "solar_road_buffer_features": int(solar_road_buffer_features),
+        "wind_road_buffer_m": WIND_ROAD_BUFFER_M,
+        "solar_road_buffer_m": SOLAR_ROAD_BUFFER_M,
+        "road_ui_contract": road_ui_contract,
         "wind_proposal_rows": len(wind_proposal),
         "solar_proposal_rows": len(solar_proposal),
         "layer_names": [str(layer.get("name")) for layer in all_layers],
@@ -311,9 +411,60 @@ def _check_region_contract(report: ParityReport, result: dict[str, Any], referen
         f"{region_id}: active wind layer produced no wind potential rows.",
     )
     report.check(
+        bool(result.get("wind_has_transport_rule", False)),
+        f"{region_id}: wind road/transport layer participates in the potential calculation.",
+        f"{region_id}: wind road/transport layer did not produce a transport distance rule.",
+    )
+    report.check(
         result["solar_potential_rows"] > 0,
         f"{region_id}: active solar layer produces solar potential rows.",
         f"{region_id}: active solar layer produced no solar potential rows.",
+    )
+    report.check(
+        bool(result.get("solar_has_road_filter_effect", False)),
+        f"{region_id}: solar road filter removes or buffers candidate area.",
+        f"{region_id}: solar road filter had no measurable area effect.",
+    )
+    report.check(
+        int(result.get("solar_road_source_features", 0) or 0) > 0,
+        f"{region_id}: solar UI can render the road source layer.",
+        f"{region_id}: solar UI cannot render the road source layer.",
+    )
+    report.check(
+        int(result.get("solar_road_buffer_features", 0) or 0) > 0,
+        f"{region_id}: solar UI can render the road buffer layer.",
+        f"{region_id}: solar UI cannot render the road buffer layer.",
+    )
+    road_ui = result.get("road_ui_contract") or {}
+    report.check(
+        int(road_ui.get("solar_source_count", 0) or 0) >= 1 and int(road_ui.get("wind_source_count", 0) or 0) >= 1,
+        f"{region_id}: road UI exposes separate solar and wind source layers.",
+        f"{region_id}: road UI lacks separate solar/wind source layers; road layers={road_ui.get('road_layer_names')}.",
+    )
+    report.check(
+        int(road_ui.get("solar_buffer_count", 0) or 0) >= 1 and int(road_ui.get("wind_buffer_count", 0) or 0) >= 1,
+        f"{region_id}: road UI exposes separate solar and wind buffer layers.",
+        f"{region_id}: road UI lacks separate solar/wind buffer layers; road layers={road_ui.get('road_layer_names')}.",
+    )
+    report.check(
+        int(road_ui.get("solar_source_features", 0) or 0) > 0 and int(road_ui.get("wind_source_features", 0) or 0) > 0,
+        f"{region_id}: solar and wind road source layers both have renderable features.",
+        f"{region_id}: one road source context has no features; road contract={road_ui}.",
+    )
+    report.check(
+        int(road_ui.get("solar_buffer_features", 0) or 0) > 0 and int(road_ui.get("wind_buffer_features", 0) or 0) > 0,
+        f"{region_id}: solar and wind road buffer layers both have renderable features.",
+        f"{region_id}: one road buffer context has no features; road contract={road_ui}.",
+    )
+    report.check(
+        bool(road_ui.get("road_layer_names_are_distinct")) and bool(road_ui.get("road_layer_ids_are_distinct")),
+        f"{region_id}: solar/wind road layer names and ids stay distinct.",
+        f"{region_id}: solar/wind road layers collapse or duplicate; road contract={road_ui}.",
+    )
+    report.check(
+        float(result.get("wind_road_buffer_m", 0.0) or 0.0) != float(result.get("solar_road_buffer_m", 0.0) or 0.0),
+        f"{region_id}: parity fixture uses different wind and solar road buffers.",
+        f"{region_id}: parity fixture did not create different wind/solar road buffer settings.",
     )
     report.pass_(
         f"{region_id}: energy proposal path executed "
@@ -341,6 +492,33 @@ def _check_region_contract(report: ParityReport, result: dict[str, Any], referen
             reference_has_establishment and current_has_establishment,
             f"{region_id}: matches Bornholm by producing the shared establishment layer.",
             f"{region_id}: does not match Bornholm shared establishment behavior.",
+        )
+        report.check(
+            bool(reference.get("wind_has_transport_rule")) == bool(result.get("wind_has_transport_rule")),
+            f"{region_id}: matches Bornholm wind-road participation.",
+            f"{region_id}: wind-road participation differs from Bornholm.",
+        )
+        report.check(
+            bool(reference.get("solar_has_road_filter_effect")) == bool(result.get("solar_has_road_filter_effect")),
+            f"{region_id}: matches Bornholm solar-road filter behavior.",
+            f"{region_id}: solar-road filter behavior differs from Bornholm.",
+        )
+        reference_road_ui = reference.get("road_ui_contract") or {}
+        report.check(
+            int(reference_road_ui.get("solar_source_count", 0) or 0) >= 1
+            and int(reference_road_ui.get("wind_source_count", 0) or 0) >= 1
+            and int(road_ui.get("solar_source_count", 0) or 0) >= 1
+            and int(road_ui.get("wind_source_count", 0) or 0) >= 1,
+            f"{region_id}: matches Bornholm by keeping solar and wind road source contexts visible.",
+            f"{region_id}: differs from Bornholm road source context behavior; Bornholm={reference_road_ui}, current={road_ui}.",
+        )
+        report.check(
+            int(reference_road_ui.get("solar_buffer_count", 0) or 0) >= 1
+            and int(reference_road_ui.get("wind_buffer_count", 0) or 0) >= 1
+            and int(road_ui.get("solar_buffer_count", 0) or 0) >= 1
+            and int(road_ui.get("wind_buffer_count", 0) or 0) >= 1,
+            f"{region_id}: matches Bornholm by keeping separate solar and wind road buffers.",
+            f"{region_id}: differs from Bornholm road buffer context behavior; Bornholm={reference_road_ui}, current={road_ui}.",
         )
     if region_id == "trondelag":
         report.check(

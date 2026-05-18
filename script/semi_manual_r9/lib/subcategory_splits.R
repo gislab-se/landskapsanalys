@@ -191,6 +191,17 @@ subset_source_by_split <- function(source_layer, split_field, split_value, input
     return(source_layer[keep, , drop = FALSE])
   }
 
+  if (identical(mode, "field_in")) {
+    if (!split_field %in% names(source_layer)) {
+      stop("Split field not found in source layer: ", split_field)
+    }
+    raw_vals <- trimws(as.character(source_layer[[split_field]]))
+    split_values <- unlist(split_value, use.names = FALSE)
+    keep_values <- slugify_text(split_values)
+    keep <- !is.na(raw_vals) & slugify_text(raw_vals) %in% keep_values
+    return(source_layer[keep, , drop = FALSE])
+  }
+
   if (identical(mode, "derived_road_class")) {
     if (!split_field %in% names(source_layer)) {
       stop("Road classification field not found in source layer: ", split_field)

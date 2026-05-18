@@ -4,6 +4,8 @@
   "hex_gpkg": "",
   "acceptance_hex_gpkg": "",
   "acceptance_hex_layer": "",
+  "native_crs_epsg": 25832,
+  "landmask_label": "Trondelag landmass",
   "asset_dir": "docs/geocontext/acceptance_framework/data/trondelag_prototype_assets",
   "groups": [
     {
@@ -30,7 +32,7 @@
       "analysis_default_m": 100,
       "blend_default": 50,
       "group_color": [177, 132, 33],
-      "interpretation": "Transport layers are not wired for the Trondelag prototype yet."
+      "interpretation": "Too close is bad. Trondelag mirrors Bornholm by splitting the N500 road network into medium and large road classes from vegkategor. N500 is used for light runtime; N250 remains a richer source candidate for later refinement."
     },
     {
       "id": "electrical",
@@ -151,6 +153,30 @@
       "note": "Advanced optional holiday-house proxy. Off by default.",
       "source_color": [236, 160, 116],
       "point_radius": 45
+    },
+    {
+      "id": "roads_medium",
+      "group_id": "transport",
+      "layer_key": "trl_roads_n500",
+      "label": "Mellanvägar",
+      "note": "Derived from Norwegian N500 vegkategor F. Mirrors Bornholm roads_medium for solar and wind filters.",
+      "source_color": [177, 132, 33],
+      "point_radius": 40,
+      "filter_field": "vegkategor",
+      "filter_value": "F",
+      "filter_mode": "field_equals"
+    },
+    {
+      "id": "roads_large",
+      "group_id": "transport",
+      "layer_key": "trl_roads_n500",
+      "label": "Stora vägar",
+      "note": "Derived from Norwegian N500 vegkategor E and R. Mirrors Bornholm roads_large for solar and wind filters.",
+      "source_color": [133, 89, 19],
+      "point_radius": 40,
+      "filter_field": "vegkategor",
+      "filter_value": ["E", "R"],
+      "filter_mode": "field_in"
     }
   ],
   "landmask_layer_key": "trl_landmask"
