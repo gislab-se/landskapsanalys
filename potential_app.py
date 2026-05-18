@@ -3609,10 +3609,13 @@ def _combined_solar_hex_frame(
     base = _landscape_frame(region, landscape_manifest, int(resolution))[["hex_id", "class_km", "landscape_type"]].copy()
     if base.empty:
         return pd.DataFrame()
+    hex_area_m2 = float(h3_hex_area_km2(int(resolution)) * 1_000_000.0)
     base["small_score"] = 0.0
     base["large_score"] = 0.0
     base["small_area_m2"] = 0.0
     base["large_area_m2"] = 0.0
+    base["large_filter_buffer_share_pct"] = 0.0
+    base["large_filter_buffer_area_m2"] = 0.0
     if not small_frame.empty:
         small = small_frame[["hex_id", "solar_v1_score", "solar_v1_area_m2"]].rename(
             columns={"solar_v1_score": "small_score", "solar_v1_area_m2": "small_area_m2"}
@@ -3624,10 +3627,38 @@ def _combined_solar_hex_frame(
         large = large_frame[["hex_id", "solar_score", "potential_area_m2"]].rename(
             columns={"solar_score": "large_score", "potential_area_m2": "large_area_m2"}
         ).copy()
-        base = base.drop(columns=["large_score", "large_area_m2"]).merge(large, on="hex_id", how="left")
+        if "protected_buffer_share_pct" in large_frame.columns:
+            large["large_filter_buffer_share_pct"] = pd.to_numeric(
+                large_frame["protected_buffer_share_pct"],
+                errors="coerce",
+            ).fillna(0.0).clip(lower=0.0, upper=100.0)
+        else:
+            large["large_filter_buffer_share_pct"] = 0.0
+        if "protected_buffer_area_m2" in large_frame.columns:
+            large["large_filter_buffer_area_m2"] = pd.to_numeric(
+                large_frame["protected_buffer_area_m2"],
+                errors="coerce",
+            ).fillna(0.0).clip(lower=0.0)
+        else:
+            large["large_filter_buffer_area_m2"] = large["large_filter_buffer_share_pct"] / 100.0 * hex_area_m2
+        base = base.drop(
+            columns=[
+                "large_score",
+                "large_area_m2",
+                "large_filter_buffer_share_pct",
+                "large_filter_buffer_area_m2",
+            ]
+        ).merge(large, on="hex_id", how="left")
         base["large_score"] = pd.to_numeric(base["large_score"], errors="coerce").fillna(0.0)
         base["large_area_m2"] = pd.to_numeric(base["large_area_m2"], errors="coerce").fillna(0.0).clip(lower=0.0)
-    hex_area_m2 = float(h3_hex_area_km2(int(resolution)) * 1_000_000.0)
+        base["large_filter_buffer_share_pct"] = pd.to_numeric(
+            base["large_filter_buffer_share_pct"],
+            errors="coerce",
+        ).fillna(0.0).clip(lower=0.0, upper=100.0)
+        base["large_filter_buffer_area_m2"] = pd.to_numeric(
+            base["large_filter_buffer_area_m2"],
+            errors="coerce",
+        ).fillna(0.0).clip(lower=0.0, upper=hex_area_m2)
     base["potential_area_m2"] = (base["small_area_m2"] + base["large_area_m2"]).clip(lower=0.0, upper=hex_area_m2)
     base["potential_area_km2"] = base["potential_area_m2"] / 1_000_000.0
     base["potential_area_share_pct"] = (base["potential_area_m2"] / max(hex_area_m2, 1e-9) * 100.0).clip(lower=0.0, upper=100.0)
@@ -6092,6 +6123,7 @@ def _potential_establishment_source_frame(
     technology: str,
     target_resolution: int,
     source_resolution: int,
+    coarse_filter_intersection_blocks: bool = False,
 ) -> pd.DataFrame:
     columns = [
         "hex_id",
@@ -6131,12 +6163,33 @@ def _potential_establishment_source_frame(
             work["potential_score"] = pd.to_numeric(work[score_col], errors="coerce").fillna(0.0).clip(lower=0.0, upper=100.0)
         else:
             work["potential_score"] = (work["potential_area_km2"] / max(source_hex_area, 1e-9) * 100.0).clip(lower=0.0, upper=100.0)
+        filter_share_sources = [
+            pd.to_numeric(work[column], errors="coerce").fillna(0.0).clip(lower=0.0, upper=100.0)
+            for column in [
+                "large_filter_buffer_share_pct",
+                "filter_buffer_share_pct",
+                "protected_buffer_share_pct",
+            ]
+            if column in work.columns
+        ]
+        if filter_share_sources:
+            work["_solar_filter_intersection_share_pct"] = pd.concat(filter_share_sources, axis=1).max(axis=1)
+        else:
+            work["_solar_filter_intersection_share_pct"] = 0.0
+        if "small_area_m2" in work.columns:
+            work["_solar_small_area_km2"] = pd.to_numeric(work["small_area_m2"], errors="coerce").fillna(0.0).clip(lower=0.0) / 1_000_000.0
+        else:
+            work["_solar_small_area_km2"] = 0.0
 
     if int(target_resolution) < int(source_resolution):
         work["hex_id"] = work["hex_id"].map(lambda value: str(h3.cell_to_parent(str(value), int(target_resolution))))
+        agg_spec: dict[str, Any] = {"potential_area_km2": ("potential_area_km2", "sum")}
+        if technology == "solar":
+            agg_spec["_solar_filter_intersection_share_pct"] = ("_solar_filter_intersection_share_pct", "max")
+            agg_spec["_solar_small_area_km2"] = ("_solar_small_area_km2", "sum")
         work = (
             work.groupby("hex_id", as_index=False)
-            .agg(potential_area_km2=("potential_area_km2", "sum"))
+            .agg(**agg_spec)
             .sort_values("hex_id")
             .reset_index(drop=True)
         )
@@ -6147,7 +6200,14 @@ def _potential_establishment_source_frame(
         work["potential_score"] = (work["potential_area_km2"] / max(target_hex_area, 1e-9) * 100.0).clip(lower=0.0, upper=100.0)
 
     out = work[["hex_id", "potential_score", "potential_area_km2"]].copy()
-    out[f"{technology}_suitable"] = out["potential_area_km2"].gt(1e-9)
+    suitable = out["potential_area_km2"].gt(1e-9)
+    if technology == "solar" and bool(coarse_filter_intersection_blocks):
+        filter_share = pd.to_numeric(work.get("_solar_filter_intersection_share_pct"), errors="coerce").fillna(0.0)
+        small_area = pd.to_numeric(work.get("_solar_small_area_km2"), errors="coerce").fillna(0.0)
+        # Trondelag uses R7 as app level. Any selected land-exclusion overlap must be visible at
+        # cell level so the coarse map mirrors Bornholm's finer-grid establishment behavior.
+        suitable = suitable & ~(filter_share.gt(0.0) & small_area.le(1e-9))
+    out[f"{technology}_suitable"] = suitable
     out[f"{technology}_potential_score"] = out["potential_score"].round(1)
     out[f"{technology}_potential_area_km2"] = out["potential_area_km2"].clip(lower=0.0)
     return out.reindex(columns=columns)
@@ -6259,7 +6319,17 @@ def _combined_potential_establishment_frame(
         return base
 
     wind = _potential_establishment_source_frame(wind_potential, "wind", int(target_resolution), int(source_resolution))
-    solar = _potential_establishment_source_frame(solar_potential, "solar", int(target_resolution), int(source_resolution))
+    solar_filter_intersection_blocks = (
+        str(region.get("region_id", "") or "").lower() == "trondelag"
+        and int(target_resolution) <= 7
+    )
+    solar = _potential_establishment_source_frame(
+        solar_potential,
+        "solar",
+        int(target_resolution),
+        int(source_resolution),
+        coarse_filter_intersection_blocks=solar_filter_intersection_blocks,
+    )
     if not wind.empty:
         base = base.merge(wind, on="hex_id", how="left")
     if not solar.empty:

@@ -43,6 +43,12 @@ For befolkning/bebyggelse-controller ska `TRL_POPULATION_250M_CENTROIDS` vara ik
 - Infrastruktur: flygplatser, vagar, europavagar, jarnvag och kraftnat som distance-to eller buffertkontroller.
 - Terrang/vatten: kust, vattendrag och vattenytor som context, distance eller mask beroende scenario.
 
+## Appkoppling 2026-05-18
+
+Forsta naturkopplingen i Potential App v2 ar medvetet smal: `TRL_NATURE_PROTECTION_AREAS` (`NEA_Naturvern_TRL+_32`) ar kopplat som `protected_areas` i samma hard-exclusion-grupp som Bornholm anvander for skyddad natur. `TRL_PROTECTED_WATERCOURSES` och `TRL_WATER_PROTECTION` ligger kvar som nasta natur/skydd-steg.
+
+Skog, jordbruksmark, myr och andra Arealdekke-klasser ska inte blandas in i `protected`-gruppen. De hor till en senare markanvandnings-controller dar anvandaren kan valja bort separata markslag, exempelvis skog, jordbruksmark eller myr.
+
 ## Endast QA/context
 
 `TRL_NATIONAL_PARKS_N500`, `TRL_N2000_NATURE_OVERVIEW`, `TRL_CULTURAL_HERITAGE_MERGED_NW`, `TRL_HOLIDAY_HOUSES_CENTROIDS`, `TRL_CONTOUR_LINES`, `TRL_OCEAN_MASK`, `TRL_ADMIN_KOMMUNER` och `TRL_NATIONAL_BORDER` bor i forsta hand anvandas for QA, bakgrund eller kartorientering. De kan bli skarpa inputs senare om pipeline-agenten verifierar tackning, attribut och dubbelrakning.
