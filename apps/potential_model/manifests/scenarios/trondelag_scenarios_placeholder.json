@@ -74,7 +74,7 @@
           "planning_year": 2050,
           "energy_scale": 0.65,
           "area_demand_scenario": "low",
-          "note": "Trondelag placeholder using Bornholm ENERGYISLAND2050 source data until regional TIMES export is connected."
+          "note": "Trondelag placeholder using Bornholm ENERGYISLAND2050 source data until EML or a Norwegian equivalent provides regional TIMES/export data."
         },
         {
           "id": "medium",
@@ -83,7 +83,7 @@
           "planning_year": 2050,
           "energy_scale": 1.0,
           "area_demand_scenario": "mid",
-          "note": "Trondelag placeholder using Bornholm ENERGYISLAND2050 source data until regional TIMES export is connected."
+          "note": "Trondelag placeholder using Bornholm ENERGYISLAND2050 source data until EML or a Norwegian equivalent provides regional TIMES/export data."
         },
         {
           "id": "high",
@@ -92,12 +92,12 @@
           "planning_year": 2050,
           "energy_scale": 1.25,
           "area_demand_scenario": "high",
-          "note": "Trondelag placeholder using Bornholm ENERGYISLAND2050 source data until regional TIMES export is connected."
+          "note": "Trondelag placeholder using Bornholm ENERGYISLAND2050 source data until EML or a Norwegian equivalent provides regional TIMES/export data."
         }
       ],
       "placement_modes": ["auto", "manual"],
       "auto_min_potential_share_pct": 65.0
     }
   },
-  "note": "Temporary Trondelag placeholder: uses Bornholm TIMES/AreaDemand files so the potential app has a functioning energy-model scenario until regional inputs are delivered."
+  "note": "Temporary Trondelag placeholder: uses Bornholm TIMES/AreaDemand files so the potential app has functioning low/medium/high scenarios until EML or a Norwegian equivalent provides regional inputs."
 }

@@ -76,8 +76,18 @@ def _read_landscape_geojson_frame(path_str: str) -> pd.DataFrame:
             continue
         if "class_km" not in props and "class_k8" in props:
             props["class_km"] = props["class_k8"]
+        if "v10_type_id" not in props and props.get("landscape_type_id"):
+            props["v10_type_id"] = props.get("landscape_type_id")
+        if "v10_type_name" not in props and props.get("landscape_type_name"):
+            props["v10_type_name"] = props.get("landscape_type_name")
         if "landscape_type" not in props:
-            props["landscape_type"] = props.get("v10_type_name") or props.get("v10_type_id") or props.get("class_km")
+            props["landscape_type"] = (
+                props.get("landscape_type_name")
+                or props.get("landscape_type_id")
+                or props.get("v10_type_name")
+                or props.get("v10_type_id")
+                or props.get("class_km")
+            )
         rows.append(props)
 
     frame = pd.DataFrame(rows)

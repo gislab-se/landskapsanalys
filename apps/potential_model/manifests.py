@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 import json
+import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
+
+
+REGIONAL_LANDSCAPE_PIPELINE_ROOT_ENV = "REGIONAL_LANDSCAPE_PIPELINE_ROOT"
+DEFAULT_REGIONAL_LANDSCAPE_PIPELINE_ROOT = Path(r"C:\gislab\regional-landscape-pipeline")
 
 
 def repo_root() -> Path:
@@ -18,9 +23,33 @@ def manifests_root() -> Path:
     return package_root() / "manifests"
 
 
+def _regional_landscape_pipeline_root() -> Path:
+    return Path(
+        os.environ.get(
+            REGIONAL_LANDSCAPE_PIPELINE_ROOT_ENV,
+            str(DEFAULT_REGIONAL_LANDSCAPE_PIPELINE_ROOT),
+        )
+    )
+
+
+def _expand_path_tokens(path_value: str) -> str:
+    value = str(path_value).strip()
+    token_values = [
+        f"${{{REGIONAL_LANDSCAPE_PIPELINE_ROOT_ENV}}}",
+        f"%{REGIONAL_LANDSCAPE_PIPELINE_ROOT_ENV}%",
+    ]
+    for token in token_values:
+        if value == token or value.startswith(f"{token}/") or value.startswith(f"{token}\\"):
+            suffix = value[len(token) :].lstrip("/\\")
+            root = _regional_landscape_pipeline_root()
+            return str(root / suffix) if suffix else str(root)
+    return os.path.expandvars(value)
+
+
 def resolve_repo_path(path_value: str | None) -> Path | None:
     if not path_value:
         return None
+    path_value = _expand_path_tokens(path_value)
     path = Path(path_value)
     if path.is_absolute():
         return path

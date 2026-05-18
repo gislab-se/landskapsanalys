@@ -149,6 +149,7 @@ UI_ONLY_RERUN_KEY = "potential_ui_only_rerun"
 UI_ONLY_RERUN_REASON_KEY = "potential_ui_only_rerun_reason"
 WORKSPACE_RENDER_CACHE_KEY = "potential_workspace_render_cache_v1"
 REGION_SELECT_KEY = "potential_selected_region_id"
+DEFAULT_REGION_ID = "trondelag"
 WIND_LAYER_SELECTION_KEY = "wind_builder_selected_layers"
 WIND_RUNTIME_OVERLAY_KEY = "wind_builder_runtime_overlay_enabled"
 SOLAR_APPLIED_CONFIG_KEY = "solar_applied_config"
@@ -1056,7 +1057,7 @@ def _region_options() -> dict[str, dict[str, Any]]:
         st.error(_t("Inga regionmanifest hittades."))
         st.stop()
     options = {str(region["region_id"]): region for region in regions}
-    default_id = "bornholm" if "bornholm" in options else "trondelag" if "trondelag" in options else next(iter(options))
+    default_id = DEFAULT_REGION_ID if DEFAULT_REGION_ID in options else "bornholm" if "bornholm" in options else next(iter(options))
     if st.session_state.get(REGION_SELECT_KEY) not in options:
         st.session_state[REGION_SELECT_KEY] = default_id
     return options
