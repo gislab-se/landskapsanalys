@@ -151,6 +151,34 @@ def check_default_region(report: ContractReport) -> None:
     )
 
 
+def check_h3_session_state_sanitizer(report: ContractReport, region: dict[str, Any]) -> None:
+    import streamlit as st  # noqa: WPS433
+    import potential_app as app  # noqa: WPS433
+
+    state_key = "combined_h3_resolution"
+    original = st.session_state.get(state_key)
+    try:
+        st.session_state[state_key] = "R10"
+        resolved = app._session_h3_resolution(region, state_key, 7)
+        report.check(
+            resolved == 7 and st.session_state.get(state_key) == 7,
+            'Stale H3 state "R10" is sanitized to Trondelag R7.',
+            f'Stale H3 state "R10" resolved to {resolved!r} with session value {st.session_state.get(state_key)!r}, expected 7.',
+        )
+        st.session_state[state_key] = "not-a-resolution"
+        resolved = app._session_h3_resolution(region, state_key, 7)
+        report.check(
+            resolved == 7 and st.session_state.get(state_key) == 7,
+            "Malformed H3 session state falls back to Trondelag R7.",
+            f"Malformed H3 session state resolved to {resolved!r} with session value {st.session_state.get(state_key)!r}, expected 7.",
+        )
+    finally:
+        if original is None:
+            st.session_state.pop(state_key, None)
+        else:
+            st.session_state[state_key] = original
+
+
 def check_trondelag_region(report: ContractReport, region: dict[str, Any]) -> None:
     report.check(
         str(region.get("native_crs")) == "EPSG:25832",
@@ -349,6 +377,7 @@ def main() -> int:
     landscape = load_linked_manifest(trondelag, "landscape_manifest")
     scenario = load_linked_manifest(trondelag, "scenario_manifest")
 
+    check_h3_session_state_sanitizer(report, trondelag)
     check_trondelag_region(report, trondelag)
     check_landscape_manifest(report, landscape)
     check_scenario_placeholder(report, scenario)

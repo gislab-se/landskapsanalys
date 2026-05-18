@@ -1631,6 +1631,33 @@ def _preferred_h3_resolution(region: dict[str, Any], preferred: int = 10) -> int
     return int(preferred) if int(preferred) in available else int(available[0])
 
 
+def _coerce_h3_resolution_value(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except Exception:
+        text = str(value).strip().upper()
+        if text.startswith("R"):
+            text = text[1:].strip()
+        try:
+            return int(text)
+        except Exception:
+            return None
+
+
+def _session_h3_resolution(region: dict[str, Any], state_key: str, preferred_hint: int) -> int:
+    preferred = _preferred_h3_resolution(region, preferred_hint)
+    available = _available_h3_resolutions(region)
+    value = _coerce_h3_resolution_value(st.session_state.get(state_key, preferred))
+    if value in available:
+        if st.session_state.get(state_key) != value:
+            st.session_state[state_key] = value
+        return int(value)
+    st.session_state[state_key] = int(preferred)
+    return int(preferred)
+
+
 def _analysis_h3_resolution(region: dict[str, Any], preferred: int = WIND_RUNTIME_BASE_RESOLUTION) -> int:
     available = _available_h3_resolutions(region)
     try:
@@ -2373,15 +2400,7 @@ def _map_panel_controls(region: dict[str, Any], key_prefix: str, panel: Any | No
         preferred_hint = int(region.get("default_display_h3_resolution") or 9)
     except Exception:
         preferred_hint = 9
-    preferred = _preferred_h3_resolution(region, preferred_hint)
-    try:
-        current_value = int(st.session_state.get(state_key, preferred))
-    except Exception:
-        current_value = preferred
-    if current_value not in available:
-        current_value = preferred
-        if state_key in st.session_state:
-            del st.session_state[state_key]
+    current_value = _session_h3_resolution(region, state_key, preferred_hint)
 
     display_modes = ["selected", "zoom_family"]
     current_display_mode = str(st.session_state.get(display_mode_key, "selected"))
@@ -8799,7 +8818,7 @@ def _unified_workspace_tab(
     _prime_solar_builder_state(solar_defaults, saved_solar_params)
     _prime_wind_builder_state(_default_wind_params(), _selected_wind_layers())
     default_display_resolution = int(region.get("default_display_h3_resolution") or region.get("default_h3_resolution") or 8)
-    h3_resolution = int(st.session_state.get("combined_h3_resolution", _preferred_h3_resolution(region, default_display_resolution)))
+    h3_resolution = _session_h3_resolution(region, "combined_h3_resolution", default_display_resolution)
     zoom_family_enabled = str(st.session_state.get("combined_h3_display_mode", "selected")) == "zoom_family"
     opacity = _current_opacity("combined")
     preserve_map_view = True
@@ -9825,13 +9844,7 @@ def main() -> None:
     context = _load_context(region)
 
     default_display_resolution = int(region.get("default_display_h3_resolution") or region.get("default_h3_resolution") or 8)
-    preferred_h3_resolution = _preferred_h3_resolution(region, default_display_resolution)
-    try:
-        h3_resolution = int(st.session_state.get("combined_h3_resolution", preferred_h3_resolution))
-    except Exception:
-        h3_resolution = int(preferred_h3_resolution)
-    if h3_resolution not in _available_h3_resolutions(region):
-        h3_resolution = int(preferred_h3_resolution)
+    h3_resolution = _session_h3_resolution(region, "combined_h3_resolution", default_display_resolution)
     with main_panel:
         _workspace_header(region, scenario_state, h3_resolution)
         _unified_workspace_tab(region, scenario_state, context, left_panel, right_panel)
