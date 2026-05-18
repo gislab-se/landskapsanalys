@@ -3341,6 +3341,118 @@ def _solar_protected_buffer_geojson(
     return _solar_filter_buffer_geojson(SOLAR_PROTECTED_GROUP_ID, buffer_m, layer_ids)
 
 
+def _h3_resolution_from_hex_ids(hex_ids: pd.Series) -> int | None:
+    for value in hex_ids.dropna().astype(str).head(250):
+        try:
+            return int(h3.get_resolution(str(value)))
+        except Exception:
+            continue
+    return None
+
+
+def _expand_share_frame_to_resolution(frame: pd.DataFrame, target_resolution: int) -> pd.DataFrame:
+    if frame.empty or "hex_id" not in frame.columns:
+        return pd.DataFrame(columns=["hex_id", "filter_buffer_share_pct"])
+    source_resolution = _h3_resolution_from_hex_ids(frame["hex_id"])
+    if source_resolution is None or int(source_resolution) == int(target_resolution):
+        out = frame[["hex_id", "filter_buffer_share_pct"]].copy()
+        out["hex_id"] = out["hex_id"].astype(str)
+        return out
+    work = frame[["hex_id", "filter_buffer_share_pct"]].copy()
+    work["hex_id"] = work["hex_id"].astype(str)
+    if int(source_resolution) > int(target_resolution):
+        work["hex_id"] = work["hex_id"].map(lambda value: str(h3.cell_to_parent(str(value), int(target_resolution))))
+        return work.groupby("hex_id", as_index=False)["filter_buffer_share_pct"].max()
+    rows: list[dict[str, Any]] = []
+    for row in work.itertuples(index=False):
+        try:
+            children = h3.cell_to_children(str(row.hex_id), int(target_resolution))
+        except Exception:
+            children = []
+        for child in children:
+            rows.append({"hex_id": str(child), "filter_buffer_share_pct": float(row.filter_buffer_share_pct or 0.0)})
+    if not rows:
+        return pd.DataFrame(columns=["hex_id", "filter_buffer_share_pct"])
+    return pd.DataFrame(rows).groupby("hex_id", as_index=False)["filter_buffer_share_pct"].max()
+
+
+def _distance_table_filter_share_frame(
+    region: dict[str, Any],
+    target_resolution: int,
+    filter_configs: list[dict[str, Any]] | tuple[dict[str, Any], ...] | None,
+) -> pd.DataFrame:
+    _ = region
+    if not filter_configs:
+        return pd.DataFrame(columns=["hex_id", "filter_buffer_share_pct"])
+    _, _, registry_meta = load_acceptance_registry()
+    status_lookup = _wind_layer_status_lookup(registry_meta)
+    frames: list[pd.DataFrame] = []
+    for filter_config in filter_configs:
+        group_id = str(filter_config.get("group_id", ""))
+        if group_id == "population":
+            continue
+        buffer_m = max(0.0, float(filter_config.get("buffer_m", 0.0) or 0.0))
+        layer_ids = _solar_available_filter_layer_ids(group_id, filter_config.get("layer_ids") or [])
+        layer_frames: list[pd.DataFrame] = []
+        for layer_id in layer_ids:
+            distance_df = distance_table_for_layer(registry_meta, layer_id)
+            if distance_df.empty or "hex_id" not in distance_df.columns:
+                continue
+            source_resolution = _h3_resolution_from_hex_ids(distance_df["hex_id"])
+            if source_resolution is None:
+                continue
+            cell_area_m2 = float(h3_hex_area_km2(source_resolution) * 1_000_000.0)
+            equivalent_radius_m = math.sqrt(max(cell_area_m2, 1e-9) / math.pi)
+            geometry_family = str((status_lookup.get(str(layer_id), {}) or {}).get("geometry_family", "") or "").lower()
+            distance = pd.to_numeric(distance_df.get("distance_m"), errors="coerce")
+            intersects = distance_df.get("intersects", pd.Series(False, index=distance_df.index)).fillna(False).astype(bool)
+            if "line" in geometry_family:
+                if buffer_m <= 0:
+                    share = pd.Series(0.0, index=distance_df.index, dtype="float64")
+                else:
+                    line_cap_pct = min(100.0, (4.0 * buffer_m * equivalent_radius_m / max(cell_area_m2, 1e-9)) * 100.0)
+                    proximity = ((buffer_m - distance) / max(buffer_m, 1.0)).clip(lower=0.0, upper=1.0).fillna(0.0)
+                    share = proximity * line_cap_pct
+                    share.loc[intersects] = line_cap_pct
+            elif "point" in geometry_family:
+                if buffer_m <= 0:
+                    share = pd.Series(0.0, index=distance_df.index, dtype="float64")
+                else:
+                    point_cap_pct = min(100.0, (math.pi * buffer_m * buffer_m / max(cell_area_m2, 1e-9)) * 100.0)
+                    proximity = ((buffer_m - distance) / max(buffer_m, 1.0)).clip(lower=0.0, upper=1.0).fillna(0.0)
+                    share = proximity * point_cap_pct
+                    share.loc[intersects] = max(point_cap_pct, 1.0)
+            else:
+                if buffer_m <= 0:
+                    share = intersects.astype(float) * 100.0
+                else:
+                    proximity = ((buffer_m - distance) / max(buffer_m, 1.0)).clip(lower=0.0, upper=1.0).fillna(0.0) * 100.0
+                    share = proximity
+                    share.loc[intersects] = 100.0
+            layer_frame = pd.DataFrame(
+                {
+                    "hex_id": distance_df["hex_id"].astype(str),
+                    "filter_buffer_share_pct": pd.to_numeric(share, errors="coerce").fillna(0.0).clip(lower=0.0, upper=100.0),
+                }
+            )
+            layer_frame = layer_frame[layer_frame["filter_buffer_share_pct"].gt(0.0)].copy()
+            if not layer_frame.empty:
+                layer_frames.append(layer_frame)
+        if not layer_frames:
+            continue
+        combined = pd.concat(layer_frames, ignore_index=True, sort=False)
+        combined = combined.groupby("hex_id", as_index=False)["filter_buffer_share_pct"].max()
+        combined = _expand_share_frame_to_resolution(combined, int(target_resolution))
+        if not combined.empty:
+            frames.append(combined)
+    if not frames:
+        return pd.DataFrame(columns=["hex_id", "filter_buffer_share_pct"])
+    out = pd.concat(frames, ignore_index=True, sort=False)
+    out = out.groupby("hex_id", as_index=False)["filter_buffer_share_pct"].max()
+    out["filter_buffer_share_pct"] = pd.to_numeric(out["filter_buffer_share_pct"], errors="coerce").fillna(0.0).clip(lower=0.0, upper=100.0)
+    return out[out["filter_buffer_share_pct"].gt(0.0)][["hex_id", "filter_buffer_share_pct"]].copy()
+
+
 def _solar_filter_buffer_frame(
     region: dict[str, Any],
     target_resolution: int,
@@ -3395,6 +3507,7 @@ def _solar_filter_union_buffer_frame(
     if not display_geometry_path:
         return pd.DataFrame(columns=["hex_id", "filter_buffer_share_pct"])
     features: list[dict[str, Any]] = []
+    fallback_configs: list[dict[str, Any]] = []
     for filter_config in filter_configs or []:
         group_id = str(filter_config.get("group_id", ""))
         layer_ids = filter_config.get("layer_ids") or []
@@ -3409,14 +3522,19 @@ def _solar_filter_union_buffer_frame(
         else:
             geojson = _solar_filter_buffer_geojson(group_id, buffer_m, layer_ids)
         if not isinstance(geojson, dict):
+            fallback_configs.append(dict(filter_config))
             continue
         for feature in geojson.get("features") or []:
             if isinstance(feature, dict) and feature.get("geometry"):
                 features.append(feature)
     population_frames = [item["__population_share_frame__"] for item in features if isinstance(item, dict) and "__population_share_frame__" in item]
     features = [item for item in features if not (isinstance(item, dict) and "__population_share_frame__" in item)]
-    if population_frames and not features:
-        combined = pd.concat(population_frames, ignore_index=True, sort=False)
+    fallback_share = _distance_table_filter_share_frame(region, int(target_resolution), fallback_configs)
+    extra_share_frames = list(population_frames)
+    if not fallback_share.empty:
+        extra_share_frames.append(fallback_share)
+    if extra_share_frames and not features:
+        combined = pd.concat(extra_share_frames, ignore_index=True, sort=False)
         combined = (
             combined.groupby("hex_id", as_index=False)["filter_buffer_share_pct"]
             .max()
@@ -3435,8 +3553,8 @@ def _solar_filter_union_buffer_frame(
     score_col = "wind_score" if "wind_score" in share.columns else "potential_area_share_pct"
     share["filter_buffer_share_pct"] = pd.to_numeric(share.get(score_col), errors="coerce").fillna(0.0).clip(lower=0.0, upper=100.0)
     share = share[share["filter_buffer_share_pct"].gt(0.0)].copy()
-    if population_frames:
-        share = pd.concat([share[["hex_id", "filter_buffer_share_pct"]], *population_frames], ignore_index=True, sort=False)
+    if extra_share_frames:
+        share = pd.concat([share[["hex_id", "filter_buffer_share_pct"]], *extra_share_frames], ignore_index=True, sort=False)
         share = share.groupby("hex_id", as_index=False)["filter_buffer_share_pct"].max()
     return share[["hex_id", "filter_buffer_share_pct"]].copy()
 
@@ -8012,6 +8130,20 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
         st.caption("Aktiva filter: " + "; ".join(active_filter_notes) + ".")
     elif unfiltered_start:
         st.caption("Aktiva filter: inga vind- eller solfilter i öppningsläget.")
+    solar_filter_impact = energy_model_state.get("solar_filter_impact")
+    if isinstance(solar_filter_impact, dict) and int(solar_filter_impact.get("active_filter_count", 0) or 0) > 0:
+        unfiltered_solar_area = float(solar_filter_impact.get("unfiltered_area_km2", 0.0) or 0.0)
+        filtered_solar_area = float(solar_filter_impact.get("filtered_area_km2", 0.0) or 0.0)
+        removed_solar_area = float(solar_filter_impact.get("removed_area_km2", 0.0) or 0.0)
+        removed_share_pct = float(solar_filter_impact.get("removed_share_pct", 0.0) or 0.0)
+        st.caption(
+            "Solfiltereffekt: "
+            f"{_format_area_primary(unfiltered_solar_area, unit, hex_area)} utan solfilter -> "
+            f"{_format_area_primary(filtered_solar_area, unit, hex_area)} efter solfilter "
+            f"(-{_format_area_primary(removed_solar_area, unit, hex_area)}, -{removed_share_pct:.1f}%)."
+        )
+        if removed_solar_area <= 1e-6:
+            st.caption("Solfiltren är aktiva men ger ingen mätbar yteffekt med nuvarande avstånd och valda källager.")
     impact_rows = [
         {
             "teknik": "Vind",
@@ -9244,6 +9376,42 @@ def _unified_workspace_tab(
                 solar_large_filter_configs,
             )
         )
+        active_solar_filter_count = int(bool(solar_large_population_active)) + len(solar_large_filter_configs)
+        if active_solar_filter_count > 0:
+            solar_unfiltered_analysis_frame = _solar_large_scale_frame(
+                region,
+                landscape_manifest,
+                analysis_h3_resolution,
+                0.0,
+                None,
+                [],
+                False,
+                [],
+            )
+            unfiltered_solar_area_km2 = float(
+                pd.to_numeric(
+                    solar_unfiltered_analysis_frame.get("potential_area_km2", pd.Series(dtype=float)),
+                    errors="coerce",
+                ).fillna(0.0).sum()
+            )
+            filtered_solar_area_km2 = float(
+                pd.to_numeric(
+                    user_solar_analysis_frame.get("potential_area_km2", pd.Series(dtype=float)),
+                    errors="coerce",
+                ).fillna(0.0).sum()
+            )
+            removed_solar_area_km2 = max(0.0, unfiltered_solar_area_km2 - filtered_solar_area_km2)
+            energy_model_state["solar_filter_impact"] = {
+                "active_filter_count": active_solar_filter_count,
+                "unfiltered_area_km2": unfiltered_solar_area_km2,
+                "filtered_area_km2": filtered_solar_area_km2,
+                "removed_area_km2": removed_solar_area_km2,
+                "removed_share_pct": (
+                    removed_solar_area_km2 / max(unfiltered_solar_area_km2, 1e-9) * 100.0
+                    if unfiltered_solar_area_km2 > 0
+                    else 0.0
+                ),
+            }
         solar_large_polygon_geojson = None
         if solar_large_population_active:
             _append_unique_layer(layers, _solar_population_source_layer())

@@ -217,6 +217,14 @@ def _establishment_class_change_count(before: pd.DataFrame, after: pd.DataFrame)
     )
 
 
+def _solar_area_km2(frame: pd.DataFrame) -> float:
+    return float(
+        pd.to_numeric(frame.get("potential_area_km2", pd.Series(dtype=float)), errors="coerce")
+        .fillna(0.0)
+        .sum()
+    )
+
+
 def _road_ui_layer_contract(layers: list[dict[str, Any]]) -> dict[str, Any]:
     solar_sources: list[dict[str, Any]] = []
     wind_sources: list[dict[str, Any]] = []
@@ -365,6 +373,17 @@ def _region_workspace_contract(region_id: str) -> dict[str, Any]:
         False,
         [],
     )
+    solar_road_area_reduction_km2 = max(0.0, _solar_area_km2(solar_large_without_road) - _solar_area_km2(solar_large))
+    solar_unfiltered_no_population = app._solar_large_scale_frame(
+        region,
+        landscape_manifest,
+        analysis_resolution,
+        0.0,
+        None,
+        [],
+        False,
+        [],
+    )
     solar_electrical_filter_configs = [
         {
             "group_id": app.SOLAR_ELECTRICAL_GROUP_ID,
@@ -434,6 +453,7 @@ def _region_workspace_contract(region_id: str) -> dict[str, Any]:
         False,
         solar_protected_filter_configs,
     )
+    solar_protected_area_reduction_km2 = max(0.0, _solar_area_km2(solar_unfiltered_no_population) - _solar_area_km2(solar_protected))
     solar_has_protected_filter_effect = pd.to_numeric(
         solar_protected.get("protected_buffer_share_pct", pd.Series(dtype=float)),
         errors="coerce",
@@ -463,6 +483,7 @@ def _region_workspace_contract(region_id: str) -> dict[str, Any]:
         False,
         solar_culture_filter_configs,
     )
+    solar_culture_area_reduction_km2 = max(0.0, _solar_area_km2(solar_unfiltered_no_population) - _solar_area_km2(solar_culture))
     solar_has_culture_filter_effect = pd.to_numeric(
         solar_culture.get("protected_buffer_share_pct", pd.Series(dtype=float)),
         errors="coerce",
@@ -640,9 +661,12 @@ def _region_workspace_contract(region_id: str) -> dict[str, Any]:
         "solar_potential_rows": len(solar_potential),
         "solar_has_road_filter_effect": bool(solar_has_road_filter_effect),
         "solar_road_establishment_class_changes": int(solar_road_establishment_class_changes),
+        "solar_road_area_reduction_km2": float(solar_road_area_reduction_km2),
         "solar_has_protected_filter_effect": bool(solar_has_protected_filter_effect),
         "solar_has_culture_filter_effect": bool(solar_has_culture_filter_effect),
         "solar_has_reindeer_filter_effect": bool(solar_has_reindeer_filter_effect),
+        "solar_protected_area_reduction_km2": float(solar_protected_area_reduction_km2),
+        "solar_culture_area_reduction_km2": float(solar_culture_area_reduction_km2),
         "solar_has_electrical_feasibility_effect": bool(solar_has_electrical_feasibility_effect),
         "solar_road_source_features": int(solar_road_source_features),
         "solar_road_buffer_features": int(solar_road_buffer_features),
@@ -707,6 +731,11 @@ def _check_region_contract(report: ParityReport, result: dict[str, Any], referen
         f"{region_id}: solar road filter had no measurable area effect.",
     )
     report.check(
+        float(result.get("solar_road_area_reduction_km2", 0.0) or 0.0) > 0.0,
+        f"{region_id}: solar road filter reduces the right-panel candidate area.",
+        f"{region_id}: solar road filter did not reduce candidate area shown in the right panel.",
+    )
+    report.check(
         int(result.get("solar_road_establishment_class_changes", 0) or 0) > 0,
         f"{region_id}: solar road filter changes the shared establishment area.",
         f"{region_id}: solar road filter did not change establishment classes.",
@@ -717,9 +746,19 @@ def _check_region_contract(report: ParityReport, result: dict[str, Any], referen
         f"{region_id}: solar protected-nature filter had no measurable area effect.",
     )
     report.check(
+        float(result.get("solar_protected_area_reduction_km2", 0.0) or 0.0) > 0.0,
+        f"{region_id}: solar protected-nature filter reduces the right-panel candidate area.",
+        f"{region_id}: solar protected-nature filter did not reduce candidate area shown in the right panel.",
+    )
+    report.check(
         bool(result.get("solar_has_culture_filter_effect", False)),
         f"{region_id}: solar culture filter removes or buffers candidate area.",
         f"{region_id}: solar culture filter had no measurable area effect.",
+    )
+    report.check(
+        float(result.get("solar_culture_area_reduction_km2", 0.0) or 0.0) > 0.0,
+        f"{region_id}: solar culture filter reduces the right-panel candidate area.",
+        f"{region_id}: solar culture filter did not reduce candidate area shown in the right panel.",
     )
     report.check(
         bool(result.get("solar_has_electrical_feasibility_effect", False)),
@@ -838,6 +877,12 @@ def _check_region_contract(report: ParityReport, result: dict[str, Any], referen
             f"{region_id}: solar-road filter behavior differs from Bornholm.",
         )
         report.check(
+            float(reference.get("solar_road_area_reduction_km2", 0.0) or 0.0) > 0.0
+            and float(result.get("solar_road_area_reduction_km2", 0.0) or 0.0) > 0.0,
+            f"{region_id}: matches Bornholm by reducing right-panel solar candidate area with roads.",
+            f"{region_id}: solar-road candidate-area reduction differs from Bornholm.",
+        )
+        report.check(
             int(reference.get("solar_road_establishment_class_changes", 0) or 0) > 0
             and int(result.get("solar_road_establishment_class_changes", 0) or 0) > 0,
             f"{region_id}: matches Bornholm by letting solar roads change establishment classes.",
@@ -866,6 +911,12 @@ def _check_region_contract(report: ParityReport, result: dict[str, Any], referen
             bool(reference.get("solar_has_protected_filter_effect")) == bool(result.get("solar_has_protected_filter_effect")),
             f"{region_id}: matches Bornholm solar protected-nature filter behavior.",
             f"{region_id}: solar protected-nature filter behavior differs from Bornholm.",
+        )
+        report.check(
+            float(reference.get("solar_protected_area_reduction_km2", 0.0) or 0.0) > 0.0
+            and float(result.get("solar_protected_area_reduction_km2", 0.0) or 0.0) > 0.0,
+            f"{region_id}: matches Bornholm by reducing right-panel solar candidate area with protected nature.",
+            f"{region_id}: solar protected-nature candidate-area reduction differs from Bornholm.",
         )
         report.check(
             bool(reference.get("solar_has_culture_filter_effect")) == bool(result.get("solar_has_culture_filter_effect")),
