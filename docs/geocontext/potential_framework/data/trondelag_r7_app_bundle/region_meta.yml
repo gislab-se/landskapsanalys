@@ -1,0 +1,8 @@
+region_id: trondelag
+region_name: Trondelag
+run_id: potential_app_landscape_r7_rollups_original_labels_offshore_trim_2026-05-18
+generated_at: 2026-05-18T15:06:38+0200
+source_app_bundle: outputs/trondelag/potential_app_landscape_r7_rollups_2026-05-18/app_bundle
+offshore_trim_keep_ids_from: outputs/trondelag/potential_app_landscape_r7_rollups_landmask_2026-05-18/app_bundle/hex.geojson
+analysis_status: app_handoff_from_original_r7_geocontext_with_offshore_boundary_trim
+pdf_landscape_types_used: false

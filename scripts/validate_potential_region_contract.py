@@ -23,7 +23,7 @@ from apps.potential_model.region_status import load_region_context  # noqa: E402
 
 
 EXPECTED_TRONDELAG_RESOLUTIONS = [7, 6, 5]
-EXPECTED_TRONDELAG_COUNTS = {7: 13851, 6: 2237, 5: 399}
+EXPECTED_TRONDELAG_COUNTS = {7: 13735, 6: 2163, 5: 365}
 REQUIRED_LANDSCAPE_FIELDS = ["hex_id", "class_km", "F1", "F2", "F3", "F4", "F5"]
 LANDSCAPE_DISPLAY_FIELDS = [
     "landscape_type",

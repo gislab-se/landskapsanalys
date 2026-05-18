@@ -1,0 +1,31 @@
+default_map_view:
+  center: [63.5, 10.5]
+  zoom: 7
+available_layers:
+  - id: landscape_type
+    source: hex.geojson
+    geometry_resolution: 7
+  - id: factor_scores
+    source: hex.geojson
+    fields: [F1, F2, F3, F4, F5]
+available_h3_resolutions:
+  - 7
+  - 6
+  - 5
+h3_geojsons:
+  r7: hex.geojson
+  r6: h3/trondelag_landscape_h3_r6_rollup.geojson
+  r5: h3/trondelag_landscape_h3_r5_rollup.geojson
+legend_sets:
+  landscape_type:
+    label_column: landscape_type_name
+    color_column: color
+popup_fields:
+  - hex_id
+  - landscape_type_name
+  - class_km
+  - F1
+  - F2
+  - F3
+  - F4
+  - F5

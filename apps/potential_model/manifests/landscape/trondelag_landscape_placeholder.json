@@ -1,6 +1,6 @@
 {
-  "analysis_id": "trondelag_potential_app_landscape_r7_rollups_2026_05_18",
-  "display_name": "Trondelag data-driven landscape R7",
+  "analysis_id": "trondelag_potential_app_landscape_r7_rollups_original_labels_offshore_trim_2026_05_18",
+  "display_name": "Trondelag data-driven landscape R7 offshore-trimmed",
   "region_id": "trondelag",
   "status": "app_ready",
   "native_crs": "EPSG:25832",
@@ -15,6 +15,7 @@
   "cluster_profile": "docs/geocontext/potential_framework/data/trondelag_r7_app_bundle/cluster_profiles.csv",
   "run_summary": "docs/geocontext/potential_framework/data/trondelag_r7_app_bundle/rollup_summary.csv",
   "factor_metadata": "docs/geocontext/potential_framework/data/trondelag_r7_app_bundle/factor_metadata.csv",
+  "factor_loadings_top12": "docs/geocontext/potential_framework/data/trondelag_r7_app_bundle/factor_loadings_top12.csv",
   "cluster_label_table": "docs/geocontext/potential_framework/data/trondelag_r7_app_bundle/landscape_cluster_labels.csv",
   "factor_labels": {
     "F1": "Settlement roads and holiday-home intensity",
@@ -78,5 +79,5 @@
     "mixed_everyday_matrix": ["F1", "F4"]
   },
   "semantic_roles_note": "Provisional mapping from the R7 factor labels so Trondelag can mirror Bornholm app logic. Recalibrate when regional controller layers and reviewed Norwegian landscape semantics replace placeholders.",
-  "method_note": "Data-driven geocontext R7 app bundle generated 2026-05-18 from outputs/trondelag/landscape_challenger_culture_settlement_roads_pop250_2026-05-13 and mirrored into docs/geocontext/potential_framework/data/trondelag_r7_app_bundle for Streamlit Cloud runtime. R7 is the interactive app level, with R6/R5 as lightweight rollups. Earlier R8 handoff (89312 hexes) and R9 minimal package (625387 hexes) are too large for light runtime and are intentionally not exposed or required. PDF-derived landscape types are parked and not used for landscape_geojson or factor_scores."
+  "method_note": "Offshore-trimmed data-driven geocontext R7 app bundle generated 2026-05-18 from outputs/trondelag/potential_app_landscape_r7_rollups_original_labels_offshore_trim_2026-05-18/app_bundle and mirrored into docs/geocontext/potential_framework/data/trondelag_r7_app_bundle for Streamlit Cloud runtime. The bundle keeps the original R7 factor and landscape labels but trims offshore cells against the landmask handoff: R7 13735, R6 2163, R5 365. R7 is the interactive app level, with R6/R5 as lightweight rollups. Earlier R8 handoff (89312 hexes) and R9 minimal package (625387 hexes) are too large for light runtime and are intentionally not exposed or required. PDF-derived landscape types are parked and not used for landscape_geojson or factor_scores."
 }
