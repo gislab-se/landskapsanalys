@@ -147,7 +147,8 @@ RIGHT_PANEL_WIDTH_KEY = "potential_right_panel_width_pct"
 PERFORMANCE_HISTORY_KEY = "potential_performance_history_v1"
 UI_ONLY_RERUN_KEY = "potential_ui_only_rerun"
 UI_ONLY_RERUN_REASON_KEY = "potential_ui_only_rerun_reason"
-WORKSPACE_RENDER_CACHE_KEY = "potential_workspace_render_cache_v1"
+WORKSPACE_RENDER_CACHE_KEY = "potential_workspace_render_cache_v2"
+WORKSPACE_CALCULATION_VERSION = "solar_filter_establishment_v2"
 REGION_SELECT_KEY = "potential_selected_region_id"
 DEFAULT_REGION_ID = "trondelag"
 WIND_LAYER_SELECTION_KEY = "wind_builder_selected_layers"
@@ -522,6 +523,7 @@ def _workspace_calculation_fingerprint(
 ) -> str:
     """Hash the calculation inputs, deliberately excluding UI language."""
     payload = {
+        "calculation_version": WORKSPACE_CALCULATION_VERSION,
         "region_id": str(region.get("region_id", "region")),
         "scenario": scenario_state.get("scenario"),
         "h3_resolution": int(h3_resolution),
@@ -555,6 +557,13 @@ def _cached_workspace_payload(fingerprint: str) -> dict[str, Any] | None:
     if str(cached.get("fingerprint", "")) != str(fingerprint):
         return None
     return cached
+
+
+def _invalidate_workspace_cache(reason: str = "") -> None:
+    st.session_state.pop(WORKSPACE_RENDER_CACHE_KEY, None)
+    _clear_ui_only_rerun()
+    if reason:
+        st.session_state["workspace_cache_invalidated_reason"] = str(reason)
 
 
 WIND_SHARE_CLASS_SPECS: list[dict[str, Any]] = [
@@ -5186,6 +5195,7 @@ def _wind_group_controls(
     normalized = normalize_group_layer_map(selected)
     st.session_state[WIND_LAYER_SELECTION_KEY] = normalized
     if applied:
+        _invalidate_workspace_cache("wind controls applied")
         st.session_state[WIND_EMPTY_SELECTION_ACTIVE_KEY] = not _has_selected_wind_layers(normalized)
 
     ui_params = _default_wind_params()
@@ -5228,6 +5238,7 @@ def _wind_layer_selector_controls(widget_prefix: str) -> None:
                 )
             applied = st.form_submit_button("Anvand andringar", type="primary", width="stretch")
         if applied:
+            _invalidate_workspace_cache("wind layer selector applied")
             st.session_state[WIND_LAYER_SELECTION_KEY] = normalize_group_layer_map(draft_layers)
             st.success("Vindlager uppdaterade.")
 
@@ -8934,6 +8945,7 @@ def _unified_workspace_tab(
                     if current_scenario in scenario_levels:
                         st.session_state[potential_scenario_key] = current_scenario
                         st.session_state[energy_scenario_key] = current_scenario
+                    _invalidate_workspace_cache("solar controls applied")
                     st.session_state[SOLAR_APPLIED_CONFIG_KEY] = _solar_draft_config_from_session()
                     solar_controls_applied = True
                     st.rerun()
