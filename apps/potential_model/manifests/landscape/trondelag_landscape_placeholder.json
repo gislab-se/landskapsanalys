@@ -8,14 +8,14 @@
   "source_h3_resolution": 7,
   "default_h3_resolution": 7,
   "available_h3_resolutions": [7, 6, 5],
-  "landscape_geojson": "${REGIONAL_LANDSCAPE_PIPELINE_ROOT}/outputs/trondelag/potential_app_landscape_r7_rollups_2026-05-18/app_bundle/hex.geojson",
+  "landscape_geojson": "docs/geocontext/potential_framework/data/trondelag_r7_app_bundle/hex.geojson",
   "pdf_landscape_geojson": null,
   "pdf_landscape_display_name": "PDF landscape types (not used)",
-  "factor_scores": "${REGIONAL_LANDSCAPE_PIPELINE_ROOT}/outputs/trondelag/potential_app_landscape_r7_rollups_2026-05-18/app_bundle/hex.geojson",
-  "cluster_profile": "${REGIONAL_LANDSCAPE_PIPELINE_ROOT}/outputs/trondelag/potential_app_landscape_r7_rollups_2026-05-18/app_bundle/cluster_profiles.csv",
-  "run_summary": "${REGIONAL_LANDSCAPE_PIPELINE_ROOT}/outputs/trondelag/potential_app_landscape_r7_rollups_2026-05-18/app_bundle/rollup_summary.csv",
-  "factor_metadata": "${REGIONAL_LANDSCAPE_PIPELINE_ROOT}/outputs/trondelag/potential_app_landscape_r7_rollups_2026-05-18/app_bundle/factor_metadata.csv",
-  "cluster_label_table": "${REGIONAL_LANDSCAPE_PIPELINE_ROOT}/outputs/trondelag/potential_app_landscape_r7_rollups_2026-05-18/app_bundle/landscape_cluster_labels.csv",
+  "factor_scores": "docs/geocontext/potential_framework/data/trondelag_r7_app_bundle/hex.geojson",
+  "cluster_profile": "docs/geocontext/potential_framework/data/trondelag_r7_app_bundle/cluster_profiles.csv",
+  "run_summary": "docs/geocontext/potential_framework/data/trondelag_r7_app_bundle/rollup_summary.csv",
+  "factor_metadata": "docs/geocontext/potential_framework/data/trondelag_r7_app_bundle/factor_metadata.csv",
+  "cluster_label_table": "docs/geocontext/potential_framework/data/trondelag_r7_app_bundle/landscape_cluster_labels.csv",
   "factor_labels": {
     "F1": "Settlement roads and holiday-home intensity",
     "F2": "Rivered inland relief versus sea coast",
@@ -78,5 +78,5 @@
     "mixed_everyday_matrix": ["F1", "F4"]
   },
   "semantic_roles_note": "Provisional mapping from the R7 factor labels so Trondelag can mirror Bornholm app logic. Recalibrate when regional controller layers and reviewed Norwegian landscape semantics replace placeholders.",
-  "method_note": "Data-driven geocontext R7 app bundle generated 2026-05-18 from outputs/trondelag/landscape_challenger_culture_settlement_roads_pop250_2026-05-13. Paths use REGIONAL_LANDSCAPE_PIPELINE_ROOT, defaulting locally to C:/gislab/regional-landscape-pipeline. R7 is the interactive app level, with R6/R5 as lightweight rollups. Earlier R8 handoff (89312 hexes) and R9 minimal package (625387 hexes) are too large for light runtime and are intentionally not exposed or required. PDF-derived landscape types are parked and not used for landscape_geojson or factor_scores."
+  "method_note": "Data-driven geocontext R7 app bundle generated 2026-05-18 from outputs/trondelag/landscape_challenger_culture_settlement_roads_pop250_2026-05-13 and mirrored into docs/geocontext/potential_framework/data/trondelag_r7_app_bundle for Streamlit Cloud runtime. R7 is the interactive app level, with R6/R5 as lightweight rollups. Earlier R8 handoff (89312 hexes) and R9 minimal package (625387 hexes) are too large for light runtime and are intentionally not exposed or required. PDF-derived landscape types are parked and not used for landscape_geojson or factor_scores."
 }

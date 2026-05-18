@@ -17,12 +17,12 @@
     "5": 399
   },
   "h3_display_geometries": {
-    "7": "${REGIONAL_LANDSCAPE_PIPELINE_ROOT}/outputs/trondelag/potential_app_landscape_r7_rollups_2026-05-18/app_bundle/hex.geojson",
-    "6": "${REGIONAL_LANDSCAPE_PIPELINE_ROOT}/outputs/trondelag/potential_app_landscape_r7_rollups_2026-05-18/app_bundle/h3/trondelag_landscape_h3_r6_rollup.geojson",
-    "5": "${REGIONAL_LANDSCAPE_PIPELINE_ROOT}/outputs/trondelag/potential_app_landscape_r7_rollups_2026-05-18/app_bundle/h3/trondelag_landscape_h3_r5_rollup.geojson"
+    "7": "docs/geocontext/potential_framework/data/trondelag_r7_app_bundle/hex.geojson",
+    "6": "docs/geocontext/potential_framework/data/trondelag_r7_app_bundle/h3/trondelag_landscape_h3_r6_rollup.geojson",
+    "5": "docs/geocontext/potential_framework/data/trondelag_r7_app_bundle/h3/trondelag_landscape_h3_r5_rollup.geojson"
   },
   "scenario_manifest": "apps/potential_model/manifests/scenarios/trondelag_scenarios_placeholder.json",
   "landscape_manifest": "apps/potential_model/manifests/landscape/trondelag_landscape_placeholder.json",
   "potential_manifest": "apps/potential_model/manifests/potential/trondelag_potential_placeholder.json",
-  "runtime_note": "Trondelag opens in light runtime mode on R7. R6 and R5 are lightweight rollups for display. R8/R9 are intentionally not exposed or required. Energy scenarios still use Bornholm placeholder TIMES/AreaDemand files until EML or a Norwegian equivalent supplies regional data."
+  "runtime_note": "Trondelag opens in light runtime mode on R7. R6 and R5 are lightweight rollups for display. R8/R9 are intentionally not exposed or required. The R7 app bundle is mirrored into the repo for Streamlit Cloud runtime. Energy scenarios still use Bornholm placeholder TIMES/AreaDemand files until EML or a Norwegian equivalent supplies regional data."
 }

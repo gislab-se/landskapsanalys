@@ -1,0 +1,9 @@
+class_k8,landscape_type_id,landscape_type_name,landscape_type_description,label_evidence,color
+1,LT01,Coastal settlement and infrastructure mosaic,Settled coastal/near-coastal cells with high built-up and road-context signal.,"High F3 and F1; high population, road density, and coastal context.",#4e79a7
+2,LT02,Open inland geology and protection landscape,"Broad inland landscape with open/forested cover, protected-nature signal, and granitic-gneiss contrast.","Low F5, moderate F2/F4; open and forest cover with protected nature and low settlement.",#f28e2b
+3,LT03,Forested roaded valley landscape,Large mixed inland valley/forest landscape with road context and moderate relief.,"High F1 and F2; high forest share, road density, and contour/river context.",#59a14f
+4,LT04,Low fjord and island coastal fringe,Low-relief sea-facing fringe with strong coastal-water expression.,"Very low F2/F3/F5, high F4; high sea share and coast/fjord length, low relief.",#e15759
+5,LT05,High open protected mountain landscape,High-elevation open upland/mountain cells with strong protected-nature signal.,"Very low F1, high F4; high elevation, high open landcover, high protected nature, no coast.",#76b7b2
+6,LT06,Coastal fjord forest-open mosaic,Coastal fjord landscape with mixed forest/open cover and limited urban-centre signal.,"Low F2, moderate F1/F4; high sea/coast context with mixed cover.",#edc948
+7,LT07,Small near-sea settlement and heritage outliers,"Small, rare coastal/island-like class dominated by sea context and extreme factor scores.","Only 66 R7 cells; very low relief, high sea share, high F3 and F5, very low F2.",#b07aa1
+8,LT08,Inland upland water and geology belt,"Higher inland open/forested landscape with inland-water, protection, and geology signal.","Low F4, high F5; high elevation, open landcover, lake/protection signal, little coast.",#9c755f

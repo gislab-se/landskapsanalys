@@ -1,0 +1,6 @@
+factor,factor_label,factor_description,evidence
+F1,Settlement roads and holiday-home intensity,"High scores mark areas with dense county-road context, population, and holiday homes; low scores align with more open landcover context.","Top loadings: fylkesveg length, population_250m, holiday-home count; negative open landcover."
+F2,Rivered inland relief versus sea coast,High scores mark river/contour-rich inland landscapes; low scores mark fjord/sea-dominated coastal cells.,Top loadings: main-river length and contour density positive; sea landcover negative.
+F3,Urban and built-up centres,"High scores mark tettsted, built landcover, populated areas, and European-road context.","Top loadings: tettsted, built, populated-area shares, and euroad density."
+F4,Cultural-holiday belts versus inland water,High scores mark cultural landscape and holiday-home belts; low scores align with lake and inland-water context.,Top loadings: cultural landscape and holiday homes positive; lake/inland-water shares negative.
+F5,Schist-phyllite and heritage versus granitic gneiss,High scores mark schist/phyllite geology and cultural-heritage context; low scores mark granitic-gneiss contexts.,Top loadings: schist/phyllite and cultural heritage positive; granitic-gneiss negative.
