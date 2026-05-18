@@ -217,6 +217,58 @@ def _establishment_class_change_count(before: pd.DataFrame, after: pd.DataFrame)
     )
 
 
+def _establishment_class_counts(frame: pd.DataFrame) -> dict[str, int]:
+    if frame.empty or "establishment_class" not in frame.columns:
+        return {}
+    counts = frame["establishment_class"].fillna("").astype(str).value_counts()
+    return {str(key): int(value) for key, value in counts.items()}
+
+
+def _layer_establishment_class_counts(layer: dict[str, Any] | None) -> dict[str, int]:
+    if not isinstance(layer, dict):
+        return {}
+    features = ((layer.get("feature_collection") or {}).get("features") or [])
+    counts: dict[str, int] = {}
+    for feature in features if isinstance(features, list) else []:
+        class_id = str(((feature.get("properties") or {}).get("establishment_class")) or "")
+        if class_id:
+            counts[class_id] = counts.get(class_id, 0) + 1
+    return counts
+
+
+def _dominant_child_class_rollup(source_frame: pd.DataFrame, target_resolution: int) -> pd.DataFrame:
+    if source_frame.empty or "hex_id" not in source_frame.columns or "establishment_class" not in source_frame.columns:
+        return pd.DataFrame(columns=["hex_id", "expected_establishment_class"])
+    work = source_frame[["hex_id", "establishment_class"]].copy()
+    work["hex_id"] = work["hex_id"].astype(str).map(lambda value: str(app.h3.cell_to_parent(str(value), int(target_resolution))))
+    work["establishment_class"] = work["establishment_class"].fillna("not_suitable").astype(str)
+    counts = work.groupby(["hex_id", "establishment_class"]).size().unstack(fill_value=0).reset_index()
+    class_order = ["wind_and_solar", "wind_only", "solar_only", "not_suitable"]
+
+    def dominant(row: Any) -> str:
+        best_class = "not_suitable"
+        best_count = -1
+        for class_id in class_order:
+            count = int(getattr(row, class_id, 0) or 0)
+            if count > best_count:
+                best_class = class_id
+                best_count = count
+        return best_class
+
+    counts["expected_establishment_class"] = [dominant(row) for row in counts.itertuples(index=False)]
+    return counts[["hex_id", "expected_establishment_class"]].copy()
+
+
+def _dominant_rollup_mismatch_count(source_frame: pd.DataFrame, rolled_frame: pd.DataFrame, target_resolution: int) -> int:
+    expected = _dominant_child_class_rollup(source_frame, int(target_resolution))
+    if expected.empty or rolled_frame.empty or "establishment_class" not in rolled_frame.columns:
+        return 0
+    merged = rolled_frame[["hex_id", "establishment_class"]].merge(expected, on="hex_id", how="inner")
+    if merged.empty:
+        return 0
+    return int((merged["establishment_class"].astype(str) != merged["expected_establishment_class"].astype(str)).sum())
+
+
 def _solar_area_km2(frame: pd.DataFrame) -> float:
     return float(
         pd.to_numeric(frame.get("potential_area_km2", pd.Series(dtype=float)), errors="coerce")
@@ -633,6 +685,55 @@ def _region_workspace_contract(region_id: str) -> dict[str, Any]:
         False,
         analysis_resolution,
     )
+    rollup_checks: dict[str, Any] = {}
+    if region_id == "trondelag":
+        source_establishment = app._combined_potential_establishment_frame(
+            region,
+            wind_potential,
+            solar_potential,
+            wind_proposal,
+            solar_proposal,
+            analysis_resolution,
+            analysis_resolution,
+        )
+        zoom_establishment_layers = app._combined_potential_establishment_family_layers(
+            region,
+            wind_potential,
+            solar_potential,
+            wind_proposal,
+            solar_proposal,
+            analysis_resolution,
+            True,
+            analysis_resolution,
+        )
+        for target_resolution in [6, 5]:
+            manual_frame = app._combined_potential_establishment_frame(
+                region,
+                wind_potential,
+                solar_potential,
+                wind_proposal,
+                solar_proposal,
+                target_resolution,
+                analysis_resolution,
+            )
+            zoom_layer = next(
+                (
+                    layer
+                    for layer in zoom_establishment_layers
+                    if int(layer.get("auto_resolution", -1) or -1) == int(target_resolution)
+                ),
+                None,
+            )
+            rollup_checks[f"r{target_resolution}_dominant_mismatches"] = _dominant_rollup_mismatch_count(
+                source_establishment,
+                manual_frame,
+                target_resolution,
+            )
+            rollup_checks[f"r{target_resolution}_manual_counts"] = _establishment_class_counts(manual_frame)
+            rollup_checks[f"r{target_resolution}_zoom_counts"] = _layer_establishment_class_counts(zoom_layer)
+            rollup_checks[f"r{target_resolution}_manual_zoom_counts_match"] = (
+                rollup_checks[f"r{target_resolution}_manual_counts"] == rollup_checks[f"r{target_resolution}_zoom_counts"]
+            )
     road_ui_layers = [
         *wind_preview_layers,
         *solar_road_source_layers,
@@ -690,6 +791,7 @@ def _region_workspace_contract(region_id: str) -> dict[str, Any]:
         "establishment_features": len(((establishment_layer or {}).get("feature_collection") or {}).get("features") or []),
         "wind_preview_layers": [str(layer.get("name")) for layer in wind_preview_layers],
         "display_geometry_path": display_geometry_path,
+        "trondelag_rollup_checks": rollup_checks,
     }
 
 
@@ -976,6 +1078,27 @@ def _check_region_contract(report: ParityReport, result: dict[str, Any], referen
             "trondelag: separate wind hex preview is hidden when establishment layer is available.",
             f"trondelag: separate wind hex preview is still visible: {result['wind_preview_layers']}.",
         )
+        rollup = result.get("trondelag_rollup_checks") or {}
+        for target_resolution in [6, 5]:
+            report.check(
+                int(rollup.get(f"r{target_resolution}_dominant_mismatches", 0) or 0) == 0,
+                f"trondelag: R{target_resolution} establishment rollup follows dominant R7 child classes.",
+                (
+                    f"trondelag: R{target_resolution} establishment rollup diverges from dominant R7 child classes; "
+                    f"mismatches={rollup.get(f'r{target_resolution}_dominant_mismatches')}, "
+                    f"manual_counts={rollup.get(f'r{target_resolution}_manual_counts')}, "
+                    f"zoom_counts={rollup.get(f'r{target_resolution}_zoom_counts')}."
+                ),
+            )
+            report.check(
+                bool(rollup.get(f"r{target_resolution}_manual_zoom_counts_match", False)),
+                f"trondelag: manual R{target_resolution} and zoom-family R{target_resolution} use the same establishment classes.",
+                (
+                    f"trondelag: manual R{target_resolution} and zoom-family R{target_resolution} differ; "
+                    f"manual_counts={rollup.get(f'r{target_resolution}_manual_counts')}, "
+                    f"zoom_counts={rollup.get(f'r{target_resolution}_zoom_counts')}."
+                ),
+            )
 
 
 def main() -> int:

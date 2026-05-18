@@ -2450,12 +2450,22 @@ def _map_panel_controls(region: dict[str, Any], key_prefix: str, panel: Any | No
             )
             if h3_resolution is None:
                 h3_resolution = current_value
-            zoom_family_min_resolution = min(_display_family_resolutions(region, int(h3_resolution)))
+            family_resolutions = _display_family_resolutions(region, int(h3_resolution))
+            zoom_family_available = len({int(value) for value in family_resolutions}) > 1
+            if not zoom_family_available and current_display_mode == "zoom_family":
+                current_display_mode = "selected"
+                st.session_state[display_mode_key] = "selected"
+            display_modes_for_resolution = ["selected", "zoom_family"] if zoom_family_available else ["selected"]
+            zoom_family_min_resolution = min(family_resolutions) if family_resolutions else int(h3_resolution)
             zoom_family_label = f"Utforska: zoomanpassad R{int(h3_resolution)}-R{int(zoom_family_min_resolution)}"
-            display_mode_index = None if display_mode_key in st.session_state else display_modes.index(current_display_mode)
+            display_mode_index = (
+                None
+                if display_mode_key in st.session_state
+                else display_modes_for_resolution.index(current_display_mode)
+            )
             display_mode = st.radio(
                 _t("Hexvisning"),
-                options=display_modes,
+                options=display_modes_for_resolution,
                 index=display_mode_index,
                 format_func=lambda value: {
                     "selected": _t("Snabb visning: vald upplösning"),
@@ -2478,7 +2488,10 @@ def _map_panel_controls(region: dict[str, Any], key_prefix: str, panel: Any | No
                 st.rerun()
     else:
         h3_resolution = current_value
-        zoom_family_enabled = current_display_mode == "zoom_family"
+        zoom_family_enabled = (
+            current_display_mode == "zoom_family"
+            and len({int(value) for value in _display_family_resolutions(region, int(h3_resolution))}) > 1
+        )
 
     return int(h3_resolution), bool(zoom_family_enabled), _current_opacity(key_prefix), True, _map_view_reset_token()
 
@@ -6503,6 +6516,33 @@ def _combined_establishment_class(wind_suitable: bool, solar_suitable: bool) -> 
     return "not_suitable"
 
 
+def _dominant_establishment_class_from_areas(row: Any) -> str:
+    class_order = ["wind_and_solar", "wind_only", "solar_only", "not_suitable"]
+    best_class = "not_suitable"
+    best_area = -1.0
+    for class_id in class_order:
+        area = float(getattr(row, f"rollup_area_{class_id}", 0.0) or 0.0)
+        if area > best_area:
+            best_class = class_id
+            best_area = area
+    return best_class if best_area > 0.0 else "not_suitable"
+
+
+def _apply_establishment_style_columns(frame: pd.DataFrame) -> pd.DataFrame:
+    frame["establishment_label"] = frame["establishment_class"].map(
+        lambda class_id: ESTABLISHMENT_CLASS_SPECS.get(str(class_id), ESTABLISHMENT_CLASS_SPECS["not_suitable"])["label"]
+    )
+    frame["fill"] = frame["establishment_class"].map(
+        lambda class_id: ESTABLISHMENT_CLASS_SPECS.get(str(class_id), ESTABLISHMENT_CLASS_SPECS["not_suitable"])["color"]
+    )
+    frame["stroke"] = frame["establishment_class"].map(
+        lambda class_id: ESTABLISHMENT_CLASS_SPECS.get(str(class_id), ESTABLISHMENT_CLASS_SPECS["not_suitable"])["stroke"]
+    )
+    frame["stroke_weight"] = 0.12
+    frame["fill_opacity"] = 0.58
+    return frame
+
+
 def _combined_establishment_frame(
     region: dict[str, Any],
     wind_selected: pd.DataFrame,
@@ -6581,6 +6621,114 @@ def _combined_establishment_frame(
     return base
 
 
+def _trondelag_rollup_potential_establishment_frame(
+    region: dict[str, Any],
+    source_frame: pd.DataFrame,
+    target_resolution: int,
+    source_resolution: int,
+) -> pd.DataFrame:
+    display_geometry_path = _h3_display_geometry_path(region, int(target_resolution))
+    if not display_geometry_path:
+        return pd.DataFrame()
+    display_geometries = load_h3_display_geometries(display_geometry_path)
+    base = pd.DataFrame({"hex_id": sorted(str(hex_id) for hex_id in display_geometries)})
+    if base.empty:
+        return base
+    if source_frame.empty or "hex_id" not in source_frame.columns:
+        base["establishment_class"] = "not_suitable"
+        for technology in ["wind", "solar"]:
+            base[f"{technology}_suitable"] = False
+            base[f"{technology}_potential_score"] = 0.0
+            base[f"{technology}_potential_area_km2"] = 0.0
+        base["wind_outside_lp_area_km2"] = 0.0
+        base["solar_outside_lp_area_km2"] = 0.0
+        base["outside_lp_shortage"] = False
+        base["outside_lp_reason"] = ""
+        return _apply_establishment_style_columns(base)
+
+    work = source_frame.copy()
+    work["hex_id"] = work["hex_id"].astype(str).map(lambda value: str(h3.cell_to_parent(str(value), int(target_resolution))))
+    child_hex_area_km2 = float(h3_hex_area_km2(int(source_resolution)))
+    target_hex_area_km2 = float(h3_hex_area_km2(int(target_resolution)))
+    for class_id in ["wind_and_solar", "wind_only", "solar_only", "not_suitable"]:
+        work[f"rollup_area_{class_id}"] = work.get("establishment_class", "").astype(str).eq(class_id).astype(float) * child_hex_area_km2
+
+    agg_spec: dict[str, Any] = {
+        "rollup_area_wind_and_solar": ("rollup_area_wind_and_solar", "sum"),
+        "rollup_area_wind_only": ("rollup_area_wind_only", "sum"),
+        "rollup_area_solar_only": ("rollup_area_solar_only", "sum"),
+        "rollup_area_not_suitable": ("rollup_area_not_suitable", "sum"),
+    }
+    for technology in ["wind", "solar"]:
+        for column, method in [
+            (f"{technology}_potential_area_km2", "sum"),
+            (f"{technology}_allocated_area_km2", "sum"),
+            (f"{technology}_allocated_gwh", "sum"),
+            (f"{technology}_allocated_hex_share_pct", "sum"),
+            (f"{technology}_conflict_area_km2", "sum"),
+            (f"{technology}_rank", "max"),
+            (f"{technology}_expansion_ring", "max"),
+        ]:
+            if column in work.columns:
+                work[column] = pd.to_numeric(work[column], errors="coerce").fillna(0.0)
+                agg_spec[column] = (column, method)
+        for column in [f"{technology}_outside_lp", f"{technology}_conflict"]:
+            if column in work.columns:
+                work[column] = work[column].map(lambda value: False if pd.isna(value) else bool(value)).astype(int)
+                agg_spec[column] = (column, "max")
+
+    rolled = (
+        work.groupby("hex_id", as_index=False)
+        .agg(**agg_spec)
+        .sort_values("hex_id")
+        .reset_index(drop=True)
+    )
+    base = base.merge(rolled, on="hex_id", how="left")
+    for column in base.columns:
+        if column.startswith("rollup_area_"):
+            base[column] = pd.to_numeric(base[column], errors="coerce").fillna(0.0)
+    base["establishment_class"] = [
+        _dominant_establishment_class_from_areas(row)
+        for row in base.itertuples(index=False)
+    ]
+    base["wind_suitable"] = base["establishment_class"].isin(["wind_and_solar", "wind_only"])
+    base["solar_suitable"] = base["establishment_class"].isin(["wind_and_solar", "solar_only"])
+
+    for technology in ["wind", "solar"]:
+        area_col = f"{technology}_potential_area_km2"
+        if area_col not in base.columns:
+            base[area_col] = 0.0
+        base[area_col] = pd.to_numeric(base[area_col], errors="coerce").fillna(0.0).clip(lower=0.0, upper=target_hex_area_km2)
+        base[f"{technology}_potential_score"] = (base[area_col] / max(target_hex_area_km2, 1e-9) * 100.0).clip(lower=0.0, upper=100.0).round(1)
+        for column in [
+            f"{technology}_rank",
+            f"{technology}_allocated_area_km2",
+            f"{technology}_allocated_gwh",
+            f"{technology}_allocated_hex_share_pct",
+            f"{technology}_conflict_area_km2",
+            f"{technology}_expansion_ring",
+        ]:
+            if column not in base.columns:
+                base[column] = 0.0
+            base[column] = pd.to_numeric(base[column], errors="coerce").fillna(0.0)
+        for column in [f"{technology}_outside_lp", f"{technology}_conflict"]:
+            if column not in base.columns:
+                base[column] = False
+            base[column] = base[column].map(lambda value: False if pd.isna(value) else bool(value))
+        phase_col = f"{technology}_phase"
+        if phase_col not in base.columns:
+            base[phase_col] = ""
+
+    base["wind_outside_lp_area_km2"] = pd.to_numeric(base.get("wind_conflict_area_km2"), errors="coerce").fillna(0.0).clip(lower=0.0)
+    base["solar_outside_lp_area_km2"] = pd.to_numeric(base.get("solar_conflict_area_km2"), errors="coerce").fillna(0.0).clip(lower=0.0)
+    base["outside_lp_shortage"] = base["wind_outside_lp_area_km2"].gt(0.0) | base["solar_outside_lp_area_km2"].gt(0.0)
+    base["outside_lp_reason"] = [
+        "vind + sol" if wind_area > 0 and solar_area > 0 else "vind" if wind_area > 0 else "sol" if solar_area > 0 else ""
+        for wind_area, solar_area in zip(base["wind_outside_lp_area_km2"], base["solar_outside_lp_area_km2"])
+    ]
+    return _apply_establishment_style_columns(base)
+
+
 def _combined_potential_establishment_frame(
     region: dict[str, Any],
     wind_potential: pd.DataFrame,
@@ -6597,6 +6745,25 @@ def _combined_potential_establishment_frame(
     base = pd.DataFrame({"hex_id": sorted(str(hex_id) for hex_id in display_geometries)})
     if base.empty:
         return base
+    if (
+        str(region.get("region_id", "") or "").lower() == "trondelag"
+        and int(target_resolution) < int(source_resolution)
+    ):
+        source_frame = _combined_potential_establishment_frame(
+            region,
+            wind_potential,
+            solar_potential,
+            wind_selected,
+            solar_selected,
+            int(source_resolution),
+            int(source_resolution),
+        )
+        return _trondelag_rollup_potential_establishment_frame(
+            region,
+            source_frame,
+            int(target_resolution),
+            int(source_resolution),
+        )
 
     wind = _potential_establishment_source_frame(wind_potential, "wind", int(target_resolution), int(source_resolution))
     solar_filter_intersection_blocks = (
