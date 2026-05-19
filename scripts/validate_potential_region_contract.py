@@ -368,6 +368,46 @@ def check_social_acceptance_impact_visual_weight(report: ContractReport, region:
     )
 
 
+def check_social_acceptance_summary(report: ContractReport, region: dict[str, Any]) -> None:
+    import pandas as pd  # noqa: WPS433
+    import potential_app as app  # noqa: WPS433
+
+    manifest = app._social_acceptance_manifest(region)
+    values = app._social_acceptance_values_frame(manifest, "medium", 7)
+    if values.empty:
+        report.fail("Social acceptance summary test could not load Trondelag acceptance values.")
+        return
+
+    low = values[pd.to_numeric(values["acceptance_value"], errors="coerce").lt(app.SOCIAL_ACCEPTANCE_LOW_THRESHOLD)].head(1)
+    high = values[pd.to_numeric(values["acceptance_value"], errors="coerce").ge(app.SOCIAL_ACCEPTANCE_HIGH_THRESHOLD)].head(1)
+    if low.empty or high.empty:
+        report.fail("Social acceptance summary test needs at least one low and one high acceptance cell.")
+        return
+    sample = pd.concat([low, high], ignore_index=True)
+    frame = pd.DataFrame(
+        [
+            {
+                "hex_id": str(row.hex_id),
+                "establishment_class": "wind_and_solar",
+                "wind_suitable": True,
+                "solar_suitable": True,
+            }
+            for row in sample.itertuples(index=False)
+        ]
+    )
+    hex_area = float(app.h3_hex_area_km2(7))
+    summary = app._social_acceptance_establishment_summary(frame, manifest, "medium", 7, hex_area, 75)
+    report.check(
+        summary.get("potential_hex_count") == 2
+        and summary.get("measured_hex_count") == 2
+        and summary.get("low_acceptance_hex_count") == 1
+        and summary.get("high_acceptance_hex_count") == 1
+        and math.isclose(float(summary.get("low_acceptance_area_km2", 0.0)), hex_area, rel_tol=0.0, abs_tol=0.0001),
+        "Social acceptance summary reports mean/median context and low/high potential-area classes.",
+        f"Social acceptance summary has unexpected values: {summary!r}.",
+    )
+
+
 def check_social_acceptance_impact_control(report: ContractReport) -> None:
     source = (ROOT / "potential_app.py").read_text(encoding="utf-8")
     report.check(
@@ -720,6 +760,7 @@ def main() -> int:
         check_runtime_hex_layers_use_zoom_family(report)
         check_social_acceptance_impact_control(report)
         check_social_acceptance_impact_visual_weight(report, trondelag)
+        check_social_acceptance_summary(report, trondelag)
         check_trondelag_region(report, trondelag)
         check_map_auto_resolution(report)
         check_landscape_manifest(report, landscape)

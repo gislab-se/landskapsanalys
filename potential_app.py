@@ -367,6 +367,8 @@ SOLAR_V1_POPULATION_COUNT_COLUMN = "fastboendebefolkningmapinfo_count"
 EML_PROVIDER_URL = "https://energymodellinglab.com/"
 IVL_PROVIDER_URL = "https://www.ivl.se/"
 SOCIAL_ACCEPTANCE_IMPACT_TINT_COLOR = "#991b1b"
+SOCIAL_ACCEPTANCE_LOW_THRESHOLD = 0.4
+SOCIAL_ACCEPTANCE_HIGH_THRESHOLD = 0.7
 
 APP_TRANSLATIONS: dict[str, dict[str, str]] = {
     "sv": {},
@@ -5425,6 +5427,67 @@ def _apply_social_acceptance_impact_to_establishment_frame(
     return work.drop(columns=["acceptance_value", "source_hex_count"], errors="ignore")
 
 
+def _social_acceptance_establishment_summary(
+    establishment_frame: pd.DataFrame,
+    manifest: dict[str, Any] | None,
+    scenario_id: str,
+    target_resolution: int,
+    hex_area_km2: float,
+    impact_pct: float,
+) -> dict[str, Any]:
+    if establishment_frame.empty or not isinstance(manifest, dict):
+        return {}
+    acceptance_frame = _social_acceptance_values_frame(manifest, scenario_id, int(target_resolution))
+    if acceptance_frame.empty:
+        return {}
+
+    work = establishment_frame.copy()
+    work["hex_id"] = work["hex_id"].astype(str)
+    if "establishment_class" in work.columns:
+        potential_mask = work["establishment_class"].astype(str).ne("not_suitable")
+    else:
+        wind_suitable = work["wind_suitable"].astype(bool) if "wind_suitable" in work.columns else pd.Series(False, index=work.index)
+        solar_suitable = work["solar_suitable"].astype(bool) if "solar_suitable" in work.columns else pd.Series(False, index=work.index)
+        potential_mask = wind_suitable | solar_suitable
+    potential_hexes = work.loc[potential_mask, ["hex_id"]].drop_duplicates().copy()
+    if potential_hexes.empty:
+        return {}
+
+    joined = potential_hexes.merge(acceptance_frame, on="hex_id", how="left")
+    joined["acceptance_value"] = pd.to_numeric(joined.get("acceptance_value"), errors="coerce")
+    measured = joined.dropna(subset=["acceptance_value"]).copy()
+    if measured.empty:
+        return {}
+    measured["acceptance_value"] = measured["acceptance_value"].clip(lower=0.0, upper=1.0)
+    low_mask = measured["acceptance_value"].lt(SOCIAL_ACCEPTANCE_LOW_THRESHOLD)
+    high_mask = measured["acceptance_value"].ge(SOCIAL_ACCEPTANCE_HIGH_THRESHOLD)
+    potential_hex_count = int(len(potential_hexes))
+    measured_hex_count = int(len(measured))
+    low_hex_count = int(low_mask.sum())
+    high_hex_count = int(high_mask.sum())
+    hex_area = max(0.0, float(hex_area_km2 or 0.0))
+    return {
+        "scenario_id": str(scenario_id),
+        "scenario_label": social_acceptance_scenario_label(manifest, str(scenario_id)),
+        "impact_pct": float(max(0.0, min(100.0, float(impact_pct or 0.0)))),
+        "h3_resolution": int(target_resolution),
+        "hex_area_km2": hex_area,
+        "potential_hex_count": potential_hex_count,
+        "measured_hex_count": measured_hex_count,
+        "missing_hex_count": max(0, potential_hex_count - measured_hex_count),
+        "mean_acceptance": float(measured["acceptance_value"].mean()),
+        "median_acceptance": float(measured["acceptance_value"].median()),
+        "low_threshold": float(SOCIAL_ACCEPTANCE_LOW_THRESHOLD),
+        "high_threshold": float(SOCIAL_ACCEPTANCE_HIGH_THRESHOLD),
+        "low_acceptance_hex_count": low_hex_count,
+        "low_acceptance_area_km2": float(low_hex_count * hex_area),
+        "low_acceptance_share_pct": (low_hex_count / measured_hex_count * 100.0) if measured_hex_count > 0 else 0.0,
+        "high_acceptance_hex_count": high_hex_count,
+        "high_acceptance_area_km2": float(high_hex_count * hex_area),
+        "high_acceptance_share_pct": (high_hex_count / measured_hex_count * 100.0) if measured_hex_count > 0 else 0.0,
+    }
+
+
 def _default_wind_layer_selection() -> dict[str, list[str]]:
     return {
         group_id: list(DEFAULT_WIND_ESTABLISHMENT_LAYER_SELECTION.get(group_id, []))
@@ -8553,6 +8616,43 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
         )
         if removed_solar_area <= 1e-6:
             st.caption("Solfiltren är aktiva men ger ingen mätbar yteffekt med nuvarande avstånd och valda källager.")
+
+    social_summary = energy_model_state.get("social_acceptance_summary")
+    if isinstance(social_summary, dict) and social_summary:
+        st.markdown(f"**{_t('Social acceptans')}**")
+        scenario_label = str(social_summary.get("scenario_label", social_summary.get("scenario_id", "-")) or "-")
+        impact_pct = float(social_summary.get("impact_pct", 0.0) or 0.0)
+        measured_hex_count = int(social_summary.get("measured_hex_count", 0) or 0)
+        potential_hex_count = int(social_summary.get("potential_hex_count", 0) or 0)
+        st.caption(
+            f"Scenario: {scenario_label}. Beräknas på {measured_hex_count:,} av {potential_hex_count:,} potentiella etableringshex."
+            .replace(",", " ")
+        )
+        metric_cols = st.columns(3)
+        metric_cols[0].metric("Medelacceptans", f"{float(social_summary.get('mean_acceptance', 0.0) or 0.0):.2f}")
+        metric_cols[1].metric("Medianacceptans", f"{float(social_summary.get('median_acceptance', 0.0) or 0.0):.2f}")
+        metric_cols[2].metric("Acceptanspåverkan", f"{impact_pct:.0f}%")
+        low_threshold = float(social_summary.get("low_threshold", SOCIAL_ACCEPTANCE_LOW_THRESHOLD) or SOCIAL_ACCEPTANCE_LOW_THRESHOLD)
+        high_threshold = float(social_summary.get("high_threshold", SOCIAL_ACCEPTANCE_HIGH_THRESHOLD) or SOCIAL_ACCEPTANCE_HIGH_THRESHOLD)
+        acceptance_rows = [
+            {
+                "klass": f"Låg < {low_threshold:.1f}",
+                "yta": _format_area_primary(float(social_summary.get("low_acceptance_area_km2", 0.0) or 0.0), unit, hex_area),
+                "andel": f"{float(social_summary.get('low_acceptance_share_pct', 0.0) or 0.0):.1f}%",
+                "hex": _count_text(int(social_summary.get("low_acceptance_hex_count", 0) or 0)),
+            },
+            {
+                "klass": f"Hög ≥ {high_threshold:.1f}",
+                "yta": _format_area_primary(float(social_summary.get("high_acceptance_area_km2", 0.0) or 0.0), unit, hex_area),
+                "andel": f"{float(social_summary.get('high_acceptance_share_pct', 0.0) or 0.0):.1f}%",
+                "hex": _count_text(int(social_summary.get("high_acceptance_hex_count", 0) or 0)),
+            },
+        ]
+        st.dataframe(pd.DataFrame(acceptance_rows), width="stretch", hide_index=True, height=124)
+        missing_hex_count = int(social_summary.get("missing_hex_count", 0) or 0)
+        if missing_hex_count > 0:
+            st.caption(f"Acceptansdata saknas för {missing_hex_count:,} potentiella hex och räknas inte i statistiken.".replace(",", " "))
+
     impact_rows = [
         {
             "teknik": "Vind",
@@ -10229,6 +10329,14 @@ def _unified_workspace_tab(
         )
         if not potential_establishment_frame.empty:
             class_counts = potential_establishment_frame.get("establishment_class", pd.Series(dtype=str)).astype(str).value_counts()
+        energy_model_state["social_acceptance_summary"] = _social_acceptance_establishment_summary(
+            potential_establishment_frame if not potential_establishment_frame.empty else selected_establishment_frame,
+            social_manifest,
+            social_acceptance_scenario,
+            analysis_h3_resolution,
+            analysis_hex_area_km2,
+            social_acceptance_impact_pct,
+        )
         energy_model_state["establishment_hex_stats"] = {
             "total_hex_count": int(len(selected_establishment_frame)),
             "black_hex_count": int(energy_model_state["outside_lp_shortage_stats"].get("total_shortage_hex_count", 0) or 0),
