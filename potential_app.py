@@ -590,6 +590,7 @@ def _workspace_calculation_fingerprint(
     show_social_acceptance: bool,
     social_acceptance_scenario: str,
     social_acceptance_impact_pct: float,
+    social_acceptance_allocation_priority_pct: float,
     selected_factor: str,
     applied_solar_config: dict[str, Any],
     solar_params: dict[str, Any],
@@ -616,6 +617,7 @@ def _workspace_calculation_fingerprint(
         "show_social_acceptance": bool(show_social_acceptance),
         "social_acceptance_scenario": str(social_acceptance_scenario),
         "social_acceptance_impact_pct": float(social_acceptance_impact_pct),
+        "social_acceptance_allocation_priority_pct": float(social_acceptance_allocation_priority_pct),
         "selected_factor": str(selected_factor),
         "applied_solar_config": applied_solar_config,
         "solar_params": solar_params,
@@ -1727,6 +1729,10 @@ def _social_acceptance_impact_state_key(region: dict[str, Any]) -> str:
     return f"social_acceptance_impact_pct_{region.get('region_id', 'region')}"
 
 
+def _social_acceptance_allocation_priority_state_key(region: dict[str, Any]) -> str:
+    return f"social_acceptance_allocation_priority_pct_{region.get('region_id', 'region')}"
+
+
 def _social_acceptance_impact_pct(region: dict[str, Any]) -> float:
     try:
         value = float(st.session_state.get(_social_acceptance_impact_state_key(region), 0.0) or 0.0)
@@ -1734,6 +1740,16 @@ def _social_acceptance_impact_pct(region: dict[str, Any]) -> float:
         value = 0.0
     value = int(round(max(0.0, min(100.0, value))))
     st.session_state[_social_acceptance_impact_state_key(region)] = value
+    return float(value)
+
+
+def _social_acceptance_allocation_priority_pct(region: dict[str, Any]) -> float:
+    try:
+        value = float(st.session_state.get(_social_acceptance_allocation_priority_state_key(region), 0.0) or 0.0)
+    except Exception:
+        value = 0.0
+    value = int(round(max(0.0, min(100.0, value))))
+    st.session_state[_social_acceptance_allocation_priority_state_key(region)] = value
     return float(value)
 
 
@@ -2218,6 +2234,7 @@ def _ensure_default_start_state(region: dict[str, Any], force: bool = False) -> 
     st.session_state["show_social_acceptance"] = False
     st.session_state[_social_acceptance_state_key(region)] = SOCIAL_ACCEPTANCE_DEFAULT_SCENARIO_ID
     st.session_state[_social_acceptance_impact_state_key(region)] = 0
+    st.session_state[_social_acceptance_allocation_priority_state_key(region)] = 0
     st.session_state["show_solar_v1"] = False
     st.session_state["show_user_solar"] = True
     st.session_state["solar_draft_small_population_active"] = False
@@ -4207,6 +4224,10 @@ def _solar_establishment_frame(
     solar_twh_need: float,
     solar_km2_per_twh: float,
     hex_area_km2: float,
+    h3_resolution: int | None = None,
+    social_acceptance_manifest: dict[str, Any] | None = None,
+    social_acceptance_scenario: str = SOCIAL_ACCEPTANCE_DEFAULT_SCENARIO_ID,
+    social_acceptance_allocation_priority_pct: float = 0.0,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     if not small_frame.empty:
@@ -4249,7 +4270,21 @@ def _solar_establishment_frame(
             "selected_hex_count": 0,
         }
     candidates = pd.DataFrame(rows)
-    candidates = candidates.sort_values(["sort_group", "potential_score", "potential_area_km2", "hex_id"], ascending=[True, False, False, True])
+    if h3_resolution is not None:
+        candidates = _apply_social_acceptance_priority_to_solar_candidates(
+            candidates,
+            social_acceptance_manifest,
+            social_acceptance_scenario,
+            int(h3_resolution),
+            float(social_acceptance_allocation_priority_pct or 0.0),
+        )
+    if "social_acceptance_priority_score" in candidates.columns and float(social_acceptance_allocation_priority_pct or 0.0) > 0.0:
+        candidates = candidates.sort_values(
+            ["sort_group", "social_acceptance_priority_score", "potential_score", "potential_area_km2", "hex_id"],
+            ascending=[True, False, False, False, True],
+        )
+    else:
+        candidates = candidates.sort_values(["sort_group", "potential_score", "potential_area_km2", "hex_id"], ascending=[True, False, False, True])
     remaining = float(solar_area_need_km2 or 0.0)
     selected_rows: list[dict[str, Any]] = []
     for rank, row in enumerate(candidates.itertuples(index=False), start=1):
@@ -4279,6 +4314,11 @@ def _solar_establishment_frame(
                 "outside_et": bool(getattr(row, "outside_et", False)),
                 "expansion_ring": int(getattr(row, "expansion_ring", 0) or 0),
                 "allocation_phase": "Inom LP",
+                "social_acceptance_value": float(getattr(row, "social_acceptance_value", 1.0) or 1.0),
+                "social_acceptance_allocation_priority_pct": float(
+                    getattr(row, "social_acceptance_allocation_priority_pct", 0.0) or 0.0
+                ),
+                "social_acceptance_priority_score": float(getattr(row, "social_acceptance_priority_score", 0.0) or 0.0),
             }
         )
         if remaining <= 1e-9:
@@ -5440,6 +5480,74 @@ def _apply_social_acceptance_impact_to_establishment_frame(
         for color, tint_amount in zip(stroke_values, work["social_acceptance_tint_amount"])
     ]
     return work.drop(columns=["acceptance_value", "source_hex_count"], errors="ignore")
+
+
+def _merge_social_acceptance_for_priority(
+    frame: pd.DataFrame,
+    manifest: dict[str, Any] | None,
+    scenario_id: str,
+    target_resolution: int,
+    priority_pct: float,
+) -> tuple[pd.DataFrame, float]:
+    priority_fraction = max(0.0, min(1.0, float(priority_pct or 0.0) / 100.0))
+    if frame.empty or priority_fraction <= 0.0 or not isinstance(manifest, dict):
+        return frame, 0.0
+    acceptance_frame = _social_acceptance_values_frame(manifest, scenario_id, int(target_resolution))
+    if acceptance_frame.empty:
+        return frame, 0.0
+    work = frame.copy()
+    work["hex_id"] = work["hex_id"].astype(str)
+    work = work.merge(acceptance_frame[["hex_id", "acceptance_value"]], on="hex_id", how="left")
+    work["social_acceptance_value"] = pd.to_numeric(work["acceptance_value"], errors="coerce").fillna(1.0).clip(lower=0.0, upper=1.0)
+    work["social_acceptance_allocation_priority_pct"] = float(priority_fraction * 100.0)
+    return work.drop(columns=["acceptance_value"], errors="ignore"), priority_fraction
+
+
+def _apply_social_acceptance_priority_to_wind_allocation_frame(
+    frame: pd.DataFrame,
+    manifest: dict[str, Any] | None,
+    scenario_id: str,
+    target_resolution: int,
+    priority_pct: float,
+) -> pd.DataFrame:
+    work, priority_fraction = _merge_social_acceptance_for_priority(frame, manifest, scenario_id, target_resolution, priority_pct)
+    if priority_fraction <= 0.0 or work.empty:
+        return work
+    core_source = work["core_score"] if "core_score" in work.columns else pd.Series(0.0, index=work.index)
+    share_source = work["potential_area_share_pct"] if "potential_area_share_pct" in work.columns else pd.Series(0.0, index=work.index)
+    core_score = pd.to_numeric(core_source, errors="coerce").fillna(0.0).clip(lower=0.0, upper=1.0)
+    potential_share = pd.to_numeric(share_source, errors="coerce").fillna(0.0).clip(lower=0.0, upper=100.0).div(100.0)
+    technical_score = ((0.7 * core_score) + (0.3 * potential_share)).clip(lower=0.0, upper=1.0)
+    acceptance = pd.to_numeric(work["social_acceptance_value"], errors="coerce").fillna(1.0).clip(lower=0.0, upper=1.0)
+    work["technical_priority_score"] = technical_score
+    work["core_score_before_acceptance"] = core_score
+    work["social_acceptance_priority_score"] = ((1.0 - priority_fraction) * technical_score + priority_fraction * acceptance).clip(
+        lower=0.0,
+        upper=1.0,
+    )
+    work["core_score"] = work["social_acceptance_priority_score"]
+    return work
+
+
+def _apply_social_acceptance_priority_to_solar_candidates(
+    frame: pd.DataFrame,
+    manifest: dict[str, Any] | None,
+    scenario_id: str,
+    target_resolution: int,
+    priority_pct: float,
+) -> pd.DataFrame:
+    work, priority_fraction = _merge_social_acceptance_for_priority(frame, manifest, scenario_id, target_resolution, priority_pct)
+    if priority_fraction <= 0.0 or work.empty:
+        return work
+    score_source = work["potential_score"] if "potential_score" in work.columns else pd.Series(0.0, index=work.index)
+    technical_score = pd.to_numeric(score_source, errors="coerce").fillna(0.0).clip(lower=0.0, upper=100.0).div(100.0)
+    acceptance = pd.to_numeric(work["social_acceptance_value"], errors="coerce").fillna(1.0).clip(lower=0.0, upper=1.0)
+    work["technical_priority_score"] = technical_score
+    work["social_acceptance_priority_score"] = ((1.0 - priority_fraction) * technical_score + priority_fraction * acceptance).clip(
+        lower=0.0,
+        upper=1.0,
+    )
+    return work
 
 
 def _social_acceptance_establishment_summary(
@@ -8694,6 +8802,9 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
         metric_cols[0].metric("Medelacceptans", f"{float(social_summary.get('mean_acceptance', 0.0) or 0.0):.2f}")
         metric_cols[1].metric("Medianacceptans", f"{float(social_summary.get('median_acceptance', 0.0) or 0.0):.2f}")
         metric_cols[2].metric("Acceptanspåverkan", f"{impact_pct:.0f}%")
+        allocation_priority_pct = float(energy_model_state.get("social_acceptance_allocation_priority_pct", 0.0) or 0.0)
+        if allocation_priority_pct > 0.0:
+            st.caption(f"Scenariohexar prioriteras med {allocation_priority_pct:.0f}% social acceptansstyrning.")
         low_threshold = float(social_summary.get("low_threshold", SOCIAL_ACCEPTANCE_LOW_THRESHOLD) or SOCIAL_ACCEPTANCE_LOW_THRESHOLD)
         high_threshold = float(social_summary.get("high_threshold", SOCIAL_ACCEPTANCE_HIGH_THRESHOLD) or SOCIAL_ACCEPTANCE_HIGH_THRESHOLD)
         acceptance_rows = [
@@ -9691,6 +9802,11 @@ def _unified_workspace_tab(
         else SOCIAL_ACCEPTANCE_DEFAULT_SCENARIO_ID
     )
     social_acceptance_impact_pct = _social_acceptance_impact_pct(region) if social_manifest is not None else 0.0
+    social_acceptance_allocation_priority_pct = (
+        _social_acceptance_allocation_priority_pct(region)
+        if social_manifest is not None
+        else 0.0
+    )
     active_landscape_count = _count_enabled(show_v10, show_pdf_types, show_cluster, show_factor)
     active_wind_count = _count_enabled(show_user_wind)
     active_solar_count = _count_enabled(show_user_solar, show_solar_v1)
@@ -9888,6 +10004,21 @@ def _unified_workspace_tab(
                         ),
                     )
                 )
+                social_acceptance_allocation_priority_pct = float(
+                    st.slider(
+                        "Acceptansstyrning av scenariohexar",
+                        min_value=0,
+                        max_value=100,
+                        value=int(round(social_acceptance_allocation_priority_pct)),
+                        step=5,
+                        format="%d%%",
+                        key=_social_acceptance_allocation_priority_state_key(region),
+                        help=(
+                            "0% använder dagens tekniska prioritering. "
+                            "100% låter hög social acceptans väga tungt när scenariohexar väljs först."
+                        ),
+                    )
+                )
                 scenario_options = [scenario["id"] for scenario in social_acceptance_scenarios(social_manifest)]
                 social_acceptance_scenario = st.radio(
                     "Acceptansscenario",
@@ -9895,7 +10026,11 @@ def _unified_workspace_tab(
                     key=_social_acceptance_state_key(region),
                     format_func=lambda scenario_id: social_acceptance_scenario_label(social_manifest, str(scenario_id)),
                     horizontal=True,
-                    disabled=not (show_social_acceptance or social_acceptance_impact_pct > 0.0),
+                    disabled=not (
+                        show_social_acceptance
+                        or social_acceptance_impact_pct > 0.0
+                        or social_acceptance_allocation_priority_pct > 0.0
+                    ),
                 )
                 st.caption(
                     f"Testdata: värden 0-1 på H3 R{int(social_manifest.get('hex_resolution') or 0)} "
@@ -9914,6 +10049,7 @@ def _unified_workspace_tab(
         energy_model_state["analysis_hex_area_km2"] = float(analysis_hex_area_km2)
         energy_model_state["display_h3_resolution"] = int(h3_resolution)
         energy_model_state["display_hex_area_km2"] = float(h3_hex_area_km2(h3_resolution))
+        energy_model_state["social_acceptance_allocation_priority_pct"] = float(social_acceptance_allocation_priority_pct or 0.0)
         energy_model_state["wind_ui_params"] = dict(wind_ui_params)
         energy_model_state["wind_active_source_count"] = sum(
             len(layer_ids) for layer_ids in normalize_group_layer_map(wind_selected_layers).values()
@@ -9941,6 +10077,7 @@ def _unified_workspace_tab(
         show_social_acceptance,
         social_acceptance_scenario,
         social_acceptance_impact_pct,
+        social_acceptance_allocation_priority_pct,
         selected_factor,
         applied_solar_config,
         solar_params,
@@ -9971,7 +10108,11 @@ def _unified_workspace_tab(
         show_user_wind,
         energy_model_state,
         bool(show_v10 or show_cluster or show_factor),
-        show_social_acceptance,
+        bool(
+            show_social_acceptance
+            or social_acceptance_impact_pct > 0.0
+            or social_acceptance_allocation_priority_pct > 0.0
+        ),
     )
     performance_bucket = _performance_history_bucket(region, h3_resolution, zoom_family_enabled)
     performance_estimates = _performance_step_estimates(performance_bucket, calc_steps)
@@ -10233,6 +10374,10 @@ def _unified_workspace_tab(
                 float(energy_model_state.get("solar_twh", 0.0) or 0.0),
                 float(energy_model_state.get("solar_km2_per_twh", math.nan) or math.nan),
                 analysis_hex_area_km2,
+                int(analysis_h3_resolution),
+                social_manifest,
+                social_acceptance_scenario,
+                social_acceptance_allocation_priority_pct,
             )
             solar_proposal_frame, solar_proposal_stats = _expand_solar_area_outside_lp(
                 combined_solar_analysis_frame,
@@ -10336,8 +10481,15 @@ def _unified_workspace_tab(
                 wind_area_need = float(energy_model_state.get("wind_area_need_km2", 0.0) or 0.0)
                 wind_twh_need = float(energy_model_state.get("wind_twh", 0.0) or 0.0)
                 wind_factor = float(energy_model_state.get("wind_km2_per_twh", math.nan) or math.nan)
-                proposal_frame, proposal_stats = allocate_wind_area_from_core_hexes(
+                wind_allocation_frame = _apply_social_acceptance_priority_to_wind_allocation_frame(
                     custom_wind_analysis_frame,
+                    social_manifest,
+                    social_acceptance_scenario,
+                    analysis_h3_resolution,
+                    social_acceptance_allocation_priority_pct,
+                )
+                proposal_frame, proposal_stats = allocate_wind_area_from_core_hexes(
+                    wind_allocation_frame,
                     wind_area_need,
                     analysis_hex_area_km2,
                     float(energy_model_state.get("auto_min_potential_share_pct", 65.0) or 65.0),
@@ -10461,6 +10613,10 @@ def _unified_workspace_tab(
             if social_manifest is not None and float(social_acceptance_impact_pct or 0.0) > 0.0:
                 unified_notes.append(
                     f"Acceptanspåverkan {float(social_acceptance_impact_pct):.0f}% tonar samma etableringsyta mot rött där syntetisk social acceptans är låg."
+                )
+            if social_manifest is not None and float(social_acceptance_allocation_priority_pct or 0.0) > 0.0:
+                unified_notes.append(
+                    f"Acceptansstyrning {float(social_acceptance_allocation_priority_pct):.0f}% prioriterar scenariohexar med hög syntetisk social acceptans."
                 )
         allocation_marker_layers = _scenario_allocation_marker_family_layers(
             region,

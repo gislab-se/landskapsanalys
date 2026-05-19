@@ -430,6 +430,75 @@ def check_social_acceptance_summary(report: ContractReport, region: dict[str, An
     )
 
 
+def check_social_acceptance_allocation_priority(report: ContractReport, region: dict[str, Any]) -> None:
+    import pandas as pd  # noqa: WPS433
+    import potential_app as app  # noqa: WPS433
+
+    manifest = app._social_acceptance_manifest(region)
+    values = app._social_acceptance_values_frame(manifest, "medium", 7)
+    low = values[pd.to_numeric(values["acceptance_value"], errors="coerce").lt(app.SOCIAL_ACCEPTANCE_LOW_THRESHOLD)].head(1)
+    high = values[pd.to_numeric(values["acceptance_value"], errors="coerce").ge(app.SOCIAL_ACCEPTANCE_HIGH_THRESHOLD)].head(1)
+    if low.empty or high.empty:
+        report.fail("Social acceptance allocation test needs one low and one high acceptance cell.")
+        return
+    low_hex = str(low.iloc[0]["hex_id"])
+    high_hex = str(high.iloc[0]["hex_id"])
+    wind_candidates = pd.DataFrame(
+        [
+            {
+                "hex_id": low_hex,
+                "potential_area_share_pct": 100.0,
+                "potential_area_km2": 1.0,
+                "core_score": 0.5,
+                "zone_size": 1,
+            },
+            {
+                "hex_id": high_hex,
+                "potential_area_share_pct": 100.0,
+                "potential_area_km2": 1.0,
+                "core_score": 0.5,
+                "zone_size": 1,
+            },
+        ]
+    )
+    adjusted_wind = app._apply_social_acceptance_priority_to_wind_allocation_frame(
+        wind_candidates,
+        manifest,
+        "medium",
+        7,
+        100,
+    )
+    wind_selected, _ = app.allocate_wind_area_from_core_hexes(adjusted_wind, 1.0, 1.0, 65.0)
+    solar_selected, _ = app._solar_establishment_frame(
+        pd.DataFrame(),
+        pd.DataFrame(
+            [
+                {"hex_id": low_hex, "solar_score": 100.0, "potential_area_km2": 1.0},
+                {"hex_id": high_hex, "solar_score": 100.0, "potential_area_km2": 1.0},
+            ]
+        ),
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        7,
+        manifest,
+        "medium",
+        100,
+    )
+    report.check(
+        not wind_selected.empty
+        and str(wind_selected.iloc[0]["hex_id"]) == high_hex
+        and not solar_selected.empty
+        and str(solar_selected.iloc[0]["hex_id"]) == high_hex,
+        "Social acceptance allocation slider can move scenariohex priority toward high-acceptance cells.",
+        (
+            "Social acceptance allocation did not prioritize the high-acceptance cell. "
+            f"wind={wind_selected.to_dict(orient='records')}, solar={solar_selected.to_dict(orient='records')}."
+        ),
+    )
+
+
 def check_social_acceptance_impact_control(report: ContractReport) -> None:
     source = (ROOT / "potential_app.py").read_text(encoding="utf-8")
     report.check(
@@ -445,6 +514,13 @@ def check_social_acceptance_impact_control(report: ContractReport) -> None:
         and "_potential_after_acceptance_area" in source,
         "Right-panel table shows potential after acceptance impact as a separate derived column.",
         "Right-panel table is missing the separate acceptance-adjusted potential column.",
+    )
+    report.check(
+        "Acceptansstyrning av scenariohexar" in source
+        and "_social_acceptance_allocation_priority_state_key" in source
+        and "_apply_social_acceptance_priority_to_wind_allocation_frame" in source,
+        "Social acceptance allocation slider is wired to scenariohex prioritization.",
+        "Social acceptance allocation slider is missing or not wired to scenariohex prioritization.",
     )
 
 
@@ -790,6 +866,7 @@ def main() -> int:
         check_social_acceptance_impact_control(report)
         check_social_acceptance_impact_visual_weight(report, trondelag)
         check_social_acceptance_summary(report, trondelag)
+        check_social_acceptance_allocation_priority(report, trondelag)
         check_trondelag_region(report, trondelag)
         check_map_auto_resolution(report)
         check_landscape_manifest(report, landscape)
