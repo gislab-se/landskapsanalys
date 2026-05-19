@@ -4,8 +4,11 @@ on:
   push:
     branches:
       - main
+      - potential-v2-multiregion
     paths:
       - .github/workflows/publish-geocontext-pages.yml
+      - docs/sol-vindpotential.html
+      - docs/POTENTIAL_APP_V2_STAKEHOLDER_METHOD_DEBUG.md
       - docs/geocontext/index.html
       - docs/geocontext/robots.txt
       - docs/geocontext/snygg_karta.png
@@ -43,10 +46,14 @@ jobs:
           set -euo pipefail
           site_dir="$RUNNER_TEMP/pages-site"
           mkdir -p "$site_dir"
+          mkdir -p "$site_dir/sol-vindpotential/geocontext"
 
           cp docs/geocontext/index.html "$site_dir/index.html"
+          cp docs/sol-vindpotential.html "$site_dir/sol-vindpotential/index.html"
+          cp docs/POTENTIAL_APP_V2_STAKEHOLDER_METHOD_DEBUG.md "$site_dir/sol-vindpotential/POTENTIAL_APP_V2_STAKEHOLDER_METHOD_DEBUG.md"
           cp docs/geocontext/robots.txt "$site_dir/robots.txt"
           cp docs/geocontext/snygg_karta.png "$site_dir/snygg_karta.png"
+          cp docs/geocontext/snygg_karta.png "$site_dir/sol-vindpotential/geocontext/snygg_karta.png"
           cp docs/geocontext/landskapsanalys_bornholm_handledarrapport.html "$site_dir/landskapsanalys_bornholm_handledarrapport.html"
           cp -R docs/geocontext/current_landscape_model "$site_dir/current_landscape_model"
           cp -R docs/geocontext/model_comparisons "$site_dir/model_comparisons"

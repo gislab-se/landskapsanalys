@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sol &amp; vindpotential</title>
+  <style>
+    :root {
+      --paper: #eef0e6;
+      --paper-deep: #ebe0cc;
+      --ink: #26231e;
+      --muted: #665f52;
+      --rule: #b9aa91;
+      --accent: #4f6f63;
+      --accent-dark: #2f4f46;
+      --sun: #b98527;
+      --wind: #516f91;
+      --white: #fffaf0;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: Georgia, "Times New Roman", serif;
+      line-height: 1.62;
+    }
+
+    a {
+      color: var(--accent-dark);
+    }
+
+    .page {
+      width: min(1160px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 42px 0 56px;
+    }
+
+    header {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 260px;
+      gap: 28px;
+      align-items: end;
+      padding-bottom: 22px;
+      border-bottom: 1px solid var(--rule);
+      margin-bottom: 26px;
+    }
+
+    .kicker {
+      margin: 0 0 8px;
+      font-family: "Courier New", Courier, monospace;
+      font-size: 0.76rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    h1 {
+      margin: 0;
+      max-width: 760px;
+      font-size: clamp(2.4rem, 5vw, 5rem);
+      line-height: 0.96;
+      font-weight: 500;
+      letter-spacing: 0;
+    }
+
+    .lede {
+      margin: 18px 0 0;
+      max-width: 760px;
+      font-size: 1.08rem;
+      color: #3f392f;
+    }
+
+    .map-slip {
+      margin: 0;
+      border: 1px solid var(--rule);
+      background: var(--white);
+      padding: 8px;
+      transform: rotate(0.4deg);
+    }
+
+    .map-slip img {
+      display: block;
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      object-fit: cover;
+      filter: sepia(0.16) contrast(0.94) saturate(0.86);
+    }
+
+    .map-slip figcaption {
+      margin-top: 7px;
+      font-family: "Courier New", Courier, monospace;
+      font-size: 0.72rem;
+      color: var(--muted);
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: minmax(0, 1.48fr) minmax(280px, 0.72fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .side-stack {
+      display: grid;
+      gap: 18px;
+    }
+
+    .card {
+      border: 1px solid var(--rule);
+      border-radius: 6px;
+      background: rgba(255, 250, 240, 0.82);
+      box-shadow: 0 10px 24px rgba(39, 32, 20, 0.08);
+    }
+
+    .report-card {
+      padding: clamp(22px, 4vw, 42px);
+      font-family: "Courier New", Courier, monospace;
+      background:
+        linear-gradient(rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.08)),
+        var(--white);
+    }
+
+    .app-card {
+      padding: 24px;
+      min-height: 240px;
+    }
+
+    .label {
+      display: inline-block;
+      margin-bottom: 12px;
+      padding: 3px 8px 2px;
+      border: 1px solid var(--rule);
+      border-radius: 3px;
+      font-family: "Courier New", Courier, monospace;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      background: var(--paper);
+    }
+
+    .beta {
+      border-color: #9a6d34;
+      color: #704a16;
+      background: #f3e1bd;
+    }
+
+    h2,
+    h3 {
+      margin: 0 0 10px;
+      line-height: 1.16;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      font-size: clamp(1.55rem, 2.8vw, 2.45rem);
+      font-weight: 600;
+    }
+
+    h3 {
+      margin-top: 28px;
+      font-size: 1.05rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .app-card h2 {
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 1.55rem;
+    }
+
+    p {
+      margin: 0 0 14px;
+    }
+
+    ul {
+      margin: 8px 0 18px;
+      padding-left: 1.2rem;
+    }
+
+    .summary {
+      padding: 16px 18px;
+      border-left: 3px solid var(--accent);
+      background: #f3ead8;
+      margin-bottom: 26px;
+    }
+
+    .summary p:last-child,
+    .app-card p:last-child {
+      margin-bottom: 0;
+    }
+
+    .meta {
+      margin-top: 18px;
+      color: var(--muted);
+      font-family: "Courier New", Courier, monospace;
+      font-size: 0.88rem;
+    }
+
+    .button {
+      display: inline-block;
+      margin-top: 14px;
+      padding: 9px 12px;
+      border: 1px solid var(--accent-dark);
+      border-radius: 3px;
+      background: #edf2e8;
+      color: var(--accent-dark);
+      text-decoration: none;
+      font-family: "Courier New", Courier, monospace;
+      font-size: 0.9rem;
+    }
+
+    .button.todo {
+      border-color: #9d8e76;
+      background: #eee4cf;
+      color: #6d624e;
+      cursor: default;
+    }
+
+    .note {
+      margin-top: 16px;
+      padding-top: 13px;
+      border-top: 1px solid #d2c4aa;
+      color: var(--muted);
+      font-size: 0.94rem;
+    }
+
+    .v2 {
+      border-top: 5px solid var(--accent);
+    }
+
+    .v1 {
+      border-top: 5px solid var(--wind);
+    }
+
+    .stamp {
+      float: right;
+      margin: 0 0 10px 14px;
+      border: 1px solid #a77f41;
+      border-radius: 4px;
+      padding: 6px 9px;
+      color: #8a5e1e;
+      font-family: "Courier New", Courier, monospace;
+      font-size: 0.78rem;
+      transform: rotate(1.2deg);
+    }
+
+    footer {
+      margin-top: 24px;
+      color: var(--muted);
+      font-family: "Courier New", Courier, monospace;
+      font-size: 0.78rem;
+    }
+
+    @media (max-width: 860px) {
+      header,
+      .cards {
+        grid-template-columns: 1fr;
+      }
+
+      .map-slip {
+        max-width: 340px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <div>
+        <p class="kicker">Arbetsblad för landskapsbaserad energi</p>
+        <h1>Sol &amp; vindpotential</h1>
+        <p class="lede">
+          En samlad ingång till rapportunderlaget och de interaktiva apparna för
+          att undersöka hur sol- och vindscenarier kan rymmas i landskapet.
+        </p>
+      </div>
+      <figure class="map-slip">
+        <img src="geocontext/snygg_karta.png" alt="Kartutsnitt från landskapsanalysen">
+        <figcaption>Kartutsnitt ur landskapsanalysens arbetsmaterial.</figcaption>
+      </figure>
+    </header>
+
+    <section class="cards" aria-label="Sol och vindpotential">
+      <article class="card report-card">
+        <span class="stamp">BETA / arbetsmaterial</span>
+        <span class="label">Rapport</span>
+        <h2>Rapportunderlag för sol- och vindpotential</h2>
+
+        <div class="summary">
+          <p>
+            Den här rapporten formulerar en sammanhållen tolkningsram för
+            Potential App v2: hur scenarier för sol och vind översätts till
+            rumsligt ytbehov, hur detta ytbehov möter landskapets begränsningar
+            och hur osäkerheter redovisas utan att döljas i kartbilden.
+          </p>
+          <p>
+            Appen är en utvecklingsversion. Resultaten ska därför läsas som ett
+            transparent test- och dialogunderlag, inte som ett färdigt planeringsbesked.
+          </p>
+        </div>
+
+        <h3>Syfte</h3>
+        <p>
+          Syftet är att pröva relationen mellan energisystemets framtida
+          markanspråk och landskapets möjliga etableringsytor. Appen översätter
+          sol- och vindbehov till yta, visar hur aktiva filter förändrar denna
+          yta och redovisar om scenariot ryms inom den beräknade potentialen.
+        </p>
+
+        <h3>Bakgrund</h3>
+        <p>
+          Arbetet bygger vidare på landskapsanalys och geokontextlogik där
+          landskapet delas in i sexkantiga analysceller. Bornholm fungerar som
+          referensflöde, medan Trøndelag är en regional v2-anpassning med eget
+          koordinatsystem och egna regionala dataförutsättningar.
+        </p>
+
+        <h3>Dataunderlag</h3>
+        <p>
+          Appen använder regionala dataförteckningar, landskapstyper,
+          landskapsfaktorer, potentialregler, energiscenarier från
+          energimodellens databaser, ytbehovsfaktorer från
+          <code>AreaDemand.xlsx</code> och tillfälliga syntetiska data för
+          social acceptans.
+        </p>
+
+        <h3>Metod</h3>
+        <p>
+          Först kontrolleras regionens data och kartgeometrier. Därefter skapas
+          kandidatytor för sol och vind. Energiscenariot räknas om till ytbehov,
+          och modellen prövar om detta ytbehov kan placeras inom de möjliga
+          etableringsytorna.
+        </p>
+
+        <h3>Beräkningslogik</h3>
+        <p>
+          Vänsterpanelen styr antagandena: region, analysupplösning,
+          vindfilter, solfilter, energimix och social acceptans. Kartan visar
+          aktiva lager. Högerpanelen visar effekten i siffror: potential efter
+          filter, yta inom potential, outnyttjad potential och ytbehov utanför
+          potential.
+        </p>
+        <p>
+          Landskapspotential för sol och vind bör förstås som beräkningsunderlag.
+          Den praktiska kartbilden att diskutera är den potentiella etableringsytan,
+          där modellen visar om vind, sol eller båda teknikerna kan ingå efter
+          aktiva filter.
+        </p>
+
+        <h3>Resultat och tolkning</h3>
+        <p>
+          Resultatet visar om valt scenario ryms inom landskapets möjliga
+          etableringsyta. Om ytan inte räcker visas ett ytbehov utanför potentialen,
+          vilket bör läsas som en signal att scenario, filter eller energimix
+          behöver granskas.
+        </p>
+
+        <h3>Begränsningar</h3>
+        <ul>
+          <li>Social acceptans är syntetiskt testdata och inte forskningsresultat.</li>
+          <li>Trøndelag använder placeholder-scenarier tills regional energidata finns.</li>
+          <li>Småskalig sol är en schablon, inte verkliga takpolygoner.</li>
+          <li>Sexkantiga analysceller kan överdriva faktisk landyta vid kust och öar.</li>
+        </ul>
+
+        <h3>Vidare utveckling</h3>
+        <p>
+          Nästa steg är att ersätta placeholder-data med regionala energidata,
+          koppla in granskad social acceptans, fortsätta stresstesta relationen
+          mellan vänsterpanel och högerpanel samt förtydliga språket kring
+          potential, filter och etableringsyta.
+        </p>
+
+        <p class="meta">
+          Fördjupat metod- och felsökningsunderlag finns i
+          <code>docs/POTENTIAL_APP_V2_STAKEHOLDER_METHOD_DEBUG.md</code>.
+        </p>
+        <a class="button" href="POTENTIAL_APP_V2_STAKEHOLDER_METHOD_DEBUG.md">Öppna rapportunderlaget</a>
+      </article>
+
+      <div class="side-stack">
+        <article class="card app-card v2">
+          <span class="label beta">V2</span>
+          <h2>Potential App v2</h2>
+          <p>
+            Multiregional BETA-version för sol- och vindpotential. Stödjer
+            Bornholm och Trøndelag, med gemensam etableringsyta, scenarioyta,
+            filter och syntetisk social acceptans.
+          </p>
+          <a class="button" href="https://landskapsanalys-potential-v2-test.streamlit.app/">Öppna v2-appen</a>
+          <p class="note">
+            Lokal entrypoint i denna gren: <code>streamlit_app.py</code>.
+          </p>
+        </article>
+
+        <article class="card app-card v1">
+          <span class="label">V1</span>
+          <h2>Potential App v1</h2>
+          <p>
+            Tidigare Bornholm-version. Den kan användas som jämförelsepunkt för
+            utvecklingen från en regional app till v2:s mer fristående
+            multiregionflöde.
+          </p>
+          <a class="button" href="https://landskapsanalys-potential-v1.streamlit.app/">Öppna v1-appen</a>
+          <p class="note">
+            V1 ska länkas här utan att v1-worktreet ändras.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <footer>
+      Sidan är skapad som separat GitHub Pages-underlag. Befintlig landningssida är inte ändrad.
+    </footer>
+  </main>
+</body>
+</html>
