@@ -326,7 +326,7 @@ def check_social_acceptance_impact_visual_weight(report: ContractReport, region:
 
     candidate_values = values[pd.to_numeric(values["acceptance_value"], errors="coerce").lt(1.0)].copy()
     if candidate_values.empty:
-        report.fail("Social acceptance impact test found no acceptance value below 1.0 to verify lightening.")
+        report.fail("Social acceptance impact test found no acceptance value below 1.0 to verify tinting.")
         return
     candidate = candidate_values.sort_values("acceptance_value").iloc[0]
     base_fill = "#15803d"
@@ -348,7 +348,7 @@ def check_social_acceptance_impact_visual_weight(report: ContractReport, region:
     unchanged = app._apply_social_acceptance_impact_to_establishment_frame(frame, manifest, "medium", 7, 0)
     weighted = app._apply_social_acceptance_impact_to_establishment_frame(frame, manifest, "medium", 7, 100)
     acceptance_value = float(candidate["acceptance_value"])
-    expected_fill = app._mix_hex_colors(base_fill, "#ffffff", 1.0 - acceptance_value)
+    expected_fill = app._mix_hex_colors(base_fill, app.SOCIAL_ACCEPTANCE_IMPACT_TINT_COLOR, 1.0 - acceptance_value)
     weighted_row = weighted.iloc[0]
 
     report.check(
@@ -360,7 +360,7 @@ def check_social_acceptance_impact_visual_weight(report: ContractReport, region:
         str(weighted_row["fill"]) == expected_fill
         and math.isclose(float(weighted_row["social_acceptance_value"]), acceptance_value, abs_tol=0.001)
         and math.isclose(float(weighted_row["social_acceptance_weight"]), acceptance_value, abs_tol=0.001),
-        "Acceptanspåverkan 100% lightens establishment-area colours by 1 - acceptance.",
+        "Acceptanspåverkan 100% tints establishment-area colours toward red by 1 - acceptance.",
         (
             "Acceptanspåverkan 100% produced unexpected visual weight: "
             f"fill={weighted_row['fill']!r}, expected={expected_fill!r}, row={weighted_row.to_dict()}."

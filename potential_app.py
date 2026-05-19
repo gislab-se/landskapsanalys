@@ -366,6 +366,7 @@ SOLAR_V1_POPULATION_LAYER_PATH = (
 SOLAR_V1_POPULATION_COUNT_COLUMN = "fastboendebefolkningmapinfo_count"
 EML_PROVIDER_URL = "https://energymodellinglab.com/"
 IVL_PROVIDER_URL = "https://www.ivl.se/"
+SOCIAL_ACCEPTANCE_IMPACT_TINT_COLOR = "#991b1b"
 
 APP_TRANSLATIONS: dict[str, dict[str, str]] = {
     "sv": {},
@@ -5406,7 +5407,7 @@ def _apply_social_acceptance_impact_to_establishment_frame(
     work["social_acceptance_value"] = work["acceptance_value"].round(3)
     work["social_acceptance_source_hex_count"] = work["source_hex_count"]
     work["social_acceptance_impact_pct"] = float(impact_fraction * 100.0)
-    work["social_acceptance_lighten"] = (impact_fraction * (1.0 - work["social_acceptance_value"])).clip(lower=0.0, upper=1.0)
+    work["social_acceptance_tint_amount"] = (impact_fraction * (1.0 - work["social_acceptance_value"])).clip(lower=0.0, upper=1.0)
     work["social_acceptance_weight"] = ((1.0 - impact_fraction) + (impact_fraction * work["social_acceptance_value"])).clip(
         lower=0.0,
         upper=1.0,
@@ -5414,12 +5415,12 @@ def _apply_social_acceptance_impact_to_establishment_frame(
     fill_values = work["fill"] if "fill" in work.columns else pd.Series("#999999", index=work.index)
     stroke_values = work["stroke"] if "stroke" in work.columns else pd.Series("#999999", index=work.index)
     work["fill"] = [
-        _mix_hex_colors(str(color), "#ffffff", float(lighten))
-        for color, lighten in zip(fill_values, work["social_acceptance_lighten"])
+        _mix_hex_colors(str(color), SOCIAL_ACCEPTANCE_IMPACT_TINT_COLOR, float(tint_amount))
+        for color, tint_amount in zip(fill_values, work["social_acceptance_tint_amount"])
     ]
     work["stroke"] = [
-        _mix_hex_colors(str(color), "#ffffff", float(lighten))
-        for color, lighten in zip(stroke_values, work["social_acceptance_lighten"])
+        _mix_hex_colors(str(color), SOCIAL_ACCEPTANCE_IMPACT_TINT_COLOR, float(tint_amount))
+        for color, tint_amount in zip(stroke_values, work["social_acceptance_tint_amount"])
     ]
     return work.drop(columns=["acceptance_value", "source_hex_count"], errors="ignore")
 
@@ -9692,7 +9693,7 @@ def _unified_workspace_tab(
                         key=_social_acceptance_impact_state_key(region),
                         help=(
                             "0% lämnar potentiell etableringsyta oförändrad. "
-                            "100% tonar färgen fullt efter social acceptans: hög acceptans behåller färgen, låg acceptans gör den ljusare."
+                            "100% tonar färgen fullt efter social acceptans: hög acceptans behåller färgen, låg acceptans tonar mot rött."
                         ),
                     )
                 )
@@ -10260,7 +10261,7 @@ def _unified_workspace_tab(
             )
             if social_manifest is not None and float(social_acceptance_impact_pct or 0.0) > 0.0:
                 unified_notes.append(
-                    f"Acceptanspåverkan {float(social_acceptance_impact_pct):.0f}% tonar samma etableringsyta ljusare där syntetisk social acceptans är låg."
+                    f"Acceptanspåverkan {float(social_acceptance_impact_pct):.0f}% tonar samma etableringsyta mot rött där syntetisk social acceptans är låg."
                 )
         allocation_marker_layers = _scenario_allocation_marker_family_layers(
             region,
