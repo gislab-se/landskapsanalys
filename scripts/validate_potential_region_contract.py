@@ -220,6 +220,32 @@ def check_fixed_region_does_not_reset_session(report: ContractReport) -> None:
             st.session_state[key] = value
 
 
+def check_trondelag_default_zoom_family(report: ContractReport, region: dict[str, Any]) -> None:
+    import streamlit as st  # noqa: WPS433
+    import potential_app as app  # noqa: WPS433
+
+    original_state = dict(st.session_state)
+    try:
+        st.session_state.clear()
+        app._ensure_default_start_state(region, force=True)
+        family = app._display_family_resolutions(region, int(st.session_state.get("combined_h3_resolution")))
+        report.check(
+            st.session_state.get("combined_h3_resolution") == 7
+            and st.session_state.get("combined_h3_display_mode") == "zoom_family"
+            and [int(value) for value in family] == [7, 6, 5],
+            "Trondelag default opens zoom-adaptive from R7 to R5.",
+            (
+                "Trondelag default H3 display is "
+                f"resolution={st.session_state.get('combined_h3_resolution')!r}, "
+                f"mode={st.session_state.get('combined_h3_display_mode')!r}, family={family!r}; expected R7 zoom_family with [7, 6, 5]."
+            ),
+        )
+    finally:
+        st.session_state.clear()
+        for key, value in original_state.items():
+            st.session_state[key] = value
+
+
 def check_synthetic_social_acceptance(report: ContractReport, region_id: str) -> None:
     from apps.potential_model.social_acceptance import acceptance_feature_collection  # noqa: WPS433
 
@@ -555,6 +581,7 @@ def main() -> int:
 
         check_h3_session_state_sanitizer(report, trondelag)
         check_fixed_region_does_not_reset_session(report)
+        check_trondelag_default_zoom_family(report, trondelag)
         check_trondelag_region(report, trondelag)
         check_map_auto_resolution(report)
         check_landscape_manifest(report, landscape)
