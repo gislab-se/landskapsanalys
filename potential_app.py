@@ -60,6 +60,12 @@ from potential_model.potential import (  # noqa: E402
     solar_capacity_frame,
     solar_capacity_summary,
 )
+from potential_model.social_acceptance import (  # noqa: E402
+    DEFAULT_SCENARIO_ID as SOCIAL_ACCEPTANCE_DEFAULT_SCENARIO_ID,
+    acceptance_layer as social_acceptance_layer,
+    acceptance_scenario_label as social_acceptance_scenario_label,
+    acceptance_scenarios as social_acceptance_scenarios,
+)
 from potential_model.wind_acceptance import (  # noqa: E402
     GROUP_LABELS,
     GROUP_PARAM_MAP,
@@ -335,6 +341,7 @@ APP_TRANSLATIONS: dict[str, dict[str, str]] = {
         "Energimodellering": "Energimodellering",
         "Social acceptans": "Social accept",
         "Visa social acceptans": "Vis social accept",
+        "Acceptansscenario": "Acceptscenario",
         "Kommer i augusti": "Kommer i august",
         "Levereras av EML": "Leveres af EML",
         "Levereras av IVL": "Leveres af IVL",
@@ -405,6 +412,7 @@ APP_TRANSLATIONS: dict[str, dict[str, str]] = {
         "Energimodellering": "Energy Modelling",
         "Social acceptans": "Social Acceptance",
         "Visa social acceptans": "Show social acceptance",
+        "Acceptansscenario": "Acceptance scenario",
         "Kommer i augusti": "Coming in August",
         "Levereras av EML": "Provided by EML",
         "Levereras av IVL": "Provided by IVL",
@@ -509,6 +517,8 @@ def _workspace_calculation_fingerprint(
     show_pdf_types: bool,
     show_cluster: bool,
     show_factor: bool,
+    show_social_acceptance: bool,
+    social_acceptance_scenario: str,
     selected_factor: str,
     applied_solar_config: dict[str, Any],
     solar_params: dict[str, Any],
@@ -531,6 +541,8 @@ def _workspace_calculation_fingerprint(
         "show_landscape_pdf_types": bool(show_pdf_types),
         "show_landscape_structures": bool(show_cluster),
         "show_landscape_factors": bool(show_factor),
+        "show_social_acceptance": bool(show_social_acceptance),
+        "social_acceptance_scenario": str(social_acceptance_scenario),
         "selected_factor": str(selected_factor),
         "applied_solar_config": applied_solar_config,
         "solar_params": solar_params,
@@ -1585,6 +1597,23 @@ def _load_context(region: dict[str, Any]) -> dict[str, Any]:
     return load_region_context(region)
 
 
+def _social_acceptance_manifest(region: dict[str, Any]) -> dict[str, Any] | None:
+    return load_linked_manifest(region, "social_acceptance_manifest")
+
+
+def _social_acceptance_state_key(region: dict[str, Any]) -> str:
+    return f"social_acceptance_scenario_{region.get('region_id', 'region')}"
+
+
+def _social_acceptance_scenario(region: dict[str, Any], manifest: dict[str, Any] | None) -> str:
+    options = [scenario["id"] for scenario in social_acceptance_scenarios(manifest)]
+    default = SOCIAL_ACCEPTANCE_DEFAULT_SCENARIO_ID if SOCIAL_ACCEPTANCE_DEFAULT_SCENARIO_ID in options else options[0]
+    state_key = _social_acceptance_state_key(region)
+    if st.session_state.get(state_key) not in options:
+        st.session_state[state_key] = default
+    return str(st.session_state.get(state_key))
+
+
 def _available_h3_resolutions(region: dict[str, Any]) -> list[int]:
     return region_available_h3_resolutions(region)
 
@@ -1774,6 +1803,7 @@ def _calculation_progress_steps(
     show_user_wind: bool,
     energy_model_state: dict[str, Any],
     show_landscape_layers: bool,
+    show_social_acceptance: bool = False,
 ) -> list[str]:
     steps: list[str] = []
     if show_user_solar:
@@ -1793,6 +1823,8 @@ def _calculation_progress_steps(
         steps.append("Etableringsstatistik")
     if show_landscape_layers:
         steps.append("Landskapslager")
+    if show_social_acceptance:
+        steps.append("Social acceptans")
     steps.append("Karta HTML och rendering")
     return steps
 
@@ -2009,6 +2041,8 @@ def _ensure_default_start_state(region: dict[str, Any]) -> None:
     st.session_state["show_landscape_pdf_types"] = False
     st.session_state["show_landscape_cluster"] = False
     st.session_state["show_landscape_factor"] = False
+    st.session_state["show_social_acceptance"] = False
+    st.session_state[_social_acceptance_state_key(region)] = SOCIAL_ACCEPTANCE_DEFAULT_SCENARIO_ID
     st.session_state["show_solar_v1"] = False
     st.session_state["show_user_solar"] = True
     st.session_state["solar_draft_small_population_active"] = False
@@ -8206,6 +8240,13 @@ def _unified_workspace_tab(
     selected_factor = str(st.session_state.get("combined_landscape_factor", factors[0] if factors else ""))
     if selected_factor not in factors and factors:
         selected_factor = factors[0]
+    social_manifest = _social_acceptance_manifest(region)
+    show_social_acceptance = bool(st.session_state.get("show_social_acceptance", False)) and social_manifest is not None
+    social_acceptance_scenario = (
+        _social_acceptance_scenario(region, social_manifest)
+        if social_manifest is not None
+        else SOCIAL_ACCEPTANCE_DEFAULT_SCENARIO_ID
+    )
     active_landscape_count = _count_enabled(show_v10, show_pdf_types, show_cluster, show_factor)
     active_wind_count = _count_enabled(show_user_wind)
     active_solar_count = _count_enabled(show_user_solar, show_solar_v1)
@@ -8368,7 +8409,29 @@ def _unified_workspace_tab(
 
         with left_panel.expander(_t("Social acceptans"), expanded=False):
             st.caption(_t("Levereras av IVL"))
-            st.caption(_t("Kommer i augusti"))
+            st.caption("Syntetiskt testlager tills IVL-data finns.")
+            if social_manifest is None:
+                st.checkbox(_t("Visa social acceptans"), value=False, key="show_social_acceptance", disabled=True)
+                st.caption(_t("Kommer i augusti"))
+            else:
+                show_social_acceptance = st.checkbox(
+                    _t("Visa social acceptans"),
+                    value=show_social_acceptance,
+                    key="show_social_acceptance",
+                )
+                scenario_options = [scenario["id"] for scenario in social_acceptance_scenarios(social_manifest)]
+                social_acceptance_scenario = st.radio(
+                    _t("Acceptansscenario"),
+                    options=scenario_options,
+                    key=_social_acceptance_state_key(region),
+                    format_func=lambda scenario_id: social_acceptance_scenario_label(social_manifest, str(scenario_id)),
+                    horizontal=True,
+                    disabled=not show_social_acceptance,
+                )
+                st.caption(
+                    f"Testdata: värden 0-1 på H3 R{int(social_manifest.get('hex_resolution') or 0)} "
+                    "med max tre decimaler. Inte IVL-forskningsdata."
+                )
             st.markdown(f"[IVL Svenska Miljöinstitutet]({IVL_PROVIDER_URL})")
 
     display_geometry_path = _h3_display_geometry_path(region, h3_resolution)
@@ -8406,6 +8469,8 @@ def _unified_workspace_tab(
         show_pdf_types,
         show_cluster,
         show_factor,
+        show_social_acceptance,
+        social_acceptance_scenario,
         selected_factor,
         applied_solar_config,
         solar_params,
@@ -8436,6 +8501,7 @@ def _unified_workspace_tab(
         show_user_wind,
         energy_model_state,
         bool(show_v10 or show_cluster or show_factor),
+        show_social_acceptance,
     )
     performance_bucket = _performance_history_bucket(region, h3_resolution, zoom_family_enabled)
     performance_estimates = _performance_step_estimates(performance_bucket, calc_steps)
@@ -8968,6 +9034,33 @@ def _unified_workspace_tab(
                     ),
                 )
             )
+
+    if show_social_acceptance and social_manifest is not None:
+        perf_started = _perf_start()
+        social_label = social_acceptance_scenario_label(social_manifest, social_acceptance_scenario)
+        layers.extend(
+            _hex_family_layers(
+                region,
+                h3_resolution,
+                zoom_family_enabled,
+                "synthetic_social_acceptance_hex",
+                f"Social acceptans: {social_label}",
+                lambda resolution: social_acceptance_layer(
+                    social_manifest,
+                    social_acceptance_scenario,
+                    int(resolution),
+                    _h3_display_geometry_path(region, int(resolution)),
+                ),
+            )
+        )
+        unified_notes.append("Social acceptans är syntetisk testdata på hexnivå och ska inte tolkas som IVL-forskningsdata.")
+        _add_perf_timing(
+            performance_log,
+            "Social acceptans",
+            perf_started,
+            f"visning R{h3_resolution}; {social_acceptance_scenario}",
+        )
+        _advance_calculation_progress(calc_progress, "Social acceptans")
 
     layers = _dedupe_layers(layers)
     if isinstance(energy_model_state, dict) and energy_model_state.get("available"):

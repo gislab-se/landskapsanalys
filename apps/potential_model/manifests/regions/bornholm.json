@@ -26,5 +26,6 @@
   },
   "scenario_manifest": "apps/potential_model/manifests/scenarios/bornholm_scenarios_placeholder.json",
   "landscape_manifest": "apps/potential_model/manifests/landscape/bornholm_landscape_v10.json",
-  "potential_manifest": "apps/potential_model/manifests/potential/bornholm_potential_v0.json"
+  "potential_manifest": "apps/potential_model/manifests/potential/bornholm_potential_v0.json",
+  "social_acceptance_manifest": "apps/potential_model/manifests/social_acceptance/bornholm_synthetic_acceptance_v0.json"
 }
