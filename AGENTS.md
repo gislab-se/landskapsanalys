@@ -1,24 +1,17 @@
 # AGENTS.md
 
-## Rule 1: Bornholm First
+## Regional App Guidance
 
-Before implementing anything for Trondelag, inspect the corresponding Bornholm implementation first.
+Bornholm and Trondelag now share the app shell, but their data paths can differ.
 
-At this stage, Trondelag should mirror Bornholm as closely as possible in:
+When changing regional app behavior:
 
-- data flow
-- app logic
-- user interface
-- layer naming
-- scenario handling
-- establishment-area behavior
-- map controls
-- text/labels
-- validation approach
+- Prefer the simplest region-specific implementation that matches the available data.
+- Keep user-facing labels and controls consistent where that does not hide real data differences.
+- Validate Bornholm and Trondelag behavior independently instead of forcing one region to mirror the other.
+- Document meaningful regional deviations in code, manifests, tests, or a handoff note.
 
-Only deviate from Bornholm when Trondelag data truly requires it. Any deviation must be documented in the code, manifest, or a handoff note.
-
-Do not invent a new Trondelag-specific pattern when a Bornholm pattern already exists.
+Do not add a Bornholm or Trondelag workaround just to satisfy parity. Fix the actual regional data flow.
 
 ## Regional CRS
 
@@ -34,21 +27,14 @@ Use `EPSG:3857` only for temporary map rendering or raster intermediates.
 
 ## Trondelag Potential App
 
-Trondelag is currently a regional adaptation of the Bornholm potential app.
-
-Before changing Trondelag potential-app behavior:
-
-1. Find the matching Bornholm implementation.
-2. Understand how Bornholm handles the same concept.
-3. Copy the structure unless there is a documented reason not to.
-4. Keep labels and user-facing explanations consistent with Bornholm.
+Trondelag is a regional potential-app implementation in the shared app shell.
 
 Current Trondelag constraints:
 
 - Do not expose Trondelag R9 in the interactive app.
-- Supported Trondelag H3 display resolutions are R8, R7, and R6.
-- Establishment-area logic should follow Bornholm.
-- Do not introduce a separate `landskapspotential vind` hex-only concept if Bornholm handles it through establishment area and scenario area demand.
+- Supported Trondelag H3 display resolutions are R7, R6, and R5.
+- Establishment-area logic must be tested for Trondelag directly.
+- Do not introduce a separate `landskapspotential vind` hex-only concept unless the app also keeps the shared establishment-area behavior correct.
 
 ## Population And Settlement Buffers
 
