@@ -9245,7 +9245,7 @@ def _render_missing_data_workspace(
                 )
                 st.radio(
                     _t("Hexvisning"),
-                    options=["Snabb vald upplösning", "Zoomanpassad familj"],
+                    options=[_t("Vald upplösning"), _t("Zoomanpassad upplösning")],
                     key="missing_combined_h3_display_mode",
                     disabled=True,
                 )

@@ -543,7 +543,9 @@ def build_layered_hex_map_html(
 
     function autoResolutionFromScale(selectedResolution, scaleMeters) {{
       let desiredResolution = 10;
-      if (scaleMeters >= 50000) {{
+      if (scaleMeters >= 100000) {{
+        desiredResolution = 5;
+      }} else if (scaleMeters >= 50000) {{
         desiredResolution = 6;
       }} else if (scaleMeters >= 20000) {{
         desiredResolution = 7;
