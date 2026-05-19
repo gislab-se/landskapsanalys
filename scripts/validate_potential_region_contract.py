@@ -314,6 +314,71 @@ def check_runtime_hex_layers_use_zoom_family(report: ContractReport) -> None:
     )
 
 
+def check_social_acceptance_impact_visual_weight(report: ContractReport, region: dict[str, Any]) -> None:
+    import pandas as pd  # noqa: WPS433
+    import potential_app as app  # noqa: WPS433
+
+    manifest = app._social_acceptance_manifest(region)
+    values = app._social_acceptance_values_frame(manifest, "medium", 7)
+    if values.empty:
+        report.fail("Social acceptance impact test could not load Trondelag acceptance values.")
+        return
+
+    candidate_values = values[pd.to_numeric(values["acceptance_value"], errors="coerce").lt(1.0)].copy()
+    if candidate_values.empty:
+        report.fail("Social acceptance impact test found no acceptance value below 1.0 to verify lightening.")
+        return
+    candidate = candidate_values.sort_values("acceptance_value").iloc[0]
+    base_fill = "#15803d"
+    base_stroke = "#dcfce7"
+    frame = pd.DataFrame(
+        [
+            {
+                "hex_id": str(candidate["hex_id"]),
+                "establishment_class": "wind_and_solar",
+                "establishment_label": "Vind och sol",
+                "wind_suitable": True,
+                "solar_suitable": True,
+                "fill": base_fill,
+                "stroke": base_stroke,
+            }
+        ]
+    )
+
+    unchanged = app._apply_social_acceptance_impact_to_establishment_frame(frame, manifest, "medium", 7, 0)
+    weighted = app._apply_social_acceptance_impact_to_establishment_frame(frame, manifest, "medium", 7, 100)
+    acceptance_value = float(candidate["acceptance_value"])
+    expected_fill = app._mix_hex_colors(base_fill, "#ffffff", 1.0 - acceptance_value)
+    weighted_row = weighted.iloc[0]
+
+    report.check(
+        str(unchanged.iloc[0]["fill"]) == base_fill,
+        "Acceptanspåverkan 0% leaves establishment-area colours unchanged.",
+        f"Acceptanspåverkan 0% changed fill from {base_fill} to {unchanged.iloc[0]['fill']!r}.",
+    )
+    report.check(
+        str(weighted_row["fill"]) == expected_fill
+        and math.isclose(float(weighted_row["social_acceptance_value"]), acceptance_value, abs_tol=0.001)
+        and math.isclose(float(weighted_row["social_acceptance_weight"]), acceptance_value, abs_tol=0.001),
+        "Acceptanspåverkan 100% lightens establishment-area colours by 1 - acceptance.",
+        (
+            "Acceptanspåverkan 100% produced unexpected visual weight: "
+            f"fill={weighted_row['fill']!r}, expected={expected_fill!r}, row={weighted_row.to_dict()}."
+        ),
+    )
+
+
+def check_social_acceptance_impact_control(report: ContractReport) -> None:
+    source = (ROOT / "potential_app.py").read_text(encoding="utf-8")
+    report.check(
+        "Acceptanspåverkan" in source
+        and "_social_acceptance_impact_state_key" in source
+        and "social_acceptance_impact_pct=social_acceptance_impact_pct" in source,
+        "Social acceptance impact slider is wired into the existing establishment-area layer.",
+        "Social acceptance impact slider is missing or not connected to the establishment-area layer.",
+    )
+
+
 def check_synthetic_social_acceptance(report: ContractReport, region_id: str) -> None:
     from apps.potential_model.social_acceptance import acceptance_feature_collection  # noqa: WPS433
 
@@ -653,6 +718,8 @@ def main() -> int:
         check_trondelag_zoom_family_recovery(report, trondelag)
         check_zoom_family_layer_contract(report, trondelag)
         check_runtime_hex_layers_use_zoom_family(report)
+        check_social_acceptance_impact_control(report)
+        check_social_acceptance_impact_visual_weight(report, trondelag)
         check_trondelag_region(report, trondelag)
         check_map_auto_resolution(report)
         check_landscape_manifest(report, landscape)

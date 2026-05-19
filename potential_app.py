@@ -63,9 +63,11 @@ from potential_model.potential import (  # noqa: E402
 )
 from potential_model.social_acceptance import (  # noqa: E402
     DEFAULT_SCENARIO_ID as SOCIAL_ACCEPTANCE_DEFAULT_SCENARIO_ID,
+    acceptance_value_column as social_acceptance_value_column,
     acceptance_layer as social_acceptance_layer,
     acceptance_scenario_label as social_acceptance_scenario_label,
     acceptance_scenarios as social_acceptance_scenarios,
+    load_acceptance_frame as load_social_acceptance_frame,
 )
 from potential_model.wind_acceptance import (  # noqa: E402
     GROUP_LABELS,
@@ -402,6 +404,8 @@ APP_TRANSLATIONS: dict[str, dict[str, str]] = {
         "Energimodellering": "Energimodellering",
         "Social acceptans": "Social accept",
         "Visa social acceptans": "Vis social accept",
+        "Visa social acceptanslager": "Vis socialt acceptlag",
+        "Acceptanspåverkan": "Acceptpåvirkning",
         "Kommer i augusti": "Kommer i august",
         "Levereras av EML": "Leveres af EML",
         "Levereras av IVL": "Leveres af IVL",
@@ -474,6 +478,8 @@ APP_TRANSLATIONS: dict[str, dict[str, str]] = {
         "Energimodellering": "Energy Modelling",
         "Social acceptans": "Social Acceptance",
         "Visa social acceptans": "Show social acceptance",
+        "Visa social acceptanslager": "Show social acceptance layer",
+        "Acceptanspåverkan": "Acceptance impact",
         "Kommer i augusti": "Coming in August",
         "Levereras av EML": "Provided by EML",
         "Levereras av IVL": "Provided by IVL",
@@ -580,6 +586,7 @@ def _workspace_calculation_fingerprint(
     show_factor: bool,
     show_social_acceptance: bool,
     social_acceptance_scenario: str,
+    social_acceptance_impact_pct: float,
     selected_factor: str,
     applied_solar_config: dict[str, Any],
     solar_params: dict[str, Any],
@@ -605,6 +612,7 @@ def _workspace_calculation_fingerprint(
         "show_landscape_factors": bool(show_factor),
         "show_social_acceptance": bool(show_social_acceptance),
         "social_acceptance_scenario": str(social_acceptance_scenario),
+        "social_acceptance_impact_pct": float(social_acceptance_impact_pct),
         "selected_factor": str(selected_factor),
         "applied_solar_config": applied_solar_config,
         "solar_params": solar_params,
@@ -1712,6 +1720,20 @@ def _social_acceptance_state_key(region: dict[str, Any]) -> str:
     return f"social_acceptance_scenario_{region.get('region_id', 'region')}"
 
 
+def _social_acceptance_impact_state_key(region: dict[str, Any]) -> str:
+    return f"social_acceptance_impact_pct_{region.get('region_id', 'region')}"
+
+
+def _social_acceptance_impact_pct(region: dict[str, Any]) -> float:
+    try:
+        value = float(st.session_state.get(_social_acceptance_impact_state_key(region), 0.0) or 0.0)
+    except Exception:
+        value = 0.0
+    value = int(round(max(0.0, min(100.0, value))))
+    st.session_state[_social_acceptance_impact_state_key(region)] = value
+    return float(value)
+
+
 def _social_acceptance_scenario(region: dict[str, Any], manifest: dict[str, Any] | None) -> str:
     options = [scenario["id"] for scenario in social_acceptance_scenarios(manifest)]
     default = SOCIAL_ACCEPTANCE_DEFAULT_SCENARIO_ID if SOCIAL_ACCEPTANCE_DEFAULT_SCENARIO_ID in options else options[0]
@@ -2192,6 +2214,7 @@ def _ensure_default_start_state(region: dict[str, Any], force: bool = False) -> 
     st.session_state["show_landscape_factor"] = False
     st.session_state["show_social_acceptance"] = False
     st.session_state[_social_acceptance_state_key(region)] = SOCIAL_ACCEPTANCE_DEFAULT_SCENARIO_ID
+    st.session_state[_social_acceptance_impact_state_key(region)] = 0
     st.session_state["show_solar_v1"] = False
     st.session_state["show_user_solar"] = True
     st.session_state["solar_draft_small_population_active"] = False
@@ -5326,6 +5349,81 @@ def _mix_hex_colors(left: str, right: str, amount: float) -> str:
     return _rgb_to_hex(mixed)
 
 
+def _social_acceptance_values_frame(
+    manifest: dict[str, Any] | None,
+    scenario_id: str,
+    target_resolution: int,
+) -> pd.DataFrame:
+    if not isinstance(manifest, dict):
+        return pd.DataFrame(columns=["hex_id", "acceptance_value", "source_hex_count"])
+    frame = load_social_acceptance_frame(manifest)
+    value_column = social_acceptance_value_column(manifest, scenario_id)
+    if frame.empty or value_column not in frame.columns or "hex_id" not in frame.columns:
+        return pd.DataFrame(columns=["hex_id", "acceptance_value", "source_hex_count"])
+    try:
+        source_resolution = int(manifest.get("hex_resolution") or target_resolution)
+    except Exception:
+        source_resolution = int(target_resolution)
+
+    work = frame[["hex_id", value_column]].copy()
+    work["hex_id"] = work["hex_id"].astype(str)
+    work[value_column] = pd.to_numeric(work[value_column], errors="coerce").clip(lower=0.0, upper=1.0)
+    if int(target_resolution) < int(source_resolution):
+        work["hex_id"] = work["hex_id"].map(lambda cell: h3.cell_to_parent(str(cell), int(target_resolution)))
+    rolled = (
+        work.groupby("hex_id", as_index=False)
+        .agg(acceptance_value=(value_column, "mean"), source_hex_count=(value_column, "count"))
+        .sort_values("hex_id")
+        .reset_index(drop=True)
+    )
+    rolled["acceptance_value"] = pd.to_numeric(rolled["acceptance_value"], errors="coerce").clip(lower=0.0, upper=1.0).round(3)
+    rolled["source_hex_count"] = pd.to_numeric(rolled["source_hex_count"], errors="coerce").fillna(0).astype(int)
+    return rolled
+
+
+def _apply_social_acceptance_impact_to_establishment_frame(
+    frame: pd.DataFrame,
+    manifest: dict[str, Any] | None,
+    scenario_id: str,
+    target_resolution: int,
+    impact_pct: float,
+) -> pd.DataFrame:
+    if frame.empty:
+        return frame
+    impact_fraction = max(0.0, min(1.0, float(impact_pct or 0.0) / 100.0))
+    if impact_fraction <= 0.0 or not isinstance(manifest, dict):
+        return frame
+
+    acceptance_frame = _social_acceptance_values_frame(manifest, scenario_id, int(target_resolution))
+    if acceptance_frame.empty:
+        return frame
+
+    work = frame.copy()
+    work["hex_id"] = work["hex_id"].astype(str)
+    work = work.merge(acceptance_frame, on="hex_id", how="left")
+    work["acceptance_value"] = pd.to_numeric(work["acceptance_value"], errors="coerce").fillna(1.0).clip(lower=0.0, upper=1.0)
+    work["source_hex_count"] = pd.to_numeric(work["source_hex_count"], errors="coerce").fillna(0).astype(int)
+    work["social_acceptance_value"] = work["acceptance_value"].round(3)
+    work["social_acceptance_source_hex_count"] = work["source_hex_count"]
+    work["social_acceptance_impact_pct"] = float(impact_fraction * 100.0)
+    work["social_acceptance_lighten"] = (impact_fraction * (1.0 - work["social_acceptance_value"])).clip(lower=0.0, upper=1.0)
+    work["social_acceptance_weight"] = ((1.0 - impact_fraction) + (impact_fraction * work["social_acceptance_value"])).clip(
+        lower=0.0,
+        upper=1.0,
+    )
+    fill_values = work["fill"] if "fill" in work.columns else pd.Series("#999999", index=work.index)
+    stroke_values = work["stroke"] if "stroke" in work.columns else pd.Series("#999999", index=work.index)
+    work["fill"] = [
+        _mix_hex_colors(str(color), "#ffffff", float(lighten))
+        for color, lighten in zip(fill_values, work["social_acceptance_lighten"])
+    ]
+    work["stroke"] = [
+        _mix_hex_colors(str(color), "#ffffff", float(lighten))
+        for color, lighten in zip(stroke_values, work["social_acceptance_lighten"])
+    ]
+    return work.drop(columns=["acceptance_value", "source_hex_count"], errors="ignore")
+
+
 def _default_wind_layer_selection() -> dict[str, list[str]]:
     return {
         group_id: list(DEFAULT_WIND_ESTABLISHMENT_LAYER_SELECTION.get(group_id, []))
@@ -7608,6 +7706,21 @@ def _combined_establishment_feature_collection(
         label = str(getattr(row, "establishment_label", ESTABLISHMENT_CLASS_SPECS["not_suitable"]["label"]))
         outside_lp_shortage = bool(getattr(row, "outside_lp_shortage", False))
         outside_lp_reason = str(getattr(row, "outside_lp_reason", "") or "")
+        social_acceptance_impact = float(getattr(row, "social_acceptance_impact_pct", 0.0) or 0.0)
+        social_acceptance_value = float(getattr(row, "social_acceptance_value", 1.0) or 1.0)
+        social_acceptance_weight = float(getattr(row, "social_acceptance_weight", 1.0) or 1.0)
+        social_acceptance_source_hex_count = int(float(getattr(row, "social_acceptance_source_hex_count", 0.0) or 0.0))
+        social_acceptance_popup = ""
+        social_acceptance_tooltip = ""
+        if social_acceptance_impact > 0.0:
+            social_acceptance_popup = (
+                "<br><strong>Social acceptans</strong><br>"
+                f"Acceptansvärde: {social_acceptance_value:.3f}<br>"
+                f"Acceptanspåverkan: {social_acceptance_impact:.0f}%<br>"
+                f"Färgvikt: {social_acceptance_weight:.3f}<br>"
+                f"Källhex: {social_acceptance_source_hex_count}"
+            )
+            social_acceptance_tooltip = f" · acceptans {social_acceptance_value:.2f}"
         popup = (
             f"<strong>{COMBINED_ESTABLISHMENT_LAYER_LABEL}</strong><br>"
             "Klassning: potential efter aktiva filter<br>"
@@ -7616,6 +7729,7 @@ def _combined_establishment_feature_collection(
             f"{_tech_html(row, 'wind', 'Vind', 'Vindpotential')}"
             f"{_tech_html(row, 'solar', 'Sol', 'Solpotential')}"
             f"H3: R{int(target_resolution)}"
+            f"{social_acceptance_popup}"
         )
         features.append(
             {
@@ -7635,9 +7749,13 @@ def _combined_establishment_feature_collection(
                     "stroke": str(getattr(row, "stroke", ESTABLISHMENT_CLASS_SPECS["not_suitable"]["stroke"])),
                     "stroke_weight": float(getattr(row, "stroke_weight", 0.38) or 0.38),
                     "fill_opacity": float(getattr(row, "fill_opacity", 0.58) or 0.58),
+                    "social_acceptance_value": social_acceptance_value,
+                    "social_acceptance_impact_pct": social_acceptance_impact,
+                    "social_acceptance_weight": social_acceptance_weight,
+                    "social_acceptance_source_hex_count": social_acceptance_source_hex_count,
                     "tooltip_title": label,
                     "tooltip_body": (
-                        f"Vindpotential: {'ja' if bool(getattr(row, 'wind_suitable', False)) else 'nej'} · Solpotential: {'ja' if bool(getattr(row, 'solar_suitable', False)) else 'nej'}"
+                        f"Vindpotential: {'ja' if bool(getattr(row, 'wind_suitable', False)) else 'nej'} · Solpotential: {'ja' if bool(getattr(row, 'solar_suitable', False)) else 'nej'}{social_acceptance_tooltip}"
                     ),
                     "popup": popup,
                 },
@@ -7681,26 +7799,37 @@ def _combined_establishment_family_layers(
     solar_selected: pd.DataFrame,
     selected_resolution: int,
     zoom_family_enabled: bool,
+    social_acceptance_manifest: dict[str, Any] | None = None,
+    social_acceptance_scenario: str = SOCIAL_ACCEPTANCE_DEFAULT_SCENARIO_ID,
+    social_acceptance_impact_pct: float = 0.0,
 ) -> list[dict[str, Any]]:
     if wind_selected.empty and solar_selected.empty:
         return []
+
+    def build_layer(resolution: int) -> dict[str, Any] | None:
+        frame = _combined_establishment_frame(
+            region,
+            wind_selected,
+            solar_selected,
+            int(resolution),
+            int(selected_resolution),
+        )
+        frame = _apply_social_acceptance_impact_to_establishment_frame(
+            frame,
+            social_acceptance_manifest,
+            social_acceptance_scenario,
+            int(resolution),
+            float(social_acceptance_impact_pct),
+        )
+        return _combined_establishment_layer(frame, _h3_display_geometry_path(region, int(resolution)), int(resolution))
+
     return _hex_family_layers(
         region,
         int(selected_resolution),
         bool(zoom_family_enabled),
         "combined_establishment",
         COMBINED_ESTABLISHMENT_LAYER_LABEL,
-        lambda resolution: _combined_establishment_layer(
-            _combined_establishment_frame(
-                region,
-                wind_selected,
-                solar_selected,
-                int(resolution),
-                int(selected_resolution),
-            ),
-            _h3_display_geometry_path(region, int(resolution)),
-            int(resolution),
-        ),
+        build_layer,
     )
 
 
@@ -7713,29 +7842,40 @@ def _combined_potential_establishment_family_layers(
     selected_resolution: int,
     zoom_family_enabled: bool,
     source_resolution: int | None = None,
+    social_acceptance_manifest: dict[str, Any] | None = None,
+    social_acceptance_scenario: str = SOCIAL_ACCEPTANCE_DEFAULT_SCENARIO_ID,
+    social_acceptance_impact_pct: float = 0.0,
 ) -> list[dict[str, Any]]:
     if wind_potential.empty and solar_potential.empty:
         return []
     source_resolution = int(source_resolution or selected_resolution)
+
+    def build_layer(resolution: int) -> dict[str, Any] | None:
+        frame = _combined_potential_establishment_frame(
+            region,
+            wind_potential,
+            solar_potential,
+            wind_selected,
+            solar_selected,
+            int(resolution),
+            int(source_resolution),
+        )
+        frame = _apply_social_acceptance_impact_to_establishment_frame(
+            frame,
+            social_acceptance_manifest,
+            social_acceptance_scenario,
+            int(resolution),
+            float(social_acceptance_impact_pct),
+        )
+        return _combined_establishment_layer(frame, _h3_display_geometry_path(region, int(resolution)), int(resolution))
+
     return _hex_family_layers(
         region,
         int(selected_resolution),
         bool(zoom_family_enabled),
         "combined_establishment",
         COMBINED_ESTABLISHMENT_LAYER_LABEL,
-        lambda resolution: _combined_establishment_layer(
-            _combined_potential_establishment_frame(
-                region,
-                wind_potential,
-                solar_potential,
-                wind_selected,
-                solar_selected,
-                int(resolution),
-                int(source_resolution),
-            ),
-            _h3_display_geometry_path(region, int(resolution)),
-            int(resolution),
-        ),
+        build_layer,
     )
 
 
@@ -9358,6 +9498,7 @@ def _unified_workspace_tab(
         if social_manifest is not None
         else SOCIAL_ACCEPTANCE_DEFAULT_SCENARIO_ID
     )
+    social_acceptance_impact_pct = _social_acceptance_impact_pct(region) if social_manifest is not None else 0.0
     active_landscape_count = _count_enabled(show_v10, show_pdf_types, show_cluster, show_factor)
     active_wind_count = _count_enabled(show_user_wind)
     active_solar_count = _count_enabled(show_user_solar, show_solar_v1)
@@ -9536,9 +9677,24 @@ def _unified_workspace_tab(
                 st.caption(_t("Kommer i augusti"))
             else:
                 show_social_acceptance = st.checkbox(
-                    _t("Visa social acceptans"),
+                    _t("Visa social acceptanslager"),
                     value=show_social_acceptance,
                     key="show_social_acceptance",
+                )
+                social_acceptance_impact_pct = float(
+                    st.slider(
+                        _t("Acceptanspåverkan"),
+                        min_value=0,
+                        max_value=100,
+                        value=int(round(social_acceptance_impact_pct)),
+                        step=5,
+                        format="%d%%",
+                        key=_social_acceptance_impact_state_key(region),
+                        help=(
+                            "0% lämnar potentiell etableringsyta oförändrad. "
+                            "100% tonar färgen fullt efter social acceptans: hög acceptans behåller färgen, låg acceptans gör den ljusare."
+                        ),
+                    )
                 )
                 scenario_options = [scenario["id"] for scenario in social_acceptance_scenarios(social_manifest)]
                 social_acceptance_scenario = st.radio(
@@ -9547,7 +9703,7 @@ def _unified_workspace_tab(
                     key=_social_acceptance_state_key(region),
                     format_func=lambda scenario_id: social_acceptance_scenario_label(social_manifest, str(scenario_id)),
                     horizontal=True,
-                    disabled=not show_social_acceptance,
+                    disabled=not (show_social_acceptance or social_acceptance_impact_pct > 0.0),
                 )
                 st.caption(
                     f"Testdata: värden 0-1 på H3 R{int(social_manifest.get('hex_resolution') or 0)} "
@@ -9592,6 +9748,7 @@ def _unified_workspace_tab(
         show_factor,
         show_social_acceptance,
         social_acceptance_scenario,
+        social_acceptance_impact_pct,
         selected_factor,
         applied_solar_config,
         solar_params,
@@ -10091,6 +10248,9 @@ def _unified_workspace_tab(
             h3_resolution,
             zoom_family_enabled,
             analysis_h3_resolution,
+            social_acceptance_manifest=social_manifest,
+            social_acceptance_scenario=social_acceptance_scenario,
+            social_acceptance_impact_pct=social_acceptance_impact_pct,
         )
         if combined_establishment_layers:
             energy_model_state["establishment_layer_visible"] = True
@@ -10098,6 +10258,10 @@ def _unified_workspace_tab(
             unified_notes.append(
                 f"{COMBINED_ESTABLISHMENT_LAYER_LABEL} visar potential efter aktiva filter: blå = vind, gul = sol, grön = båda, röd = inte lämplig."
             )
+            if social_manifest is not None and float(social_acceptance_impact_pct or 0.0) > 0.0:
+                unified_notes.append(
+                    f"Acceptanspåverkan {float(social_acceptance_impact_pct):.0f}% tonar samma etableringsyta ljusare där syntetisk social acceptans är låg."
+                )
         allocation_marker_layers = _scenario_allocation_marker_family_layers(
             region,
             energy_model_state.get("proposal_frame", pd.DataFrame()),
