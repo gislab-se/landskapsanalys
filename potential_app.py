@@ -164,7 +164,7 @@ WIND_LAYER_SELECTION_KEY = "wind_builder_selected_layers"
 WIND_RUNTIME_OVERLAY_KEY = "wind_builder_runtime_overlay_enabled"
 SOLAR_APPLIED_CONFIG_KEY = "solar_applied_config"
 START_DEFAULT_VERSION_KEY = "potential_start_default_version"
-START_DEFAULT_VERSION = "trondelag_zoom_family_v1"
+START_DEFAULT_VERSION = "trondelag_zoom_family_v2"
 WIND_EMPTY_SELECTION_ACTIVE_KEY = "wind_empty_selection_active"
 WIND_CONTROL_LANGUAGE = "sv"
 WIND_RUNTIME_BASE_RESOLUTION = 10
@@ -1693,7 +1693,19 @@ def _load_context(region: dict[str, Any]) -> dict[str, Any]:
 
 
 def _social_acceptance_manifest(region: dict[str, Any]) -> dict[str, Any] | None:
-    return load_linked_manifest(region, "social_acceptance_manifest")
+    manifest = load_linked_manifest(region, "social_acceptance_manifest")
+    if manifest is not None:
+        return manifest
+    if str(region.get("region_id", "") or "").lower() != "trondelag":
+        return None
+    fallback_path = resolve_repo_path(
+        "apps/potential_model/manifests/social_acceptance/trondelag_synthetic_acceptance_v0.json"
+    )
+    if fallback_path is None or not fallback_path.exists():
+        return None
+    manifest = read_manifest(str(fallback_path)).copy()
+    manifest["_manifest_path"] = str(fallback_path)
+    return manifest
 
 
 def _social_acceptance_state_key(region: dict[str, Any]) -> str:

@@ -547,7 +547,7 @@ def build_layered_hex_map_html(
         desiredResolution = 5;
       }} else if (scaleMeters >= 50000) {{
         desiredResolution = 6;
-      }} else if (scaleMeters >= 20000) {{
+      }} else if (scaleMeters >= 30000) {{
         desiredResolution = 7;
       }} else if (scaleMeters >= 10000) {{
         desiredResolution = 8;
