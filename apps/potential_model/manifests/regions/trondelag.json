@@ -24,5 +24,6 @@
   "scenario_manifest": "apps/potential_model/manifests/scenarios/trondelag_scenarios_placeholder.json",
   "landscape_manifest": "apps/potential_model/manifests/landscape/trondelag_landscape_placeholder.json",
   "potential_manifest": "apps/potential_model/manifests/potential/trondelag_potential_placeholder.json",
+  "social_acceptance_manifest": "apps/potential_model/manifests/social_acceptance/trondelag_synthetic_acceptance_v0.json",
   "runtime_note": "Trondelag opens in light runtime mode on the offshore-trimmed R7 app bundle. R6 and R5 are lightweight rollups for display. R8/R9 are intentionally not exposed or required. The R7 app bundle is mirrored into the repo for Streamlit Cloud runtime. Energy scenarios still use Bornholm placeholder TIMES/AreaDemand files until EML or a Norwegian equivalent supplies regional data."
 }

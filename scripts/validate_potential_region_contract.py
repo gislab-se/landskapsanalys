@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+import csv
+import contextlib
+from io import StringIO
 import json
+import logging
 import math
+import os
 import re
 import sys
 import importlib.util
@@ -11,6 +16,8 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
+os.environ.setdefault("STREAMLIT_LOG_LEVEL", "error")
+logging.getLogger("streamlit").setLevel(logging.ERROR)
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
@@ -24,6 +31,8 @@ from apps.potential_model.region_status import load_region_context  # noqa: E402
 
 EXPECTED_TRONDELAG_RESOLUTIONS = [7, 6, 5]
 EXPECTED_TRONDELAG_COUNTS = {7: 13735, 6: 2163, 5: 365}
+EXPECTED_SYNTHETIC_ACCEPTANCE_RESOLUTIONS = {"bornholm": 10, "trondelag": 7}
+SYNTHETIC_ACCEPTANCE_COLUMNS = ["acceptance_low", "acceptance_medium", "acceptance_high"]
 REQUIRED_LANDSCAPE_FIELDS = ["hex_id", "class_km", "F1", "F2", "F3", "F4", "F5"]
 LANDSCAPE_DISPLAY_FIELDS = [
     "landscape_type",
@@ -102,6 +111,18 @@ def _feature_count(path: Path) -> int:
     return len(_geojson_features(path))
 
 
+def _csv_rows(path: Path) -> list[dict[str, str]]:
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        return list(csv.DictReader(handle))
+
+
+def _decimal_places(text: str) -> int:
+    value = str(text).strip()
+    if "." not in value:
+        return 0
+    return len(value.split(".", 1)[1].rstrip("0"))
+
+
 def _properties(features: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [dict(feature.get("properties") or {}) for feature in features]
 
@@ -177,6 +198,154 @@ def check_h3_session_state_sanitizer(report: ContractReport, region: dict[str, A
             st.session_state.pop(state_key, None)
         else:
             st.session_state[state_key] = original
+
+
+def check_region_switch_resets_to_light_default(report: ContractReport) -> None:
+    import streamlit as st  # noqa: WPS433
+    import potential_app as app  # noqa: WPS433
+
+    bornholm = load_region("bornholm")
+    trondelag = load_region("trondelag")
+    options = {"bornholm": bornholm, "trondelag": trondelag}
+    original_state = dict(st.session_state)
+    try:
+        st.session_state.clear()
+        st.session_state[app.APP_LANGUAGE_KEY] = "sv"
+        st.session_state[app.REGION_SELECT_KEY] = "bornholm"
+        app._reset_session_for_region(bornholm)
+        st.session_state["combined_h3_resolution"] = 10
+        st.session_state["combined_h3_display_mode"] = "zoom_family"
+        st.session_state["show_landscape_v10"] = True
+        st.session_state["show_social_acceptance"] = True
+        st.session_state[app.SOLAR_APPLIED_CONFIG_KEY] = {"large_scale_active": False}
+        st.session_state["potential_scenario_bornholm"] = "high"
+
+        st.session_state[app.REGION_SELECT_KEY] = "trondelag"
+        app._sync_region_selection_state(options)
+        report.check(
+            st.session_state.get(app.ACTIVE_REGION_KEY) == "trondelag"
+            and st.session_state.get("combined_h3_resolution") == 7
+            and st.session_state.get("combined_h3_display_mode") == "selected"
+            and st.session_state.get("show_landscape_v10") is False
+            and st.session_state.get("show_social_acceptance") is False
+            and st.session_state.get("show_user_solar") is True
+            and "potential_scenario_bornholm" not in st.session_state,
+            "Region switch to Trondelag resets to the light default state.",
+            "Region switch to Trondelag did not reset stale Bornholm controls to light defaults.",
+        )
+
+        st.session_state["combined_h3_resolution"] = 7
+        st.session_state["show_landscape_factor"] = True
+        st.session_state["show_social_acceptance"] = True
+        st.session_state["potential_scenario_trondelag"] = "low"
+        st.session_state[app.REGION_SELECT_KEY] = "bornholm"
+        app._sync_region_selection_state(options)
+        report.check(
+            st.session_state.get(app.ACTIVE_REGION_KEY) == "bornholm"
+            and st.session_state.get("combined_h3_resolution") == 8
+            and st.session_state.get("combined_h3_display_mode") == "selected"
+            and st.session_state.get("show_landscape_factor") is False
+            and st.session_state.get("show_social_acceptance") is False
+            and "potential_scenario_trondelag" not in st.session_state,
+            "Switching back to Bornholm also opens a fresh light default state.",
+            "Switching back to Bornholm kept stale Trondelag controls instead of light defaults.",
+        )
+    finally:
+        st.session_state.clear()
+        for key, value in original_state.items():
+            st.session_state[key] = value
+
+
+def check_synthetic_social_acceptance(report: ContractReport, region_id: str) -> None:
+    region = load_region(region_id)
+    manifest = load_linked_manifest(region, "social_acceptance_manifest")
+    expected_resolution = EXPECTED_SYNTHETIC_ACCEPTANCE_RESOLUTIONS[region_id]
+    if not isinstance(manifest, dict):
+        report.fail(f"{region_id}: social_acceptance_manifest could not be loaded.")
+        return
+
+    source_path = _path_from_manifest(manifest, "source_hex_geojson")
+    csv_path = _path_from_manifest(manifest, "acceptance_csv")
+    report.check(
+        bool(manifest.get("synthetic")) and str(manifest.get("status")) == "synthetic_test_data",
+        f"{region_id}: social acceptance manifest is marked synthetic test data.",
+        f"{region_id}: social acceptance manifest is not clearly marked synthetic test data.",
+    )
+    report.check(
+        int(manifest.get("hex_resolution") or -1) == expected_resolution,
+        f"{region_id}: synthetic acceptance uses H3 R{expected_resolution}.",
+        f"{region_id}: synthetic acceptance resolution is {manifest.get('hex_resolution')!r}, expected R{expected_resolution}.",
+    )
+    if source_path is None or not source_path.exists():
+        report.fail(f"{region_id}: synthetic acceptance source hex GeoJSON is missing: {source_path}")
+        return
+    if csv_path is None or not csv_path.exists():
+        report.fail(f"{region_id}: synthetic acceptance CSV is missing: {csv_path}")
+        return
+
+    rows = _csv_rows(csv_path)
+    source_count = _feature_count(source_path)
+    report.check(
+        len(rows) == source_count,
+        f"{region_id}: synthetic acceptance has one row for every source hex ({source_count}).",
+        f"{region_id}: synthetic acceptance has {len(rows)} rows, expected {source_count} source hex rows.",
+    )
+
+    scenario_ids = [str(scenario.get("id")) for scenario in manifest.get("scenarios") or [] if isinstance(scenario, dict)]
+    report.check(
+        scenario_ids == ["low", "medium", "high"],
+        f"{region_id}: synthetic acceptance exposes low/medium/high scenarios.",
+        f"{region_id}: synthetic acceptance scenarios are {scenario_ids}, expected low/medium/high.",
+    )
+
+    bad_values: list[str] = []
+    bad_decimals: list[str] = []
+    bad_order: list[str] = []
+    bad_status = 0
+    bad_resolution = 0
+    for row in rows:
+        if str(row.get("data_status")) != "synthetic_test_data_not_research":
+            bad_status += 1
+        if int(row.get("h3_resolution") or -1) != expected_resolution:
+            bad_resolution += 1
+        parsed: dict[str, float] = {}
+        for column in SYNTHETIC_ACCEPTANCE_COLUMNS:
+            text = str(row.get(column, "")).strip()
+            try:
+                value = float(text)
+            except Exception:
+                bad_values.append(f"{row.get('hex_id')}:{column}={text!r}")
+                continue
+            parsed[column] = value
+            if not 0.0 <= value <= 1.0:
+                bad_values.append(f"{row.get('hex_id')}:{column}={text}")
+            if _decimal_places(text) > 3:
+                bad_decimals.append(f"{row.get('hex_id')}:{column}={text}")
+        if len(parsed) == 3 and not (
+            parsed["acceptance_low"] <= parsed["acceptance_medium"] <= parsed["acceptance_high"]
+        ):
+            bad_order.append(str(row.get("hex_id")))
+
+    report.check(
+        not bad_values,
+        f"{region_id}: all synthetic acceptance values are in [0, 1].",
+        f"{region_id}: invalid synthetic acceptance values: {bad_values[:5]}",
+    )
+    report.check(
+        not bad_decimals,
+        f"{region_id}: all synthetic acceptance values use max three decimals.",
+        f"{region_id}: synthetic acceptance values exceed three decimals: {bad_decimals[:5]}",
+    )
+    report.check(
+        not bad_order,
+        f"{region_id}: low <= medium <= high for every synthetic acceptance row.",
+        f"{region_id}: scenario ordering failed for hex rows: {bad_order[:5]}",
+    )
+    report.check(
+        bad_status == 0 and bad_resolution == 0,
+        f"{region_id}: every synthetic acceptance row is labelled test data at the expected resolution.",
+        f"{region_id}: {bad_status} rows have bad data_status and {bad_resolution} rows have bad resolution.",
+    )
 
 
 def check_trondelag_region(report: ContractReport, region: dict[str, Any]) -> None:
@@ -370,18 +539,22 @@ def check_trondelag_runtime(report: ContractReport, region: dict[str, Any]) -> N
 
 def main() -> int:
     report = ContractReport()
-    check_bornholm_runtime(report)
-    check_default_region(report)
+    with contextlib.redirect_stderr(StringIO()):
+        check_bornholm_runtime(report)
+        check_default_region(report)
 
-    trondelag = load_region("trondelag")
-    landscape = load_linked_manifest(trondelag, "landscape_manifest")
-    scenario = load_linked_manifest(trondelag, "scenario_manifest")
+        trondelag = load_region("trondelag")
+        landscape = load_linked_manifest(trondelag, "landscape_manifest")
+        scenario = load_linked_manifest(trondelag, "scenario_manifest")
 
-    check_h3_session_state_sanitizer(report, trondelag)
-    check_trondelag_region(report, trondelag)
-    check_landscape_manifest(report, landscape)
-    check_scenario_placeholder(report, scenario)
-    check_trondelag_runtime(report, trondelag)
+        check_h3_session_state_sanitizer(report, trondelag)
+        check_region_switch_resets_to_light_default(report)
+        check_trondelag_region(report, trondelag)
+        check_landscape_manifest(report, landscape)
+        check_scenario_placeholder(report, scenario)
+        check_synthetic_social_acceptance(report, "bornholm")
+        check_synthetic_social_acceptance(report, "trondelag")
+        check_trondelag_runtime(report, trondelag)
     return report.emit()
 
 

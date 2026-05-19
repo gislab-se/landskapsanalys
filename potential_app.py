@@ -61,6 +61,12 @@ from potential_model.potential import (  # noqa: E402
     solar_capacity_frame,
     solar_capacity_summary,
 )
+from potential_model.social_acceptance import (  # noqa: E402
+    DEFAULT_SCENARIO_ID as SOCIAL_ACCEPTANCE_DEFAULT_SCENARIO_ID,
+    acceptance_layer as social_acceptance_layer,
+    acceptance_scenario_label as social_acceptance_scenario_label,
+    acceptance_scenarios as social_acceptance_scenarios,
+)
 from potential_model.wind_acceptance import (  # noqa: E402
     GROUP_LABELS,
     GROUP_PARAM_MAP,
@@ -128,6 +134,8 @@ def landscape_type_display_colors(manifest: dict[str, Any] | None = None) -> dic
 
 
 PAGE_TITLE = "Sol- och vindpotential"
+APP_RELEASE_STAGE = "BETA"
+APP_RELEASE_NOTE = "Utvecklingsversion - inte färdig produkt"
 APP_LANGUAGE_KEY = "potential_app_language"
 APP_LANGUAGES = {
     "da_no": "Danska/Norska",
@@ -150,6 +158,8 @@ UI_ONLY_RERUN_REASON_KEY = "potential_ui_only_rerun_reason"
 WORKSPACE_RENDER_CACHE_KEY = "potential_workspace_render_cache_v2"
 WORKSPACE_CALCULATION_VERSION = "solar_filter_establishment_v2"
 REGION_SELECT_KEY = "potential_selected_region_id"
+ACTIVE_REGION_KEY = "potential_active_region_id"
+REGION_RESET_REASON_KEY = "potential_region_reset_reason"
 DEFAULT_REGION_ID = "trondelag"
 WIND_LAYER_SELECTION_KEY = "wind_builder_selected_layers"
 WIND_RUNTIME_OVERLAY_KEY = "wind_builder_runtime_overlay_enabled"
@@ -565,6 +575,8 @@ def _workspace_calculation_fingerprint(
     show_pdf_types: bool,
     show_cluster: bool,
     show_factor: bool,
+    show_social_acceptance: bool,
+    social_acceptance_scenario: str,
     selected_factor: str,
     applied_solar_config: dict[str, Any],
     solar_params: dict[str, Any],
@@ -588,6 +600,8 @@ def _workspace_calculation_fingerprint(
         "show_landscape_pdf_types": bool(show_pdf_types),
         "show_landscape_structures": bool(show_cluster),
         "show_landscape_factors": bool(show_factor),
+        "show_social_acceptance": bool(show_social_acceptance),
+        "social_acceptance_scenario": str(social_acceptance_scenario),
         "selected_factor": str(selected_factor),
         "applied_solar_config": applied_solar_config,
         "solar_params": solar_params,
@@ -893,6 +907,30 @@ def _panel_shell() -> tuple[Any | None, Any | None]:
           line-height: 1.15;
           margin: 0;
         }}
+        .workspace-title-row {{
+          display: flex;
+          align-items: center;
+          gap: 0.55rem;
+          flex-wrap: wrap;
+        }}
+        .workspace-beta-badge {{
+          display: inline-flex;
+          align-items: center;
+          min-height: 1.35rem;
+          padding: 0.16rem 0.45rem;
+          border-radius: 0.28rem;
+          background: #7f1d1d;
+          color: #fff;
+          font-size: 0.72rem;
+          font-weight: 700;
+          letter-spacing: 0;
+        }}
+        .workspace-beta-note {{
+          margin-top: 0.18rem;
+          color: rgba(127, 29, 29, 0.88);
+          font-size: 0.82rem;
+          font-weight: 600;
+        }}
         .workspace-eyebrow {{
           color: rgba(49, 51, 63, 0.68);
           font-size: 0.86rem;
@@ -991,6 +1029,30 @@ def _workspace_shell() -> tuple[Any | None, Any, Any | None]:
           font-size: 1.42rem;
           line-height: 1.15;
           margin: 0;
+        }
+        .workspace-title-row {
+          display: flex;
+          align-items: center;
+          gap: 0.55rem;
+          flex-wrap: wrap;
+        }
+        .workspace-beta-badge {
+          display: inline-flex;
+          align-items: center;
+          min-height: 1.35rem;
+          padding: 0.16rem 0.45rem;
+          border-radius: 0.28rem;
+          background: #7f1d1d;
+          color: #fff;
+          font-size: 0.72rem;
+          font-weight: 700;
+          letter-spacing: 0;
+        }
+        .workspace-beta-note {
+          margin-top: 0.18rem;
+          color: rgba(127, 29, 29, 0.88);
+          font-size: 0.82rem;
+          font-weight: 600;
         }
         .workspace-eyebrow {
           color: rgba(49, 51, 63, 0.68);
@@ -1124,11 +1186,49 @@ def _region_options() -> dict[str, dict[str, Any]]:
     return options
 
 
+def _reset_session_for_region(region: dict[str, Any], previous_region_id: str | None = None) -> None:
+    region_id = str(region.get("region_id", DEFAULT_REGION_ID) or DEFAULT_REGION_ID)
+    map_reset_token = _map_view_reset_token()
+    preserved_values = {
+        APP_LANGUAGE_KEY: st.session_state.get(APP_LANGUAGE_KEY, "sv"),
+        LEFT_PANEL_OPEN_KEY: st.session_state.get(LEFT_PANEL_OPEN_KEY, True),
+        RIGHT_PANEL_OPEN_KEY: st.session_state.get(RIGHT_PANEL_OPEN_KEY, True),
+        RIGHT_PANEL_WIDTH_KEY: st.session_state.get(RIGHT_PANEL_WIDTH_KEY, 34.0),
+    }
+
+    st.session_state.clear()
+    for key, value in preserved_values.items():
+        st.session_state[key] = value
+    st.session_state[REGION_SELECT_KEY] = region_id
+    st.session_state[ACTIVE_REGION_KEY] = region_id
+    st.session_state[REGION_RESET_REASON_KEY] = (
+        f"region changed from {previous_region_id} to {region_id}"
+        if previous_region_id
+        else f"region initialized as {region_id}"
+    )
+    st.session_state[MAP_VIEW_RESET_TOKEN_KEY] = map_reset_token + 1
+    _ensure_default_start_state(region, force=True)
+
+
+def _sync_region_selection_state(options: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    selected_id = str(st.session_state.get(REGION_SELECT_KEY))
+    if selected_id not in options:
+        selected_id = DEFAULT_REGION_ID if DEFAULT_REGION_ID in options else "bornholm" if "bornholm" in options else next(iter(options))
+        st.session_state[REGION_SELECT_KEY] = selected_id
+
+    active_id = st.session_state.get(ACTIVE_REGION_KEY)
+    region = options[selected_id]
+    if str(active_id or "") != selected_id:
+        _reset_session_for_region(region, str(active_id) if active_id else None)
+    return region
+
+
 def _select_region(panel: Any | None = None) -> dict[str, Any]:
     options = _region_options()
+    region = _sync_region_selection_state(options)
     selected_id = str(st.session_state.get(REGION_SELECT_KEY))
     if panel is None:
-        return options[selected_id]
+        return region
 
     selected_id = panel.selectbox(
         _t("Region"),
@@ -1609,12 +1709,12 @@ def _render_region_scenario_panel(panel: Any | None) -> tuple[dict[str, Any], di
 
 
 def _metric_header(region: dict[str, Any], scenario_state: dict[str, Any], h3_resolution: int | None = None) -> None:
-    st.title(_t(PAGE_TITLE))
+    st.title(f"{_t(PAGE_TITLE)} · {APP_RELEASE_STAGE}")
     st.caption(
         {
-            "en": f"Regional v0 for scenarios, {_t(SOLAR_LANDSCAPE_POTENTIAL_LABEL)}, {_t(WIND_LANDSCAPE_POTENTIAL_LABEL)} and landscape analysis.",
-            "da_no": f"Regional v0 for scenarier, {_t(SOLAR_LANDSCAPE_POTENTIAL_LABEL)}, {_t(WIND_LANDSCAPE_POTENTIAL_LABEL)} og landskabsanalyse.",
-        }.get(_language(), f"Regional v0 för scenarier, {SOLAR_LANDSCAPE_POTENTIAL_LABEL}, {WIND_LANDSCAPE_POTENTIAL_LABEL} och landskapsanalys.")
+            "en": f"{APP_RELEASE_STAGE}: development version, not a finished product. Regional v0 for scenarios, {_t(SOLAR_LANDSCAPE_POTENTIAL_LABEL)}, {_t(WIND_LANDSCAPE_POTENTIAL_LABEL)} and landscape analysis.",
+            "da_no": f"{APP_RELEASE_STAGE}: udviklingsversion, ikke et færdigt produkt. Regional v0 for scenarier, {_t(SOLAR_LANDSCAPE_POTENTIAL_LABEL)}, {_t(WIND_LANDSCAPE_POTENTIAL_LABEL)} og landskabsanalyse.",
+        }.get(_language(), f"{APP_RELEASE_STAGE}: {APP_RELEASE_NOTE}. Regional v0 för scenarier, {SOLAR_LANDSCAPE_POTENTIAL_LABEL}, {WIND_LANDSCAPE_POTENTIAL_LABEL} och landskapsanalys.")
     )
 
     c1, c2, c3, c4, c5 = st.columns(5)
@@ -1636,7 +1736,11 @@ def _workspace_header(region: dict[str, Any], scenario_state: dict[str, Any], h3
         <div class="workspace-header">
           <div>
             <div class="workspace-eyebrow">{region_label} · scenario {scenario_label} · H3 {h3_label}</div>
-            <h1>{_t(PAGE_TITLE)}</h1>
+            <div class="workspace-title-row">
+              <h1>{_t(PAGE_TITLE)}</h1>
+              <span class="workspace-beta-badge">{APP_RELEASE_STAGE}</span>
+            </div>
+            <div class="workspace-beta-note">{APP_RELEASE_NOTE}</div>
           </div>
           <div class="workspace-pill">CRS: {region.get("native_crs", "TBD")}</div>
         </div>
@@ -1647,6 +1751,23 @@ def _workspace_header(region: dict[str, Any], scenario_state: dict[str, Any], h3
 
 def _load_context(region: dict[str, Any]) -> dict[str, Any]:
     return load_region_context(region)
+
+
+def _social_acceptance_manifest(region: dict[str, Any]) -> dict[str, Any] | None:
+    return load_linked_manifest(region, "social_acceptance_manifest")
+
+
+def _social_acceptance_state_key(region: dict[str, Any]) -> str:
+    return f"social_acceptance_scenario_{region.get('region_id', 'region')}"
+
+
+def _social_acceptance_scenario(region: dict[str, Any], manifest: dict[str, Any] | None) -> str:
+    options = [scenario["id"] for scenario in social_acceptance_scenarios(manifest)]
+    default = SOCIAL_ACCEPTANCE_DEFAULT_SCENARIO_ID if SOCIAL_ACCEPTANCE_DEFAULT_SCENARIO_ID in options else options[0]
+    state_key = _social_acceptance_state_key(region)
+    if st.session_state.get(state_key) not in options:
+        st.session_state[state_key] = default
+    return str(st.session_state.get(state_key))
 
 
 def _available_h3_resolutions(region: dict[str, Any]) -> list[int]:
@@ -1865,6 +1986,7 @@ def _calculation_progress_steps(
     show_user_wind: bool,
     energy_model_state: dict[str, Any],
     show_landscape_layers: bool,
+    show_social_acceptance: bool = False,
 ) -> list[str]:
     steps: list[str] = []
     if show_user_solar:
@@ -1884,6 +2006,8 @@ def _calculation_progress_steps(
         steps.append("Etableringsstatistik")
     if show_landscape_layers:
         steps.append("Landskapslager")
+    if show_social_acceptance:
+        steps.append("Social acceptans")
     steps.append("Karta HTML och rendering")
     return steps
 
@@ -2101,9 +2225,9 @@ def _region_start_default_key(region: dict[str, Any]) -> str:
     return f"{START_DEFAULT_VERSION_KEY}_{region_id}"
 
 
-def _ensure_default_start_state(region: dict[str, Any]) -> None:
+def _ensure_default_start_state(region: dict[str, Any], force: bool = False) -> None:
     start_default_key = _region_start_default_key(region)
-    if st.session_state.get(start_default_key) == START_DEFAULT_VERSION:
+    if not force and st.session_state.get(start_default_key) == START_DEFAULT_VERSION:
         return
     _apply_wind_layer_selection_state(_default_wind_layer_selection())
     st.session_state[WIND_EMPTY_SELECTION_ACTIVE_KEY] = True
@@ -2115,6 +2239,8 @@ def _ensure_default_start_state(region: dict[str, Any]) -> None:
     st.session_state["show_landscape_pdf_types"] = False
     st.session_state["show_landscape_cluster"] = False
     st.session_state["show_landscape_factor"] = False
+    st.session_state["show_social_acceptance"] = False
+    st.session_state[_social_acceptance_state_key(region)] = SOCIAL_ACCEPTANCE_DEFAULT_SCENARIO_ID
     st.session_state["show_solar_v1"] = False
     st.session_state["show_user_solar"] = True
     st.session_state["solar_draft_small_population_active"] = False
@@ -9252,6 +9378,13 @@ def _unified_workspace_tab(
     selected_factor = str(st.session_state.get("combined_landscape_factor", factors[0] if factors else ""))
     if selected_factor not in factors and factors:
         selected_factor = factors[0]
+    social_manifest = _social_acceptance_manifest(region)
+    show_social_acceptance = bool(st.session_state.get("show_social_acceptance", False)) and social_manifest is not None
+    social_acceptance_scenario = (
+        _social_acceptance_scenario(region, social_manifest)
+        if social_manifest is not None
+        else SOCIAL_ACCEPTANCE_DEFAULT_SCENARIO_ID
+    )
     active_landscape_count = _count_enabled(show_v10, show_pdf_types, show_cluster, show_factor)
     active_wind_count = _count_enabled(show_user_wind)
     active_solar_count = _count_enabled(show_user_solar, show_solar_v1)
@@ -9427,7 +9560,29 @@ def _unified_workspace_tab(
 
         with left_panel.expander(_t("Social acceptans"), expanded=False):
             st.caption(_t("Levereras av IVL"))
-            st.caption(_t("Kommer i augusti"))
+            st.caption("Syntetiskt testlager tills IVL-data finns.")
+            if social_manifest is None:
+                st.checkbox(_t("Visa social acceptans"), value=False, key="show_social_acceptance", disabled=True)
+                st.caption(_t("Kommer i augusti"))
+            else:
+                show_social_acceptance = st.checkbox(
+                    _t("Visa social acceptans"),
+                    value=show_social_acceptance,
+                    key="show_social_acceptance",
+                )
+                scenario_options = [scenario["id"] for scenario in social_acceptance_scenarios(social_manifest)]
+                social_acceptance_scenario = st.radio(
+                    "Acceptansscenario",
+                    options=scenario_options,
+                    key=_social_acceptance_state_key(region),
+                    format_func=lambda scenario_id: social_acceptance_scenario_label(social_manifest, str(scenario_id)),
+                    horizontal=True,
+                    disabled=not show_social_acceptance,
+                )
+                st.caption(
+                    f"Testdata: värden 0-1 på H3 R{int(social_manifest.get('hex_resolution') or 0)} "
+                    "med max tre decimaler. Inte verkliga forskningsresultat."
+                )
             st.markdown(f"[IVL Svenska Miljöinstitutet]({IVL_PROVIDER_URL})")
 
     display_geometry_path = _h3_display_geometry_path(region, h3_resolution)
@@ -9465,6 +9620,8 @@ def _unified_workspace_tab(
         show_pdf_types,
         show_cluster,
         show_factor,
+        show_social_acceptance,
+        social_acceptance_scenario,
         selected_factor,
         applied_solar_config,
         solar_params,
@@ -9495,6 +9652,7 @@ def _unified_workspace_tab(
         show_user_wind,
         energy_model_state,
         bool(show_v10 or show_cluster or show_factor),
+        show_social_acceptance,
     )
     performance_bucket = _performance_history_bucket(region, h3_resolution, zoom_family_enabled)
     performance_estimates = _performance_step_estimates(performance_bucket, calc_steps)
@@ -10087,6 +10245,18 @@ def _unified_workspace_tab(
                 )
             )
 
+    if show_social_acceptance and social_manifest is not None:
+        perf_started = _perf_start()
+        _append_unique_layer(layers, social_acceptance_layer(social_manifest, social_acceptance_scenario))
+        unified_notes.append("Social acceptans är syntetiskt testdata på hexnivå och ska inte tolkas som IVL-resultat.")
+        _add_perf_timing(
+            performance_log,
+            "Social acceptans",
+            perf_started,
+            f"H3 R{int(social_manifest.get('hex_resolution') or 0)}; {social_acceptance_scenario}",
+        )
+        _advance_calculation_progress(calc_progress, "Social acceptans")
+
     layers = _dedupe_layers(layers)
     if isinstance(energy_model_state, dict) and energy_model_state.get("available"):
         energy_model_state["map_layer_debug_rows"] = _map_layer_debug_rows(layers)
@@ -10274,11 +10444,11 @@ def _unified_workspace_tab(
 
 def main() -> None:
     st.session_state.setdefault(APP_LANGUAGE_KEY, "sv")
-    st.set_page_config(page_title=_t(PAGE_TITLE), layout="wide", initial_sidebar_state="expanded")
-    left_panel, main_panel, right_panel = _workspace_shell()
+    st.set_page_config(page_title=f"{_t(PAGE_TITLE)} · {APP_RELEASE_STAGE}", layout="wide", initial_sidebar_state="expanded")
     region = _select_region(None)
     scenario_state = _scenario_state(region, None)
     context = _load_context(region)
+    left_panel, main_panel, right_panel = _workspace_shell()
 
     default_display_resolution = int(region.get("default_display_h3_resolution") or region.get("default_h3_resolution") or 8)
     h3_resolution = _session_h3_resolution(region, "combined_h3_resolution", default_display_resolution)
