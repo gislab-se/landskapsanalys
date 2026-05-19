@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - potential-v2-multiregion
     paths:
       - .github/workflows/publish-geocontext-pages.yml
       - docs/sol-vindpotential.html
