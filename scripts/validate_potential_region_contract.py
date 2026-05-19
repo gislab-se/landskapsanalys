@@ -32,6 +32,7 @@ from apps.potential_model.region_status import load_region_context  # noqa: E402
 EXPECTED_TRONDELAG_RESOLUTIONS = [7, 6, 5]
 EXPECTED_TRONDELAG_COUNTS = {7: 13735, 6: 2163, 5: 365}
 EXPECTED_SYNTHETIC_ACCEPTANCE_RESOLUTIONS = {"bornholm": 10, "trondelag": 7}
+EXPECTED_SYNTHETIC_ACCEPTANCE_ROLLUP_RESOLUTIONS = {"bornholm": 8, "trondelag": 6}
 SYNTHETIC_ACCEPTANCE_COLUMNS = ["acceptance_low", "acceptance_medium", "acceptance_high"]
 REQUIRED_LANDSCAPE_FIELDS = ["hex_id", "class_km", "F1", "F2", "F3", "F4", "F5"]
 LANDSCAPE_DISPLAY_FIELDS = [
@@ -257,6 +258,8 @@ def check_region_switch_resets_to_light_default(report: ContractReport) -> None:
 
 
 def check_synthetic_social_acceptance(report: ContractReport, region_id: str) -> None:
+    from apps.potential_model.social_acceptance import acceptance_feature_collection  # noqa: WPS433
+
     region = load_region(region_id)
     manifest = load_linked_manifest(region, "social_acceptance_manifest")
     expected_resolution = EXPECTED_SYNTHETIC_ACCEPTANCE_RESOLUTIONS[region_id]
@@ -345,6 +348,38 @@ def check_synthetic_social_acceptance(report: ContractReport, region_id: str) ->
         bad_status == 0 and bad_resolution == 0,
         f"{region_id}: every synthetic acceptance row is labelled test data at the expected resolution.",
         f"{region_id}: {bad_status} rows have bad data_status and {bad_resolution} rows have bad resolution.",
+    )
+
+    rollup_resolution = EXPECTED_SYNTHETIC_ACCEPTANCE_ROLLUP_RESOLUTIONS[region_id]
+    rollup_geometry_value = (region.get("h3_display_geometries") or {}).get(str(rollup_resolution))
+    rollup_geometry_path = resolve_repo_path(str(rollup_geometry_value)) if rollup_geometry_value else None
+    if rollup_geometry_path is None or not rollup_geometry_path.exists():
+        report.fail(f"{region_id}: rollup geometry R{rollup_resolution} is missing: {rollup_geometry_value!r}")
+        return
+    rollup_collection = acceptance_feature_collection(
+        manifest,
+        "medium",
+        rollup_resolution,
+        str(rollup_geometry_path),
+    )
+    rollup_features = rollup_collection.get("features") if isinstance(rollup_collection, dict) else []
+    rollup_props = [dict(feature.get("properties") or {}) for feature in rollup_features or []]
+    bad_rollup_values = [
+        str(props.get("hex_id"))
+        for props in rollup_props
+        if not 0.0 <= float(props.get("acceptance_value", -1.0)) <= 1.0
+    ]
+    report.check(
+        0 < len(rollup_props) < source_count,
+        f"{region_id}: synthetic acceptance rolls up from R{expected_resolution} to R{rollup_resolution}.",
+        f"{region_id}: synthetic acceptance rollup produced {len(rollup_props)} features from {source_count} source rows.",
+    )
+    report.check(
+        all(int(props.get("target_h3_resolution") or -1) == rollup_resolution for props in rollup_props)
+        and any(int(props.get("source_hex_count") or 0) > 1 for props in rollup_props)
+        and not bad_rollup_values,
+        f"{region_id}: rollup features keep target resolution, child counts and values in [0, 1].",
+        f"{region_id}: invalid rollup features for R{rollup_resolution}: {bad_rollup_values[:5]}",
     )
 
 

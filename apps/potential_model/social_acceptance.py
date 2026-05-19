@@ -5,6 +5,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+import h3
 import pandas as pd
 
 from .geometry import geometry_for_hex, load_h3_display_geometries
@@ -101,6 +102,33 @@ def acceptance_color(value: float) -> str:
     return "#166534"
 
 
+@lru_cache(maxsize=24)
+def _rolled_acceptance_frame(
+    csv_path: str,
+    value_column: str,
+    source_resolution: int,
+    target_resolution: int,
+) -> pd.DataFrame:
+    frame = _load_acceptance_csv(csv_path)
+    if frame.empty or value_column not in frame.columns:
+        return pd.DataFrame(columns=["hex_id", "acceptance_value", "source_hex_count"])
+
+    work = frame[["hex_id", value_column]].copy()
+    work[value_column] = pd.to_numeric(work[value_column], errors="coerce").clip(lower=0.0, upper=1.0)
+    if int(target_resolution) < int(source_resolution):
+        work["target_hex_id"] = work["hex_id"].map(lambda cell: h3.cell_to_parent(str(cell), int(target_resolution)))
+    else:
+        work["target_hex_id"] = work["hex_id"].astype(str)
+
+    rolled = (
+        work.groupby("target_hex_id", as_index=False)
+        .agg(acceptance_value=(value_column, "mean"), source_hex_count=("hex_id", "count"))
+        .rename(columns={"target_hex_id": "hex_id"})
+    )
+    rolled["acceptance_value"] = rolled["acceptance_value"].clip(lower=0.0, upper=1.0).round(3)
+    return rolled.sort_values("hex_id").reset_index(drop=True)
+
+
 @lru_cache(maxsize=12)
 def _acceptance_feature_collection_cached(
     csv_path: str,
@@ -108,20 +136,22 @@ def _acceptance_feature_collection_cached(
     scenario_id: str,
     value_column: str,
     scenario_label: str,
-    resolution: int,
+    source_resolution: int,
+    target_resolution: int,
 ) -> dict[str, Any]:
-    frame = _load_acceptance_csv(csv_path)
-    if frame.empty or value_column not in frame.columns:
+    frame = _rolled_acceptance_frame(csv_path, value_column, int(source_resolution), int(target_resolution))
+    if frame.empty:
         return {"type": "FeatureCollection", "features": []}
 
     geometries = load_h3_display_geometries(geometry_path)
     features: list[dict[str, Any]] = []
-    for row in frame[["hex_id", value_column]].itertuples(index=False):
+    for row in frame.itertuples(index=False):
         hex_id = str(row.hex_id)
         geometry = geometry_for_hex(hex_id, geometries)
         if geometry is None:
             continue
-        value = round(float(getattr(row, value_column)), 3)
+        value = round(float(row.acceptance_value), 3)
+        source_count = int(row.source_hex_count)
         features.append(
             {
                 "type": "Feature",
@@ -130,12 +160,16 @@ def _acceptance_feature_collection_cached(
                     "hex_id": hex_id,
                     "acceptance_scenario": str(scenario_id),
                     "acceptance_value": value,
+                    "source_hex_count": source_count,
+                    "source_h3_resolution": int(source_resolution),
+                    "target_h3_resolution": int(target_resolution),
                     "fill": acceptance_color(value),
                     "tooltip_title": "Syntetisk social acceptans",
                     "tooltip_body": (
                         f"{html.escape(str(scenario_label))}<br>"
                         f"Värde: {value:.3f}<br>"
-                        f"H3 R{int(resolution)}<br>"
+                        f"H3 R{int(target_resolution)}<br>"
+                        f"Källhex: {source_count}<br>"
                         "Testdata, inte forskningsresultat"
                     ),
                 },
@@ -144,29 +178,46 @@ def _acceptance_feature_collection_cached(
     return {"type": "FeatureCollection", "features": features}
 
 
-def acceptance_feature_collection(manifest: dict[str, Any], scenario_id: str) -> dict[str, Any]:
+def acceptance_feature_collection(
+    manifest: dict[str, Any],
+    scenario_id: str,
+    target_resolution: int | None = None,
+    display_geometry_path: str | None = None,
+) -> dict[str, Any]:
     csv_path = _manifest_path(manifest, "acceptance_csv")
-    geometry_path = _manifest_path(manifest, "hex_geometry_path") or _manifest_path(manifest, "source_hex_geojson")
+    geometry_path = (
+        Path(display_geometry_path)
+        if display_geometry_path
+        else _manifest_path(manifest, "hex_geometry_path") or _manifest_path(manifest, "source_hex_geojson")
+    )
     if csv_path is None or geometry_path is None or not csv_path.exists() or not geometry_path.exists():
         return {"type": "FeatureCollection", "features": []}
 
     scenario_id = str(scenario_id) if str(scenario_id) in SCENARIO_IDS else DEFAULT_SCENARIO_ID
-    resolution = int(manifest.get("hex_resolution") or 0)
+    source_resolution = int(manifest.get("hex_resolution") or 0)
+    target_resolution = int(target_resolution or source_resolution)
     return _acceptance_feature_collection_cached(
         str(csv_path),
         str(geometry_path),
         scenario_id,
         acceptance_value_column(manifest, scenario_id),
         acceptance_scenario_label(manifest, scenario_id),
-        resolution,
+        source_resolution,
+        target_resolution,
     )
 
 
-def acceptance_layer(manifest: dict[str, Any], scenario_id: str) -> dict[str, Any]:
+def acceptance_layer(
+    manifest: dict[str, Any],
+    scenario_id: str,
+    target_resolution: int | None = None,
+    display_geometry_path: str | None = None,
+) -> dict[str, Any]:
     scenario_label = acceptance_scenario_label(manifest, scenario_id)
+    resolution = int(target_resolution or manifest.get("hex_resolution") or 0)
     return {
-        "name": f"Social acceptans: {scenario_label}",
-        "feature_collection": acceptance_feature_collection(manifest, scenario_id),
+        "name": f"Social acceptans: {scenario_label} R{resolution}",
+        "feature_collection": acceptance_feature_collection(manifest, scenario_id, resolution, display_geometry_path),
         "fill_property": "fill",
         "legend_items": acceptance_legend_items(),
         "legend_id": "synthetic_social_acceptance",

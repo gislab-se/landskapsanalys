@@ -387,6 +387,8 @@ APP_TRANSLATIONS: dict[str, dict[str, str]] = {
         "H3-upplösning": "H3-oppløsning",
         "H3-rollup": "H3-rollup",
         "Hexvisning": "Hexvisning",
+        "Vald upplösning": "Valgt oppløsning",
+        "Zoomanpassad upplösning": "Zoomtilpasset oppløsning",
         "Snabb visning: vald upplösning": "Hurtig visning: valgt oppløsning",
         "Återställ kartvy": "Nulstil kartvisning",
         "Panelbredd": "Panelbredde",
@@ -457,6 +459,8 @@ APP_TRANSLATIONS: dict[str, dict[str, str]] = {
         "H3-upplösning": "H3 Resolution",
         "H3-rollup": "H3 Rollup",
         "Hexvisning": "Hex Display",
+        "Vald upplösning": "Selected resolution",
+        "Zoomanpassad upplösning": "Zoom-adaptive resolution",
         "Snabb visning: vald upplösning": "Fast display: selected resolution",
         "Återställ kartvy": "Reset map view",
         "Panelbredd": "Panel width",
@@ -2565,25 +2569,12 @@ def _map_panel_controls(region: dict[str, Any], key_prefix: str, panel: Any | No
 
     if panel is not None:
         with panel.expander(_t("H3-upplösning"), expanded=False):
-            h3_index = None if state_key in st.session_state else available.index(current_value)
-            h3_resolution = st.radio(
-                _t("H3-rollup"),
-                options=available,
-                index=h3_index,
-                format_func=lambda value: _h3_option_label(region, value),
-                horizontal=False,
-                key=state_key,
-            )
-            if h3_resolution is None:
-                h3_resolution = current_value
-            family_resolutions = _display_family_resolutions(region, int(h3_resolution))
+            family_resolutions = _display_family_resolutions(region, int(current_value))
             zoom_family_available = len({int(value) for value in family_resolutions}) > 1
             if not zoom_family_available and current_display_mode == "zoom_family":
                 current_display_mode = "selected"
                 st.session_state[display_mode_key] = "selected"
             display_modes_for_resolution = ["selected", "zoom_family"] if zoom_family_available else ["selected"]
-            zoom_family_min_resolution = min(family_resolutions) if family_resolutions else int(h3_resolution)
-            zoom_family_label = f"Utforska: zoomanpassad R{int(h3_resolution)}-R{int(zoom_family_min_resolution)}"
             display_mode_index = (
                 None
                 if display_mode_key in st.session_state
@@ -2594,8 +2585,8 @@ def _map_panel_controls(region: dict[str, Any], key_prefix: str, panel: Any | No
                 options=display_modes_for_resolution,
                 index=display_mode_index,
                 format_func=lambda value: {
-                    "selected": _t("Snabb visning: vald upplösning"),
-                    "zoom_family": zoom_family_label,
+                    "selected": _t("Vald upplösning"),
+                    "zoom_family": _t("Zoomanpassad upplösning"),
                 }.get(str(value), str(value)),
                 horizontal=False,
                 key=display_mode_key,
@@ -2604,9 +2595,19 @@ def _map_panel_controls(region: dict[str, Any], key_prefix: str, panel: Any | No
                 display_mode = current_display_mode
             zoom_family_enabled = display_mode == "zoom_family"
             if zoom_family_enabled:
-                st.caption({"en": "Builds several H3 resolutions and switches layers by zoom level. Useful for review, but slower.", "da_no": "Bygger flere H3-oppløsninger og skifter lag efter zoomniveau. Nyttigt til granskning, men langsommere."}.get(_language(), "Bygger flera H3-upplösningar och växlar lager efter zoomnivå. Användbart för granskning, men långsammare."))
+                h3_resolution = current_value
             else:
-                st.caption({"en": "Builds only the selected H3 resolution. Fastest after changes in wind and solar potential.", "da_no": "Bygger kun valgt H3-oppløsning. Hurtigst efter ændringer i vind- og solpotentiale."}.get(_language(), "Bygger bara vald H3-upplösning. Snabbast efter ändringar i vind- och solpotential."))
+                h3_index = None if state_key in st.session_state else available.index(current_value)
+                h3_resolution = st.radio(
+                    _t("H3-rollup"),
+                    options=available,
+                    index=h3_index,
+                    format_func=lambda value: _h3_option_label(region, value),
+                    horizontal=False,
+                    key=state_key,
+                )
+                if h3_resolution is None:
+                    h3_resolution = current_value
             st.markdown("[Läs mer om H3-upplösningar](https://h3geo.org/).")
             if st.button(_t("Återställ kartvy"), key=f"{key_prefix}_reset_map_view"):
                 _request_browser_map_view_reset()
@@ -10247,13 +10248,28 @@ def _unified_workspace_tab(
 
     if show_social_acceptance and social_manifest is not None:
         perf_started = _perf_start()
-        _append_unique_layer(layers, social_acceptance_layer(social_manifest, social_acceptance_scenario))
+        social_label = social_acceptance_scenario_label(social_manifest, social_acceptance_scenario)
+        layers.extend(
+            _hex_family_layers(
+                region,
+                h3_resolution,
+                zoom_family_enabled,
+                "synthetic_social_acceptance_hex",
+                f"Social acceptans: {social_label}",
+                lambda resolution: social_acceptance_layer(
+                    social_manifest,
+                    social_acceptance_scenario,
+                    int(resolution),
+                    _h3_display_geometry_path(region, int(resolution)),
+                ),
+            )
+        )
         unified_notes.append("Social acceptans är syntetiskt testdata på hexnivå och ska inte tolkas som IVL-resultat.")
         _add_perf_timing(
             performance_log,
             "Social acceptans",
             perf_started,
-            f"H3 R{int(social_manifest.get('hex_resolution') or 0)}; {social_acceptance_scenario}",
+            f"visning R{h3_resolution}; {social_acceptance_scenario}",
         )
         _advance_calculation_progress(calc_progress, "Social acceptans")
 
