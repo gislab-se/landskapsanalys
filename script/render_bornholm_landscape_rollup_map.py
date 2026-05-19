@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import sys
 from pathlib import Path
 from typing import Any
@@ -32,6 +33,49 @@ ROLLUP_OUTPUTS = {
     6: MAP_DIR / "bornholm_v10_landscape_types_rollup_r6.geojson",
 }
 
+V9_META = {
+    "1": {
+        "label": "Tätorts- och verksamhetskärnor",
+        "color": "#6E7C91",
+        "factor": "F4",
+    },
+    "2": {
+        "label": "Sprickdalspåverkat övergångslandskap",
+        "color": "#8B6B45",
+        "factor": "F1",
+    },
+    "3": {
+        "label": "Blandat vardagslandskap med låg faktorprofil",
+        "color": "#D8C97A",
+        "factor": "mixed",
+    },
+    "4": {
+        "label": "Flygsand och sandkust - kärnzon",
+        "color": "#D5B08A",
+        "factor": "F2",
+    },
+    "5": {
+        "label": "Sprickdal och brant relief - kärnzon med sand/kust",
+        "color": "#8B6B45",
+        "factor": "F1",
+    },
+    "6": {
+        "label": "Öppet och låglänt blandlandskap",
+        "color": "#9AA8B8",
+        "factor": "F5",
+    },
+    "7": {
+        "label": "Skog och skyddad natur - kärnzon",
+        "color": "#5B7F4A",
+        "factor": "F3",
+    },
+    "8": {
+        "label": "Sand- och kustpräglat landskap",
+        "color": "#D5B08A",
+        "factor": "F2",
+    },
+}
+
 
 def _read_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
@@ -50,6 +94,56 @@ def _display_geometry_path(region: dict[str, Any], resolution: int) -> str | Non
     if path is None or not path.exists():
         return None
     return str(path)
+
+
+def _numeric(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if math.isnan(number):
+        return None
+    return round(number, 4)
+
+
+def _integer_key(value: Any) -> str | None:
+    number = _numeric(value)
+    if number is None:
+        return None
+    return str(int(number))
+
+
+def _enrich_rollup_features(feature_collection: dict[str, Any], frame: Any) -> dict[str, Any]:
+    rows = {str(row["hex_id"]): row for row in frame.to_dict("records") if row.get("hex_id")}
+    for feature in feature_collection.get("features") or []:
+        properties = feature.setdefault("properties", {})
+        row = rows.get(str(properties.get("hex_id")), {})
+
+        cluster_key = (
+            _integer_key(row.get("class_k8"))
+            or _integer_key(row.get("class_km"))
+            or _integer_key(properties.get("v9_cluster"))
+        )
+        if cluster_key:
+            cluster_meta = V9_META.get(cluster_key, {})
+            properties["class_k8"] = int(cluster_key)
+            properties["class_km"] = int(cluster_key)
+            properties["v9_cluster"] = cluster_key
+            properties["v9_cluster_label"] = cluster_meta.get("label", f"Kluster {cluster_key}")
+            properties["v9_cluster_fill"] = cluster_meta.get("color", "#999999")
+
+        for factor in ("F1", "F2", "F3", "F4", "F5"):
+            factor_value = _numeric(row.get(factor))
+            if factor_value is not None:
+                properties[factor] = factor_value
+
+        for column in ("v10_type_name_en", "v10_rule", "v10_rule_en", "v10_confidence"):
+            value = row.get(column)
+            if value is not None and str(value) != "nan":
+                properties[column] = str(value)
+    return feature_collection
 
 
 def _add_resolution_metadata(feature_collection: dict[str, Any], resolution: int) -> dict[str, Any]:
@@ -78,6 +172,7 @@ def _render_rollup_geojson() -> dict[int, int]:
             frame,
             _display_geometry_path(region, resolution),
         )
+        feature_collection = _enrich_rollup_features(feature_collection, frame)
         feature_collection = _add_resolution_metadata(feature_collection, resolution)
         _write_json(output_path, feature_collection)
         counts[resolution] = len(feature_collection.get("features") or [])
@@ -90,6 +185,7 @@ def _render_rollup_geojson() -> dict[int, int]:
 def _html_template(manifest: dict[str, Any], counts: dict[int, int]) -> str:
     type_labels = manifest.get("landscape_type_labels") or {}
     type_colors = manifest.get("landscape_type_colors") or {}
+    factor_labels = manifest.get("factor_labels") or {}
     type_meta = {
         key: {"label": type_labels.get(key, key), "color": type_colors.get(key, "#999999")}
         for key in sorted(type_labels)
@@ -227,6 +323,70 @@ def _html_template(manifest: dict[str, Any], counts: dict[int, int]) -> str:
       margin: 16px 0 10px;
     }
 
+    .control-block {
+      display: grid;
+      gap: 8px;
+      margin-top: 15px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
+
+    .control-title {
+      color: var(--green);
+      font-family: Arial, sans-serif;
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .mode-list,
+    .factor-grid {
+      display: grid;
+      gap: 7px;
+    }
+
+    .factor-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .option {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      color: var(--ink);
+      font-family: Arial, sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.35;
+    }
+
+    .option span {
+      color: var(--muted);
+      display: block;
+      font-weight: 600;
+    }
+
+    .option input {
+      margin-top: 2px;
+      accent-color: var(--green-dark);
+    }
+
+    .slider-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 48px;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+      font-family: Arial, sans-serif;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--green-dark);
+    }
+
     button {
       min-height: 38px;
       border: 1px solid var(--line);
@@ -298,6 +458,22 @@ def _html_template(manifest: dict[str, Any], counts: dict[int, int]) -> str:
       border-radius: 4px;
     }
 
+    .factor-ramp {
+      height: 14px;
+      border: 1px solid rgba(18, 25, 20, 0.18);
+      border-radius: 4px;
+      background: linear-gradient(90deg, #4f6d9a, #f7f4ec, #b65f57);
+    }
+
+    .factor-scale {
+      display: flex;
+      justify-content: space-between;
+      color: var(--muted);
+      font-family: Arial, sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
     .zoom-control {
       position: absolute;
       z-index: 601;
@@ -367,6 +543,34 @@ def _html_template(manifest: dict[str, Any], counts: dict[int, int]) -> str:
       <button type="button" data-resolution="6">R6</button>
     </div>
 
+    <div class="control-block" aria-label="Visningslager">
+      <div class="control-title">Lager</div>
+      <div class="mode-list">
+        <label class="option"><input type="radio" name="viewMode" value="landscape" checked> Landskapstyper <span>Fem tolkade v10-typer.</span></label>
+        <label class="option"><input type="radio" name="viewMode" value="structure"> Strukturer <span>v9 originalkluster K=8.</span></label>
+        <label class="option"><input type="radio" name="viewMode" value="factor"> Faktorer <span>Kontinuerliga faktorvärden.</span></label>
+      </div>
+    </div>
+
+    <div class="control-block" aria-label="Opacitet">
+      <div class="control-title">Opacitet</div>
+      <div class="slider-row">
+        <input id="opacitySlider" type="range" min="15" max="95" value="72">
+        <span id="opacityValue">72%</span>
+      </div>
+    </div>
+
+    <div class="control-block" aria-label="Faktorer">
+      <div class="control-title">Faktorer</div>
+      <div class="factor-grid" id="factorControls">
+        <label class="option"><input type="radio" name="factor" value="F1" checked> F1 <span>Sprickdal och brant relief</span></label>
+        <label class="option"><input type="radio" name="factor" value="F2"> F2 <span>Flygsand och sandpräglad kust</span></label>
+        <label class="option"><input type="radio" name="factor" value="F3"> F3 <span>Skog och skyddad natur</span></label>
+        <label class="option"><input type="radio" name="factor" value="F4"> F4 <span>Tätort och byggd struktur</span></label>
+        <label class="option"><input type="radio" name="factor" value="F5"> F5 <span>Låglänt öppet land</span></label>
+      </div>
+    </div>
+
     <div class="status" id="status">
       Laddar karta...
       <span>R10 är källnivån. Lägre resolutioner är rollups från samma Bornholm-klassning.</span>
@@ -385,10 +589,16 @@ def _html_template(manifest: dict[str, Any], counts: dict[int, int]) -> str:
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     const typeMeta = __TYPE_META__;
+    const v9Meta = __V9_META__;
+    const factorLabels = __FACTOR_LABELS__;
     const datasets = __DATASETS__;
+    const factorLimit = 4.5;
     const dataCache = new Map();
     let activeLayer = null;
     let activeResolution = null;
+    let activeView = "landscape";
+    let currentFactor = "F1";
+    let fillOpacity = 0.72;
     let autoMode = true;
     let firstFit = true;
 
@@ -406,6 +616,9 @@ def _html_template(manifest: dict[str, Any], counts: dict[int, int]) -> str:
     const statusEl = document.getElementById("status");
     const toolbar = document.getElementById("resolutionToolbar");
     const legend = document.getElementById("legend");
+    const factorControls = document.getElementById("factorControls");
+    const opacitySlider = document.getElementById("opacitySlider");
+    const opacityValue = document.getElementById("opacityValue");
 
     document.getElementById("zoomIn").addEventListener("click", () => map.zoomIn());
     document.getElementById("zoomOut").addEventListener("click", () => map.zoomOut());
@@ -420,39 +633,111 @@ def _html_template(manifest: dict[str, Any], counts: dict[int, int]) -> str:
       }[char]));
     }
 
-    function buildLegend() {
-      for (const [typeId, meta] of Object.entries(typeMeta)) {
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function hexToRgb(hex) {
+      const value = hex.replace("#", "");
+      return [parseInt(value.slice(0, 2), 16), parseInt(value.slice(2, 4), 16), parseInt(value.slice(4, 6), 16)];
+    }
+
+    function rgbToHex(rgb) {
+      return "#" + rgb.map((value) => clamp(Math.round(value), 0, 255).toString(16).padStart(2, "0")).join("");
+    }
+
+    function lerpColor(left, right, share) {
+      const leftRgb = hexToRgb(left);
+      const rightRgb = hexToRgb(right);
+      return rgbToHex(leftRgb.map((value, index) => value + (rightRgb[index] - value) * share));
+    }
+
+    function factorColor(value) {
+      const number = Number(value);
+      if (!Number.isFinite(number)) {
+        return "#d6d6d6";
+      }
+      const clamped = clamp(number, -factorLimit, factorLimit);
+      if (clamped < 0) {
+        return lerpColor("#4f6d9a", "#f7f4ec", (clamped + factorLimit) / factorLimit);
+      }
+      return lerpColor("#f7f4ec", "#b65f57", clamped / factorLimit);
+    }
+
+    function clusterKey(props) {
+      return String(props.v9_cluster || props.class_km || props.class_k8 || props.cluster || "?");
+    }
+
+    function factorValueLine(props, factor) {
+      const value = Number(props[factor]);
+      return `${factor} ${factorLabels[factor] || factor}: ${Number.isFinite(value) ? value.toFixed(2) : "saknas"}`;
+    }
+
+    function setFactorControlsEnabled() {
+      for (const input of factorControls.querySelectorAll("input")) {
+        input.disabled = activeView !== "factor";
+      }
+    }
+
+    function refreshLegend() {
+      legend.innerHTML = "";
+      const title = document.createElement("div");
+      title.className = "legend-title";
+      legend.appendChild(title);
+
+      if (activeView === "factor") {
+        title.textContent = `Faktor ${currentFactor}`;
+        const text = document.createElement("div");
+        text.className = "legend-row";
+        text.style.gridTemplateColumns = "1fr";
+        text.innerHTML = `<span>${escapeHtml(factorLabels[currentFactor] || currentFactor)}</span><div class="factor-ramp"></div><div class="factor-scale"><span>−${factorLimit.toFixed(1)}</span><span>0</span><span>${factorLimit.toFixed(1)}</span></div>`;
+        legend.appendChild(text);
+        return;
+      }
+
+      const meta = activeView === "structure" ? v9Meta : typeMeta;
+      title.textContent = activeView === "structure" ? "Strukturer" : "Landskapstyper";
+      for (const [id, item] of Object.entries(meta)) {
         const row = document.createElement("div");
         row.className = "legend-row";
-        row.innerHTML = `<span class="swatch" style="background:${meta.color}"></span><span>${escapeHtml(typeId)} · ${escapeHtml(meta.label)}</span>`;
+        row.innerHTML = `<span class="swatch" style="background:${item.color}"></span><span>${escapeHtml(id)} · ${escapeHtml(item.label)}</span>`;
         legend.appendChild(row);
       }
     }
 
     function colorForFeature(feature) {
       const props = feature.properties || {};
-      if (props.landscape_type_fill) {
-        return props.landscape_type_fill;
+      if (activeView === "factor") {
+        return factorColor(props[currentFactor]);
+      }
+      if (activeView === "structure") {
+        const meta = v9Meta[clusterKey(props)] || {};
+        return props.v9_cluster_fill || meta.color || "#999999";
       }
       const typeId = props.v10_type_id || props.landscape_type || "LT?";
-      return (typeMeta[typeId] && typeMeta[typeId].color) || "#999999";
+      const meta = typeMeta[typeId] || {};
+      return props.landscape_type_fill || meta.color || "#999999";
     }
 
     function popupForFeature(feature) {
       const props = feature.properties || {};
-      if (props.popup) {
-        return props.popup;
-      }
       const typeId = props.v10_type_id || props.landscape_type || "LT?";
-      const meta = typeMeta[typeId] || {};
-      const typeName = props.v10_type_name || meta.label || typeId;
-      const cluster = props.v9_cluster || props.class_km || props.class_k8 || "?";
+      const type = typeMeta[typeId] || {};
+      const cluster = clusterKey(props);
+      const structure = v9Meta[cluster] || {};
+      const typeName = props.v10_type_name || type.label || typeId;
+      const structureName = props.v9_cluster_label || structure.label || `Kluster ${cluster}`;
       const confidence = props.v10_confidence || props.confidence || "";
       return [
         `<strong>${escapeHtml(props.hex_id || "")}</strong>`,
-        `Landskapstyp: ${escapeHtml(typeName)}`,
-        `Landskapsstruktur: ${escapeHtml(cluster)}`,
-        confidence ? `Säkerhet: ${escapeHtml(confidence)}` : ""
+        `<strong>${escapeHtml(typeId)} ${escapeHtml(typeName)}</strong>`,
+        `Struktur ${escapeHtml(cluster)}: ${escapeHtml(structureName)}`,
+        confidence ? `Säkerhet: ${escapeHtml(confidence)}` : "",
+        factorValueLine(props, "F1"),
+        factorValueLine(props, "F2"),
+        factorValueLine(props, "F3"),
+        factorValueLine(props, "F4"),
+        factorValueLine(props, "F5")
       ].filter(Boolean).join("<br>");
     }
 
@@ -481,7 +766,8 @@ def _html_template(manifest: dict[str, Any], counts: dict[int, int]) -> str:
     function updateStatus(resolution, loading = false) {
       const dataset = datasets[String(resolution)];
       const count = new Intl.NumberFormat("sv-SE").format(dataset.count);
-      statusEl.innerHTML = `${loading ? "Laddar" : "Visar"} ${dataset.label}<span>${dataset.note}. ${count} hexagoner. ${autoMode ? "Auto-rollup är aktivt." : "Manuell upplösning är vald."}</span>`;
+      const viewLabel = activeView === "factor" ? `faktor ${currentFactor}` : activeView === "structure" ? "strukturer" : "landskapstyper";
+      statusEl.innerHTML = `${loading ? "Laddar" : "Visar"} ${dataset.label}<span>${dataset.note}. ${count} hexagoner. Visning: ${viewLabel}. ${autoMode ? "Auto-rollup är aktivt." : "Manuell upplösning är vald."}</span>`;
     }
 
     function styleFeature(feature) {
@@ -489,7 +775,7 @@ def _html_template(manifest: dict[str, Any], counts: dict[int, int]) -> str:
         color: "rgba(27, 36, 29, 0.46)",
         weight: 0.45,
         fillColor: colorForFeature(feature),
-        fillOpacity: 0.72
+        fillOpacity
       };
     }
 
@@ -515,6 +801,7 @@ def _html_template(manifest: dict[str, Any], counts: dict[int, int]) -> str:
         }
       }).addTo(map);
       updateStatus(resolution, false);
+      refreshLegend();
       if (firstFit) {
         firstFit = false;
         map.fitBounds(activeLayer.getBounds(), { padding: [18, 18] });
@@ -547,7 +834,38 @@ def _html_template(manifest: dict[str, Any], counts: dict[int, int]) -> str:
       }
     });
 
-    buildLegend();
+    document.addEventListener("change", (event) => {
+      const target = event.target;
+      if (!target) return;
+      if (target.name === "viewMode") {
+        activeView = target.value;
+        setFactorControlsEnabled();
+        if (activeLayer) {
+          activeLayer.setStyle(styleFeature);
+        }
+        refreshLegend();
+        updateStatus(activeResolution || resolutionForZoom(map.getZoom()), false);
+      }
+      if (target.name === "factor") {
+        currentFactor = target.value;
+        if (activeLayer) {
+          activeLayer.setStyle(styleFeature);
+        }
+        refreshLegend();
+        updateStatus(activeResolution || resolutionForZoom(map.getZoom()), false);
+      }
+    });
+
+    opacitySlider.addEventListener("input", () => {
+      fillOpacity = Number(opacitySlider.value) / 100;
+      opacityValue.textContent = `${opacitySlider.value}%`;
+      if (activeLayer) {
+        activeLayer.setStyle(styleFeature);
+      }
+    });
+
+    setFactorControlsEnabled();
+    refreshLegend();
     showResolution(resolutionForZoom(map.getZoom())).catch((error) => {
       statusEl.innerHTML = `Kartan kunde inte laddas<span>${escapeHtml(error.message)}</span>`;
     });
@@ -556,6 +874,8 @@ def _html_template(manifest: dict[str, Any], counts: dict[int, int]) -> str:
 </html>
 """
         .replace("__TYPE_META__", json.dumps(type_meta, ensure_ascii=False, indent=4))
+        .replace("__V9_META__", json.dumps(V9_META, ensure_ascii=False, indent=4))
+        .replace("__FACTOR_LABELS__", json.dumps(factor_labels, ensure_ascii=False, indent=4))
         .replace("__DATASETS__", json.dumps(datasets, ensure_ascii=False, indent=4))
     )
 
