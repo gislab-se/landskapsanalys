@@ -246,6 +246,74 @@ def check_trondelag_default_zoom_family(report: ContractReport, region: dict[str
             st.session_state[key] = value
 
 
+def check_trondelag_zoom_family_recovery(report: ContractReport, region: dict[str, Any]) -> None:
+    import streamlit as st  # noqa: WPS433
+    import potential_app as app  # noqa: WPS433
+
+    original_state = dict(st.session_state)
+    try:
+        st.session_state.clear()
+        st.session_state["combined_h3_resolution"] = 5
+        st.session_state["combined_h3_display_mode"] = "zoom_family"
+        h3_resolution, zoom_enabled, *_ = app._map_panel_controls(region, "combined", None)
+        family = app._zoom_family_resolutions(region)
+        rule = app._hex_display_rule(region, 5, True)
+        report.check(
+            h3_resolution == 7
+            and zoom_enabled
+            and [int(value) for value in family] == [7, 6, 5]
+            and rule.get("display_label") == "R7 till R5",
+            "Trondelag zoom-adaptive mode recovers from stale/manual R5 state.",
+            (
+                "Trondelag zoom-adaptive recovery failed: "
+                f"h3={h3_resolution!r}, enabled={zoom_enabled!r}, family={family!r}, rule={rule!r}."
+            ),
+        )
+    finally:
+        st.session_state.clear()
+        for key, value in original_state.items():
+            st.session_state[key] = value
+
+
+def check_zoom_family_layer_contract(report: ContractReport, region: dict[str, Any]) -> None:
+    import potential_app as app  # noqa: WPS433
+
+    layers = app._hex_family_layers(
+        region,
+        5,
+        True,
+        "contract_zoom_family",
+        "Contract zoom family",
+        lambda resolution: {
+            "name": "Contract zoom family",
+            "feature_collection": {"type": "FeatureCollection", "features": []},
+            "layer_kind": "hex",
+        },
+    )
+    resolutions = [int(layer.get("auto_resolution")) for layer in layers]
+    selected_values = {int(layer.get("selected_resolution")) for layer in layers}
+    unlocked = [not bool(layer.get("lock_selected_resolution")) for layer in layers]
+    report.check(
+        resolutions == [7, 6, 5] and selected_values == {7} and all(unlocked),
+        "Zoom-adaptive hex layer contract builds the full Trondelag R7/R6/R5 family.",
+        (
+            "Zoom-adaptive hex layer contract is wrong: "
+            f"resolutions={resolutions!r}, selected_values={selected_values!r}, unlocked={unlocked!r}."
+        ),
+    )
+
+
+def check_runtime_hex_layers_use_zoom_family(report: ContractReport) -> None:
+    source = (ROOT / "potential_app.py").read_text(encoding="utf-8")
+    report.check(
+        "build_fast_distance_layer" in source
+        and "hex_layers = _hex_family_layers(" in source
+        and '"solar_v1_schematic"' in source,
+        "Wind fast-distance and solar schematic hex layers are routed through zoom-adaptive layer families.",
+        "At least one runtime hex layer bypasses the zoom-adaptive layer-family helper.",
+    )
+
+
 def check_synthetic_social_acceptance(report: ContractReport, region_id: str) -> None:
     from apps.potential_model.social_acceptance import acceptance_feature_collection  # noqa: WPS433
 
@@ -375,9 +443,9 @@ def check_synthetic_social_acceptance(report: ContractReport, region_id: str) ->
 def check_map_auto_resolution(report: ContractReport) -> None:
     source = (ROOT / "apps/potential_model/map_rendering.py").read_text(encoding="utf-8")
     report.check(
-        "desiredResolution = 5;" in source and "scaleMeters >= 100000" in source,
-        "Zoom-adaptive H3 display can select R5 for coarse Trondelag map scale.",
-        "Zoom-adaptive H3 display has no R5 scale threshold, so Trondelag would only use two auto-rollup levels.",
+        all(marker in source for marker in ["scaleMeters >= 100000", "scaleMeters >= 50000", "scaleMeters >= 30000"]),
+        "Zoom-adaptive H3 display keeps the 100/50/30 km thresholds for R5/R6/R7.",
+        "Zoom-adaptive H3 display no longer matches the agreed 100/50/30 km thresholds.",
     )
 
 
@@ -582,6 +650,9 @@ def main() -> int:
         check_h3_session_state_sanitizer(report, trondelag)
         check_fixed_region_does_not_reset_session(report)
         check_trondelag_default_zoom_family(report, trondelag)
+        check_trondelag_zoom_family_recovery(report, trondelag)
+        check_zoom_family_layer_contract(report, trondelag)
+        check_runtime_hex_layers_use_zoom_family(report)
         check_trondelag_region(report, trondelag)
         check_map_auto_resolution(report)
         check_landscape_manifest(report, landscape)

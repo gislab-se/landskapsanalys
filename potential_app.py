@@ -164,7 +164,7 @@ WIND_LAYER_SELECTION_KEY = "wind_builder_selected_layers"
 WIND_RUNTIME_OVERLAY_KEY = "wind_builder_runtime_overlay_enabled"
 SOLAR_APPLIED_CONFIG_KEY = "solar_applied_config"
 START_DEFAULT_VERSION_KEY = "potential_start_default_version"
-START_DEFAULT_VERSION = "trondelag_zoom_family_v2"
+START_DEFAULT_VERSION = "trondelag_zoom_family_v3"
 WIND_EMPTY_SELECTION_ACTIVE_KEY = "wind_empty_selection_active"
 WIND_CONTROL_LANGUAGE = "sv"
 WIND_RUNTIME_BASE_RESOLUTION = 10
@@ -2516,7 +2516,8 @@ def _map_panel_controls(region: dict[str, Any], key_prefix: str, panel: Any | No
 
     if panel is not None:
         with panel.expander(_t("H3-upplösning"), expanded=False):
-            family_resolutions = _display_family_resolutions(region, int(current_value))
+            zoom_family_base = _zoom_family_base_resolution(region)
+            family_resolutions = _zoom_family_resolutions(region)
             zoom_family_available = len({int(value) for value in family_resolutions}) > 1
             if not zoom_family_available and current_display_mode == "zoom_family":
                 current_display_mode = "selected"
@@ -2542,7 +2543,9 @@ def _map_panel_controls(region: dict[str, Any], key_prefix: str, panel: Any | No
                 display_mode = current_display_mode
             zoom_family_enabled = display_mode == "zoom_family"
             if zoom_family_enabled:
-                h3_resolution = current_value
+                h3_resolution = zoom_family_base
+                if st.session_state.get(state_key) != int(h3_resolution):
+                    st.session_state[state_key] = int(h3_resolution)
             else:
                 h3_index = None if state_key in st.session_state else available.index(current_value)
                 h3_resolution = st.radio(
@@ -2564,8 +2567,10 @@ def _map_panel_controls(region: dict[str, Any], key_prefix: str, panel: Any | No
         h3_resolution = current_value
         zoom_family_enabled = (
             current_display_mode == "zoom_family"
-            and len({int(value) for value in _display_family_resolutions(region, int(h3_resolution))}) > 1
+            and len({int(value) for value in _zoom_family_resolutions(region)}) > 1
         )
+        if zoom_family_enabled:
+            h3_resolution = _zoom_family_base_resolution(region)
 
     return int(h3_resolution), bool(zoom_family_enabled), _current_opacity(key_prefix), True, _map_view_reset_token()
 
@@ -2583,9 +2588,22 @@ def _display_family_resolutions(region: dict[str, Any], preferred_resolution: in
     return available or [preferred]
 
 
+def _zoom_family_base_resolution(region: dict[str, Any]) -> int:
+    available = _available_h3_resolutions(region)
+    try:
+        default_resolution = int(region.get("default_display_h3_resolution") or region.get("default_h3_resolution") or max(available))
+    except Exception:
+        default_resolution = max(available)
+    return _preferred_h3_resolution(region, default_resolution)
+
+
+def _zoom_family_resolutions(region: dict[str, Any]) -> list[int]:
+    return _display_family_resolutions(region, _zoom_family_base_resolution(region))
+
+
 def _hex_display_rule(region: dict[str, Any], selected_resolution: int, zoom_family_enabled: bool) -> dict[str, str]:
-    selected = int(selected_resolution)
-    family_resolutions = _display_family_resolutions(region, selected)
+    selected = _zoom_family_base_resolution(region) if bool(zoom_family_enabled) else int(selected_resolution)
+    family_resolutions = _zoom_family_resolutions(region) if bool(zoom_family_enabled) else _display_family_resolutions(region, selected)
     min_resolution = min(int(value) for value in family_resolutions) if family_resolutions else selected
     if not bool(zoom_family_enabled):
         return {
@@ -2624,11 +2642,12 @@ def _hex_family_layers(
     family_resolutions: list[int] | None = None,
 ) -> list[dict[str, Any]]:
     layers: list[dict[str, Any]] = []
+    selected_for_map = _zoom_family_base_resolution(region) if bool(zoom_family_enabled) else int(selected_resolution)
     resolutions = (
         [int(value) for value in family_resolutions]
         if family_resolutions is not None
         else (
-            _display_family_resolutions(region, int(selected_resolution))
+            _zoom_family_resolutions(region)
             if bool(zoom_family_enabled)
             else [int(selected_resolution)]
         )
@@ -2641,7 +2660,7 @@ def _hex_family_layers(
         layer["control_name"] = control_name
         layer["auto_resolution_group"] = str(family_key)
         layer["auto_resolution"] = int(resolution)
-        layer["selected_resolution"] = int(selected_resolution)
+        layer["selected_resolution"] = int(selected_for_map)
         layer["lock_selected_resolution"] = not bool(zoom_family_enabled)
         layers.append(layer)
     return layers
@@ -7873,10 +7892,23 @@ def _wind_polygon_preview_state(
     layers: list[dict[str, Any]] = []
     hex_layers: list[dict[str, Any]] = []
     if not runtime_error and bool(runtime_result.get("fast_distance")):
-        fast_hex_layer = _wind_runtime_hex_layer(region, runtime_result, int(target_resolution), control_name)
-        if fast_hex_layer is not None:
-            hex_layers.append(fast_hex_layer)
-            layers.append(fast_hex_layer)
+        def build_fast_distance_layer(resolution: int) -> dict[str, Any] | None:
+            layer_result = runtime_result
+            if int(resolution) != int(target_resolution):
+                layer_result = _wind_fast_distance_runtime_result(region, ui_params, selected, int(resolution))
+            if layer_result is None:
+                return None
+            return _wind_runtime_hex_layer(region, layer_result, int(resolution), control_name)
+
+        hex_layers = _hex_family_layers(
+            region,
+            int(target_resolution),
+            bool(zoom_family_enabled),
+            family_key,
+            control_name,
+            build_fast_distance_layer,
+        )
+        layers.extend(hex_layers)
     else:
         combined_layer = None if runtime_error else _wind_polygon_combined_layer(runtime_result)
         if combined_layer is not None:
@@ -9748,13 +9780,19 @@ def _unified_workspace_tab(
             solar_small_buffer_geojson = _solar_population_buffer_geojson(100.0)
             _append_unique_layer(layers, _solar_population_source_layer())
             _append_unique_layer(layers, _solar_population_buffer_layer(region, h3_resolution, 100.0))
-        _append_unique_layer(
-            layers,
-            _solar_v1_layer(
-                f"{SOLAR_SMALL_SCALE_LABEL} (schablonhex)",
-                solar_v1_frame,
+        layers.extend(
+            _hex_family_layers(
+                region,
                 h3_resolution,
-            ),
+                zoom_family_enabled,
+                "solar_v1_schematic",
+                f"{SOLAR_SMALL_SCALE_LABEL} (schablonhex)",
+                lambda resolution: _solar_v1_layer(
+                    f"{SOLAR_SMALL_SCALE_LABEL} (schablonhex)",
+                    solar_v1_frame if int(resolution) == int(h3_resolution) else _solar_v1_frame(region, landscape_manifest, int(resolution), solar_v1_area_m2_per_person),
+                    int(resolution),
+                ),
+            )
         )
         potential_frames.append(
             {
