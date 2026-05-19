@@ -143,16 +143,6 @@ def _path_looks_pdf_or_raw(path_value: str | None, path: Path | None) -> bool:
     return any(marker in text for marker in ["pdf", ".tif", ".tiff", ".gpkg"])
 
 
-def check_bornholm_runtime(report: ContractReport) -> None:
-    bornholm = load_region("bornholm")
-    context = load_region_context(bornholm)
-    if context.get("runtime_ready"):
-        report.pass_("Bornholm remains runtime_ready.")
-        return
-    blockers = context.get("missing_data") or []
-    report.fail(f"Bornholm is no longer runtime_ready: {json.dumps(blockers, ensure_ascii=False)}")
-
-
 def check_default_region(report: ContractReport) -> None:
     source_path = ROOT / "potential_app.py"
     source = source_path.read_text(encoding="utf-8")
@@ -167,9 +157,12 @@ def check_default_region(report: ContractReport) -> None:
         f'DEFAULT_REGION_ID is "{default_region}", expected "trondelag".',
     )
     report.check(
-        "DEFAULT_REGION_ID if DEFAULT_REGION_ID in options" in source,
-        "_region_options() uses DEFAULT_REGION_ID before fallback regions.",
-        "_region_options() does not appear to prefer DEFAULT_REGION_ID before Bornholm fallback.",
+        "_active_region" in source
+        and "_select_region" not in source
+        and "_reset_session_for_region" not in source
+        and "_sync_region_selection_state" not in source,
+        "The app uses a fixed Trondelag region path with no region switch/reset code.",
+        "Region switch/reset code is still present in potential_app.py.",
     )
 
 
@@ -201,55 +194,25 @@ def check_h3_session_state_sanitizer(report: ContractReport, region: dict[str, A
             st.session_state[state_key] = original
 
 
-def check_region_switch_resets_to_light_default(report: ContractReport) -> None:
+def check_fixed_region_does_not_reset_session(report: ContractReport) -> None:
     import streamlit as st  # noqa: WPS433
     import potential_app as app  # noqa: WPS433
 
-    bornholm = load_region("bornholm")
-    trondelag = load_region("trondelag")
-    options = {"bornholm": bornholm, "trondelag": trondelag}
     original_state = dict(st.session_state)
     try:
         st.session_state.clear()
         st.session_state[app.APP_LANGUAGE_KEY] = "sv"
         st.session_state[app.REGION_SELECT_KEY] = "bornholm"
-        app._reset_session_for_region(bornholm)
-        st.session_state["combined_h3_resolution"] = 10
-        st.session_state["combined_h3_display_mode"] = "zoom_family"
-        st.session_state["show_landscape_v10"] = True
         st.session_state["show_social_acceptance"] = True
-        st.session_state[app.SOLAR_APPLIED_CONFIG_KEY] = {"large_scale_active": False}
-        st.session_state["potential_scenario_bornholm"] = "high"
-
-        st.session_state[app.REGION_SELECT_KEY] = "trondelag"
-        app._sync_region_selection_state(options)
-        report.check(
-            st.session_state.get(app.ACTIVE_REGION_KEY) == "trondelag"
-            and st.session_state.get("combined_h3_resolution") == 7
-            and st.session_state.get("combined_h3_display_mode") == "selected"
-            and st.session_state.get("show_landscape_v10") is False
-            and st.session_state.get("show_social_acceptance") is False
-            and st.session_state.get("show_user_solar") is True
-            and "potential_scenario_bornholm" not in st.session_state,
-            "Region switch to Trondelag resets to the light default state.",
-            "Region switch to Trondelag did not reset stale Bornholm controls to light defaults.",
-        )
-
-        st.session_state["combined_h3_resolution"] = 7
         st.session_state["show_landscape_factor"] = True
-        st.session_state["show_social_acceptance"] = True
-        st.session_state["potential_scenario_trondelag"] = "low"
-        st.session_state[app.REGION_SELECT_KEY] = "bornholm"
-        app._sync_region_selection_state(options)
+        region = app._active_region()
         report.check(
-            st.session_state.get(app.ACTIVE_REGION_KEY) == "bornholm"
-            and st.session_state.get("combined_h3_resolution") == 8
-            and st.session_state.get("combined_h3_display_mode") == "selected"
-            and st.session_state.get("show_landscape_factor") is False
-            and st.session_state.get("show_social_acceptance") is False
-            and "potential_scenario_trondelag" not in st.session_state,
-            "Switching back to Bornholm also opens a fresh light default state.",
-            "Switching back to Bornholm kept stale Trondelag controls instead of light defaults.",
+            str(region.get("region_id")) == "trondelag"
+            and st.session_state.get(app.REGION_SELECT_KEY) == "trondelag"
+            and st.session_state.get("show_social_acceptance") is True
+            and st.session_state.get("show_landscape_factor") is True,
+            "Fixed-region loading forces Trondelag without clearing existing session controls.",
+            "Fixed-region loading still behaves like a region switch/reset.",
         )
     finally:
         st.session_state.clear()
@@ -584,7 +547,6 @@ def check_trondelag_runtime(report: ContractReport, region: dict[str, Any]) -> N
 def main() -> int:
     report = ContractReport()
     with contextlib.redirect_stderr(StringIO()):
-        check_bornholm_runtime(report)
         check_default_region(report)
 
         trondelag = load_region("trondelag")
@@ -592,12 +554,11 @@ def main() -> int:
         scenario = load_linked_manifest(trondelag, "scenario_manifest")
 
         check_h3_session_state_sanitizer(report, trondelag)
-        check_region_switch_resets_to_light_default(report)
+        check_fixed_region_does_not_reset_session(report)
         check_trondelag_region(report, trondelag)
         check_map_auto_resolution(report)
         check_landscape_manifest(report, landscape)
         check_scenario_placeholder(report, scenario)
-        check_synthetic_social_acceptance(report, "bornholm")
         check_synthetic_social_acceptance(report, "trondelag")
         check_trondelag_runtime(report, trondelag)
     return report.emit()

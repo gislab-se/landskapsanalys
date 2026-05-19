@@ -49,7 +49,7 @@ def repo_root() -> Path:
 
 
 def registry_path() -> Path:
-    region_id = str(st.session_state.get("potential_selected_region_id", "") or "").lower()
+    region_id = str(st.session_state.get("potential_selected_region_id", "trondelag") or "trondelag").lower()
     if region_id == "trondelag":
         trondelag_path = Path(__file__).resolve().with_name("registry_trondelag.json")
         if trondelag_path.exists():

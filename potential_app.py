@@ -27,8 +27,8 @@ if str(APPS_DIR) not in sys.path:
 from potential_model.geometry import geometry_for_hex, load_h3_display_geometries  # noqa: E402
 import potential_model.landscape as landscape_model  # noqa: E402
 from potential_model.manifests import (  # noqa: E402
-    list_regions,
     load_linked_manifest,
+    load_region,
     read_manifest,
     resolve_repo_path,
 )
@@ -157,9 +157,8 @@ UI_ONLY_RERUN_KEY = "potential_ui_only_rerun"
 UI_ONLY_RERUN_REASON_KEY = "potential_ui_only_rerun_reason"
 WORKSPACE_RENDER_CACHE_KEY = "potential_workspace_render_cache_v2"
 WORKSPACE_CALCULATION_VERSION = "solar_filter_establishment_v2"
+# Kept only so shared registry helpers can resolve the Trondelag layer registry.
 REGION_SELECT_KEY = "potential_selected_region_id"
-ACTIVE_REGION_KEY = "potential_active_region_id"
-REGION_RESET_REASON_KEY = "potential_region_reset_reason"
 DEFAULT_REGION_ID = "trondelag"
 WIND_LAYER_SELECTION_KEY = "wind_builder_selected_layers"
 WIND_RUNTIME_OVERLAY_KEY = "wind_builder_runtime_overlay_enabled"
@@ -1172,75 +1171,13 @@ def _workspace_shell() -> tuple[Any | None, Any, Any | None]:
     return left_panel, main_col, right_panel
 
 
-def _region_choice_label(region: dict[str, Any]) -> str:
-    status = str(region.get("status", "planned"))
-    suffix = "" if status == "active" else f" ({_t('planerad')})"
-    return f"{region.get('display_name', region.get('region_id'))}{suffix}"
-
-
-def _region_options() -> dict[str, dict[str, Any]]:
-    regions = list_regions()
-    if not regions:
-        st.error(_t("Inga regionmanifest hittades."))
+def _active_region() -> dict[str, Any]:
+    st.session_state[REGION_SELECT_KEY] = DEFAULT_REGION_ID
+    try:
+        return load_region(DEFAULT_REGION_ID)
+    except Exception as exc:
+        st.error(f"Trøndelag-regionens manifest kunde inte laddas: {exc}")
         st.stop()
-    options = {str(region["region_id"]): region for region in regions}
-    default_id = DEFAULT_REGION_ID if DEFAULT_REGION_ID in options else "bornholm" if "bornholm" in options else next(iter(options))
-    if st.session_state.get(REGION_SELECT_KEY) not in options:
-        st.session_state[REGION_SELECT_KEY] = default_id
-    return options
-
-
-def _reset_session_for_region(region: dict[str, Any], previous_region_id: str | None = None) -> None:
-    region_id = str(region.get("region_id", DEFAULT_REGION_ID) or DEFAULT_REGION_ID)
-    map_reset_token = _map_view_reset_token()
-    preserved_values = {
-        APP_LANGUAGE_KEY: st.session_state.get(APP_LANGUAGE_KEY, "sv"),
-        LEFT_PANEL_OPEN_KEY: st.session_state.get(LEFT_PANEL_OPEN_KEY, True),
-        RIGHT_PANEL_OPEN_KEY: st.session_state.get(RIGHT_PANEL_OPEN_KEY, True),
-        RIGHT_PANEL_WIDTH_KEY: st.session_state.get(RIGHT_PANEL_WIDTH_KEY, 34.0),
-    }
-
-    st.session_state.clear()
-    for key, value in preserved_values.items():
-        st.session_state[key] = value
-    st.session_state[REGION_SELECT_KEY] = region_id
-    st.session_state[ACTIVE_REGION_KEY] = region_id
-    st.session_state[REGION_RESET_REASON_KEY] = (
-        f"region changed from {previous_region_id} to {region_id}"
-        if previous_region_id
-        else f"region initialized as {region_id}"
-    )
-    st.session_state[MAP_VIEW_RESET_TOKEN_KEY] = map_reset_token + 1
-    _ensure_default_start_state(region, force=True)
-
-
-def _sync_region_selection_state(options: dict[str, dict[str, Any]]) -> dict[str, Any]:
-    selected_id = str(st.session_state.get(REGION_SELECT_KEY))
-    if selected_id not in options:
-        selected_id = DEFAULT_REGION_ID if DEFAULT_REGION_ID in options else "bornholm" if "bornholm" in options else next(iter(options))
-        st.session_state[REGION_SELECT_KEY] = selected_id
-
-    active_id = st.session_state.get(ACTIVE_REGION_KEY)
-    region = options[selected_id]
-    if str(active_id or "") != selected_id:
-        _reset_session_for_region(region, str(active_id) if active_id else None)
-    return region
-
-
-def _select_region(panel: Any | None = None) -> dict[str, Any]:
-    options = _region_options()
-    region = _sync_region_selection_state(options)
-    selected_id = str(st.session_state.get(REGION_SELECT_KEY))
-    if panel is None:
-        return region
-
-    selected_id = panel.selectbox(
-        _t("Region"),
-        options=list(options),
-        key=REGION_SELECT_KEY,
-        format_func=lambda region_id: _region_choice_label(options[region_id]),
-    )
-    return options[selected_id]
 
 
 def _scenario_sidebar(region: dict[str, Any]) -> dict[str, Any]:
@@ -1701,12 +1638,10 @@ def _render_energy_modeling_panel(
 
 
 def _render_region_scenario_panel(panel: Any | None) -> tuple[dict[str, Any], dict[str, Any]]:
+    region = _active_region()
     if panel is None:
-        region = _select_region(None)
         return region, _scenario_state(region, None)
 
-    with panel.expander(_t("Region"), expanded=False):
-        region = _select_region(st)
     with panel.expander(_t("Scenarier"), expanded=False):
         scenario_state = _scenario_state(region, st)
     return region, scenario_state
@@ -3076,7 +3011,6 @@ def _solar_population_source_layer() -> dict[str, Any] | None:
         return None
     source_color = _rgb_to_hex(layer_spec.source_color)
     source_label = f"Sol källa: {layer_label(layer_spec, WIND_CONTROL_LANGUAGE, layer_spec.label)}"
-    is_trondelag = str(st.session_state.get(REGION_SELECT_KEY, "") or "").lower() == "trondelag"
     return {
         "name": source_label,
         "source_layer_id": f"solar:{WIND_POPULATION_SOURCE_LAYER_ID}",
@@ -3085,7 +3019,7 @@ def _solar_population_source_layer() -> dict[str, Any] | None:
         "legend_items": [],
         "legend_id": "solar_population_source",
         "legend_title": "",
-        "default_visible": bool(is_trondelag),
+        "default_visible": True,
         "stroke_color": source_color,
         "fill_color": source_color,
         "stroke_opacity": 0.85,
@@ -5810,11 +5744,7 @@ def _wind_polygon_source_layers(
             geojson = source_geojson_for_layer(registry_meta, layer_id)
             if geojson is None:
                 continue
-            is_trondelag_population = (
-                str(st.session_state.get(REGION_SELECT_KEY, "") or "").lower() == "trondelag"
-                and group_id == WIND_SETTLEMENT_GROUP_ID
-                and layer_id == WIND_POPULATION_SOURCE_LAYER_ID
-            )
+            is_trondelag_population = group_id == WIND_SETTLEMENT_GROUP_ID and layer_id == WIND_POPULATION_SOURCE_LAYER_ID
             map_layers.append(
                 {
                     "name": f"Vind källa: {layer_label(layer_spec, WIND_CONTROL_LANGUAGE, layer_spec.label)} ({translated_group_label})",
@@ -9218,9 +9148,7 @@ def _render_missing_data_workspace(
 
     if left_panel is not None:
         with left_panel.expander(_t("Geografier"), expanded=True):
-            with st.expander(_t("Region"), expanded=True):
-                _select_region(st)
-                st.caption(f"{region_label}: regionen kan öppnas även om data fylls på stegvis.")
+            st.caption(f"{region_label}: fast Trøndelag-version.")
             with st.expander(_t("Landskap"), expanded=True):
                 st.caption("Landskapsdata saknas ännu för denna region." if context.get("landscape_manifest") is None else "Landskapsmanifest finns.")
                 st.checkbox(_t("Landskapstyper"), value=False, disabled=True, key="missing_show_landscape_v10")
@@ -9412,9 +9340,6 @@ def _unified_workspace_tab(
 
     if left_panel is not None:
         with left_panel.expander(_t("Geografier"), expanded=False):
-            with st.expander(_t("Region"), expanded=False):
-                region = _select_region(st)
-
             with st.expander(_t("Landskap"), expanded=True):
                 st.caption(f"Aktiva kartlager: {active_landscape_count}")
                 show_v10 = st.checkbox(_t("Landskapstyper"), value=show_v10, key="show_landscape_v10")
@@ -10461,7 +10386,7 @@ def _unified_workspace_tab(
 def main() -> None:
     st.session_state.setdefault(APP_LANGUAGE_KEY, "sv")
     st.set_page_config(page_title=f"{_t(PAGE_TITLE)} · {APP_RELEASE_STAGE}", layout="wide", initial_sidebar_state="expanded")
-    region = _select_region(None)
+    region = _active_region()
     scenario_state = _scenario_state(region, None)
     context = _load_context(region)
     left_panel, main_panel, right_panel = _workspace_shell()
