@@ -384,19 +384,25 @@ def check_social_acceptance_summary(report: ContractReport, region: dict[str, An
         report.fail("Social acceptance summary test needs at least one low and one high acceptance cell.")
         return
     sample = pd.concat([low, high], ignore_index=True)
-    frame = pd.DataFrame(
-        [
+    frame_rows = []
+    for index, row in enumerate(sample.itertuples(index=False), start=1):
+        frame_rows.append(
             {
                 "hex_id": str(row.hex_id),
                 "establishment_class": "wind_and_solar",
                 "wind_suitable": True,
                 "solar_suitable": True,
+                "wind_potential_area_km2": float(index),
+                "solar_potential_area_km2": float(index * 2),
             }
-            for row in sample.itertuples(index=False)
-        ]
-    )
+        )
+    frame = pd.DataFrame(frame_rows)
     hex_area = float(app.h3_hex_area_km2(7))
     summary = app._social_acceptance_establishment_summary(frame, manifest, "medium", 7, hex_area, 75)
+    sample_acceptance = pd.to_numeric(sample["acceptance_value"], errors="coerce").clip(lower=0.0, upper=1.0).tolist()
+    weights = [(1.0 - 0.75) + (0.75 * float(value)) for value in sample_acceptance]
+    expected_wind_after_acceptance = sum(float(index) * weight for index, weight in enumerate(weights, start=1))
+    expected_solar_after_acceptance = sum(float(index * 2) * weight for index, weight in enumerate(weights, start=1))
     report.check(
         summary.get("potential_hex_count") == 2
         and summary.get("measured_hex_count") == 2
@@ -405,6 +411,22 @@ def check_social_acceptance_summary(report: ContractReport, region: dict[str, An
         and math.isclose(float(summary.get("low_acceptance_area_km2", 0.0)), hex_area, rel_tol=0.0, abs_tol=0.0001),
         "Social acceptance summary reports mean/median context and low/high potential-area classes.",
         f"Social acceptance summary has unexpected values: {summary!r}.",
+    )
+    report.check(
+        math.isclose(
+            float(summary.get("wind_potential_after_acceptance_km2", 0.0)),
+            expected_wind_after_acceptance,
+            rel_tol=0.0,
+            abs_tol=0.0001,
+        )
+        and math.isclose(
+            float(summary.get("solar_potential_after_acceptance_km2", 0.0)),
+            expected_solar_after_acceptance,
+            rel_tol=0.0,
+            abs_tol=0.0001,
+        ),
+        "Social acceptance summary exposes acceptance-adjusted potential without changing base potential columns.",
+        f"Acceptance-adjusted potential values are unexpected: {summary!r}.",
     )
 
 
@@ -416,6 +438,13 @@ def check_social_acceptance_impact_control(report: ContractReport) -> None:
         and "social_acceptance_impact_pct=social_acceptance_impact_pct" in source,
         "Social acceptance impact slider is wired into the existing establishment-area layer.",
         "Social acceptance impact slider is missing or not connected to the establishment-area layer.",
+    )
+    report.check(
+        "potential efter acceptanspåverkan" in source
+        and "potential_acceptance_ratio" in source
+        and "_potential_after_acceptance_area" in source,
+        "Right-panel table shows potential after acceptance impact as a separate derived column.",
+        "Right-panel table is missing the separate acceptance-adjusted potential column.",
     )
 
 

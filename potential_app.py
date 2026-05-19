@@ -4669,12 +4669,27 @@ def _render_impact_change_table(rows: list[dict[str, str]]) -> None:
         "energi",
         "ytbehov",
         "potential efter filter",
+        "potential efter acceptanspåverkan",
         "inom potential",
         "outnyttjad potential",
         "ytbehov utanför potential",
         "andel inom potential",
     ]
-    header_html = "".join(f"<th>{html.escape(header)}</th>" for header in headers)
+
+    def _header_html(header: str) -> str:
+        wrapped_headers = {
+            "potential efter filter": "potential<br>efter filter",
+            "potential efter acceptanspåverkan": "potential efter<br>acceptanspåverkan",
+            "inom potential": "inom<br>potential",
+            "outnyttjad potential": "outnyttjad<br>potential",
+            "ytbehov utanför potential": "ytbehov utanför<br>potential",
+            "andel inom potential": "andel inom<br>potential",
+        }
+        if header not in wrapped_headers:
+            return html.escape(header)
+        return wrapped_headers[header]
+
+    header_html = "".join(f"<th>{_header_html(header)}</th>" for header in headers)
     row_html = ""
     for row in rows:
         row_html += "<tr>" + "".join(f"<td>{row.get(header, '')}</td>" for header in headers) + "</tr>"
@@ -4689,7 +4704,7 @@ def _render_impact_change_table(rows: list[dict[str, str]]) -> None:
         "<style>"
         ".change-table-wrap{overflow-x:auto;border:1px solid rgba(49,51,63,0.14);border-radius:6px;margin-top:0.35rem;}"
         ".change-table{width:100%;border-collapse:collapse;font-size:0.78rem;}"
-        ".change-table th{background:#f8fafc;color:#475569;text-align:left;font-weight:600;padding:0.42rem 0.5rem;border-bottom:1px solid rgba(49,51,63,0.12);}"
+        ".change-table th{background:#f8fafc;color:#475569;text-align:left;font-weight:600;padding:0.42rem 0.5rem;border-bottom:1px solid rgba(49,51,63,0.12);white-space:normal;line-height:1.2;}"
         ".change-table td{padding:0.42rem 0.5rem;border-top:1px solid rgba(49,51,63,0.08);vertical-align:top;white-space:nowrap;}"
         "</style>",
         unsafe_allow_html=True,
@@ -5466,10 +5481,52 @@ def _social_acceptance_establishment_summary(
     low_hex_count = int(low_mask.sum())
     high_hex_count = int(high_mask.sum())
     hex_area = max(0.0, float(hex_area_km2 or 0.0))
+    impact_fraction = max(0.0, min(1.0, float(impact_pct or 0.0) / 100.0))
+
+    def _technology_potential_area(column_prefix: str) -> pd.Series:
+        area_col = f"{column_prefix}_potential_area_km2"
+        if area_col in work.columns:
+            return pd.to_numeric(work[area_col], errors="coerce").fillna(0.0).clip(lower=0.0)
+        suitable_col = f"{column_prefix}_suitable"
+        if suitable_col in work.columns and hex_area > 0:
+            return work[suitable_col].map(lambda value: False if pd.isna(value) else bool(value)).astype(float) * hex_area
+        return pd.Series(0.0, index=work.index, dtype="float64")
+
+    tech_area = work[["hex_id"]].copy()
+    tech_area["wind_potential_area_km2"] = _technology_potential_area("wind")
+    tech_area["solar_potential_area_km2"] = _technology_potential_area("solar")
+    tech_area = (
+        tech_area.groupby("hex_id", as_index=False)
+        .agg(
+            wind_potential_area_km2=("wind_potential_area_km2", "sum"),
+            solar_potential_area_km2=("solar_potential_area_km2", "sum"),
+        )
+        .merge(acceptance_frame, on="hex_id", how="left")
+    )
+    tech_area["acceptance_value"] = pd.to_numeric(tech_area.get("acceptance_value"), errors="coerce").fillna(1.0).clip(lower=0.0, upper=1.0)
+    tech_area["acceptance_weight"] = ((1.0 - impact_fraction) + (impact_fraction * tech_area["acceptance_value"])).clip(lower=0.0, upper=1.0)
+
+    def _weighted_potential_stats(column_prefix: str) -> dict[str, float]:
+        area_col = f"{column_prefix}_potential_area_km2"
+        raw_area = float(pd.to_numeric(tech_area.get(area_col), errors="coerce").fillna(0.0).clip(lower=0.0).sum())
+        weighted_area = float((pd.to_numeric(tech_area.get(area_col), errors="coerce").fillna(0.0).clip(lower=0.0) * tech_area["acceptance_weight"]).sum())
+        return {
+            f"{column_prefix}_potential_after_acceptance_km2": max(0.0, weighted_area),
+            f"{column_prefix}_potential_acceptance_reduction_km2": max(0.0, raw_area - weighted_area),
+            f"{column_prefix}_potential_acceptance_ratio": (weighted_area / raw_area) if raw_area > 1e-9 else 1.0,
+        }
+
+    wind_acceptance_stats = _weighted_potential_stats("wind")
+    solar_acceptance_stats = _weighted_potential_stats("solar")
+    total_potential_after_acceptance = (
+        wind_acceptance_stats["wind_potential_after_acceptance_km2"]
+        + solar_acceptance_stats["solar_potential_after_acceptance_km2"]
+    )
+    total_raw_potential = float(tech_area["wind_potential_area_km2"].sum() + tech_area["solar_potential_area_km2"].sum())
     return {
         "scenario_id": str(scenario_id),
         "scenario_label": social_acceptance_scenario_label(manifest, str(scenario_id)),
-        "impact_pct": float(max(0.0, min(100.0, float(impact_pct or 0.0)))),
+        "impact_pct": float(impact_fraction * 100.0),
         "h3_resolution": int(target_resolution),
         "hex_area_km2": hex_area,
         "potential_hex_count": potential_hex_count,
@@ -5485,6 +5542,11 @@ def _social_acceptance_establishment_summary(
         "high_acceptance_hex_count": high_hex_count,
         "high_acceptance_area_km2": float(high_hex_count * hex_area),
         "high_acceptance_share_pct": (high_hex_count / measured_hex_count * 100.0) if measured_hex_count > 0 else 0.0,
+        **wind_acceptance_stats,
+        **solar_acceptance_stats,
+        "total_potential_after_acceptance_km2": max(0.0, total_potential_after_acceptance),
+        "total_potential_acceptance_reduction_km2": max(0.0, total_raw_potential - total_potential_after_acceptance),
+        "total_potential_acceptance_ratio": (total_potential_after_acceptance / total_raw_potential) if total_raw_potential > 1e-9 else 1.0,
     }
 
 
@@ -8653,6 +8715,20 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
         if missing_hex_count > 0:
             st.caption(f"Acceptansdata saknas för {missing_hex_count:,} potentiella hex och räknas inte i statistiken.".replace(",", " "))
 
+    social_effect = social_summary if isinstance(social_summary, dict) else {}
+
+    def _potential_after_acceptance_area(technology: str, base_area_km2: float) -> float:
+        ratio_key = f"{technology}_potential_acceptance_ratio"
+        try:
+            ratio = float(social_effect.get(ratio_key, 1.0) or 1.0)
+        except Exception:
+            ratio = 1.0
+        return max(0.0, float(base_area_km2 or 0.0) * max(0.0, min(1.0, ratio)))
+
+    wind_after_acceptance_area = _potential_after_acceptance_area("wind", wind_available_area)
+    solar_after_acceptance_area = _potential_after_acceptance_area("solar", solar_available_area)
+    total_after_acceptance_area = wind_after_acceptance_area + solar_after_acceptance_area
+
     impact_rows = [
         {
             "teknik": "Vind",
@@ -8662,6 +8738,11 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
                 _format_area_primary(wind_available_area, unit, hex_area),
                 wind_available_area,
                 _previous_snapshot_value(previous_snapshot, "wind_available_km2"),
+            ),
+            "potential efter acceptanspåverkan": _value_with_change_html(
+                _format_area_primary(wind_after_acceptance_area, unit, hex_area),
+                wind_after_acceptance_area,
+                wind_available_area,
             ),
             "inom potential": _value_with_change_html(_format_area_primary(wind_inside, unit, hex_area), wind_inside, _previous_snapshot_value(previous_snapshot, "wind_inside_km2")),
             "outnyttjad potential": _value_with_change_html(
@@ -8685,6 +8766,11 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
                 solar_available_area,
                 _previous_snapshot_value(previous_snapshot, "solar_available_km2"),
             ),
+            "potential efter acceptanspåverkan": _value_with_change_html(
+                _format_area_primary(solar_after_acceptance_area, unit, hex_area),
+                solar_after_acceptance_area,
+                solar_available_area,
+            ),
             "inom potential": _value_with_change_html(_format_area_primary(solar_inside, unit, hex_area), solar_inside, _previous_snapshot_value(previous_snapshot, "solar_inside_km2")),
             "outnyttjad potential": _value_with_change_html(
                 _format_area_primary(solar_unused_potential, unit, hex_area),
@@ -8706,6 +8792,11 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
                 _format_area_primary(total_available_area, unit, hex_area),
                 total_available_area,
                 _previous_snapshot_value(previous_snapshot, "total_available_km2"),
+            ),
+            "potential efter acceptanspåverkan": _value_with_change_html(
+                _format_area_primary(total_after_acceptance_area, unit, hex_area),
+                total_after_acceptance_area,
+                total_available_area,
             ),
             "inom potential": _value_with_change_html(_format_area_primary(inside_total, unit, hex_area), inside_total, _previous_snapshot_value(previous_snapshot, "inside_total_km2")),
             "outnyttjad potential": _value_with_change_html(
