@@ -646,8 +646,9 @@
 
     function styleFeature(feature) {
       return {
-        color: "rgba(27, 36, 29, 0.46)",
-        weight: 0.45,
+        color: "rgba(27, 36, 29, 0.10)",
+        opacity: 0.65,
+        weight: 0.12,
         fillColor: colorForFeature(feature),
         fillOpacity
       };
@@ -670,7 +671,7 @@
         style: styleFeature,
         onEachFeature: (feature, layer) => {
           layer.bindPopup(popupForFeature(feature));
-          layer.on("mouseover", () => layer.setStyle({ weight: 1.8, fillOpacity: 0.88 }));
+          layer.on("mouseover", () => layer.setStyle({ color: "rgba(27, 36, 29, 0.26)", opacity: 0.75, weight: 0.45, fillOpacity: Math.min(fillOpacity + 0.12, 0.95) }));
           layer.on("mouseout", () => layer.setStyle(styleFeature(feature)));
         }
       }).addTo(map);
