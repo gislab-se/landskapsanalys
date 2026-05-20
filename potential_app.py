@@ -15,7 +15,11 @@ from typing import Any
 
 import pandas as pd
 import streamlit as st
-import streamlit.components.v1 as components
+
+try:
+    import streamlit.components.v1 as components
+except Exception:
+    components = None
 
 
 ROOT = Path(__file__).resolve().parent
@@ -157,7 +161,7 @@ WIND_LAYER_SELECTION_KEY = "wind_builder_selected_layers"
 WIND_RUNTIME_OVERLAY_KEY = "wind_builder_runtime_overlay_enabled"
 SOLAR_APPLIED_CONFIG_KEY = "solar_applied_config"
 START_DEFAULT_VERSION_KEY = "potential_start_default_version"
-START_DEFAULT_VERSION = "establishment_area_unfiltered_v1"
+START_DEFAULT_VERSION = "establishment_area_unfiltered_v2"
 WIND_EMPTY_SELECTION_ACTIVE_KEY = "wind_empty_selection_active"
 WIND_CONTROL_LANGUAGE = "sv"
 WIND_RUNTIME_BASE_RESOLUTION = 10
@@ -1623,6 +1627,14 @@ def _preferred_h3_resolution(region: dict[str, Any], preferred: int = 10) -> int
     return int(preferred) if int(preferred) in available else int(available[0])
 
 
+def _default_display_h3_resolution(region: dict[str, Any], fallback: int = 8) -> int:
+    try:
+        preferred = int(region.get("default_display_h3_resolution") or fallback)
+    except Exception:
+        preferred = fallback
+    return _preferred_h3_resolution(region, preferred)
+
+
 def _analysis_h3_resolution(region: dict[str, Any], preferred: int = WIND_RUNTIME_BASE_RESOLUTION) -> int:
     available = _available_h3_resolutions(region)
     try:
@@ -2036,7 +2048,8 @@ def _ensure_default_start_state(region: dict[str, Any]) -> None:
     _apply_wind_layer_selection_state(_default_wind_layer_selection())
     st.session_state[WIND_EMPTY_SELECTION_ACTIVE_KEY] = True
     st.session_state[SOLAR_APPLIED_CONFIG_KEY] = dict(DEFAULT_SOLAR_APPLIED_CONFIG)
-    st.session_state["combined_h3_resolution"] = _preferred_h3_resolution(region, 9)
+    st.session_state["combined_h3_resolution"] = _default_display_h3_resolution(region)
+    st.session_state["combined_h3_display_mode"] = "selected"
     st.session_state["show_landscape_v10"] = False
     st.session_state["show_landscape_pdf_types"] = False
     st.session_state["show_landscape_cluster"] = False
@@ -2351,11 +2364,7 @@ def _map_panel_controls(region: dict[str, Any], key_prefix: str, panel: Any | No
     available = _available_h3_resolutions(region)
     state_key = f"{key_prefix}_h3_resolution"
     display_mode_key = f"{key_prefix}_h3_display_mode"
-    try:
-        preferred_hint = int(region.get("default_display_h3_resolution") or 9)
-    except Exception:
-        preferred_hint = 9
-    preferred = _preferred_h3_resolution(region, preferred_hint)
+    preferred = _default_display_h3_resolution(region)
     try:
         current_value = int(st.session_state.get(state_key, preferred))
     except Exception:
@@ -4549,6 +4558,20 @@ def _saved_solar_params() -> dict[str, float] | None:
     return dict(params) if isinstance(params, dict) else None
 
 
+def _render_html_map(map_html: str, height: int = 820) -> None:
+    iframe = getattr(st, "iframe", None)
+    if callable(iframe):
+        iframe(map_html, width="stretch", height=height)
+        return
+    if components is None:
+        st.error(
+            "Kartan kan inte renderas med den installerade Streamlit-versionen. "
+            "Uppgradera Streamlit eller använd en version med st.iframe."
+        )
+        return
+    components.html(map_html, height=height)
+
+
 def _render_layers(
     region: dict[str, Any],
     layers: list[dict[str, Any]],
@@ -4576,7 +4599,7 @@ def _render_layers(
     )
     map_left, map_center, map_right = st.columns([0.04, 0.92, 0.04], gap="small")
     with map_center:
-        components.html(map_html, height=820)
+        _render_html_map(map_html, height=820)
         if opacity_key_prefix:
             _hex_opacity_controls(adjusted_layers, opacity_key_prefix)
             _render_opacity_control(opacity_key_prefix)
@@ -8200,7 +8223,7 @@ def _unified_workspace_tab(
     solar_defaults = _default_solar_params(solar_rules)
     _prime_solar_builder_state(solar_defaults, saved_solar_params)
     _prime_wind_builder_state(_default_wind_params(), _selected_wind_layers())
-    h3_resolution = int(st.session_state.get("combined_h3_resolution", _preferred_h3_resolution(region, 9)))
+    h3_resolution = int(st.session_state.get("combined_h3_resolution", _default_display_h3_resolution(region)))
     zoom_family_enabled = str(st.session_state.get("combined_h3_display_mode", "selected")) == "zoom_family"
     opacity = _current_opacity("combined")
     preserve_map_view = True
@@ -9255,8 +9278,8 @@ def main() -> None:
     scenario_state = _scenario_state(region, None)
     context = _load_context(region)
 
-    st.session_state.setdefault("combined_h3_resolution", _preferred_h3_resolution(region, 9))
-    h3_resolution = int(st.session_state.get("combined_h3_resolution", _preferred_h3_resolution(region, 9)))
+    st.session_state.setdefault("combined_h3_resolution", _default_display_h3_resolution(region))
+    h3_resolution = int(st.session_state.get("combined_h3_resolution", _default_display_h3_resolution(region)))
     with main_panel:
         _workspace_header(region, scenario_state, h3_resolution)
         _unified_workspace_tab(region, scenario_state, context, left_panel, right_panel)
