@@ -74,6 +74,19 @@
       "interpretation": "Protected nature is treated as a hard exclusion following the Bornholm controller pattern. Trondelag currently wires the NEA Naturvern layer as the first protected-nature source; protected watercourses and water protection remain next-step candidates. Land-use classes such as forest, agriculture and wetland are intentionally kept out of this group for a later land-use controller."
     },
     {
+      "id": "land_use",
+      "label": "Land use / markdekke",
+      "analysis_kind": "hard_exclusion",
+      "analysis_label": "Optional buffer",
+      "analysis_min_m": 0,
+      "analysis_max_m": 1000,
+      "analysis_step_m": 50,
+      "analysis_default_m": 0,
+      "blend_default": 60,
+      "group_color": [22, 101, 52],
+      "interpretation": "Separate land-use controller for Trondelag. Forest uses N500 markdekke polygons filtered to objtype = Skog and is intentionally kept separate from protected nature."
+    },
+    {
       "id": "reindeer",
       "label": "Reindeer husbandry / reindrift",
       "analysis_kind": "hard_exclusion",
@@ -244,6 +257,18 @@
       "note": "Norwegian NEA Naturvern layer clipped and dissolved as the first Trondelag protected-nature controller. Forest, agriculture, wetland and other land-use classes are deliberately reserved for a later land-use controller.",
       "source_color": [64, 119, 73],
       "point_radius": 45
+    },
+    {
+      "id": "forest_land_cover",
+      "group_id": "land_use",
+      "layer_key": "trl_landcover_n500",
+      "label": "Skog (N500 markdekke)",
+      "note": "Norwegian N500 markdekke polygons filtered to objtype = Skog. Separate land-use controller for large-scale solar.",
+      "source_color": [22, 101, 52],
+      "point_radius": 45,
+      "filter_field": "objtype",
+      "filter_value": "Skog",
+      "filter_mode": "field_equals"
     },
     {
       "id": "reindeer_grazing_merged",

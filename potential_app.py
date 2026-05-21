@@ -16,7 +16,11 @@ from typing import Any
 
 import pandas as pd
 import streamlit as st
-import streamlit.components.v1 as components
+
+try:
+    import streamlit.components.v1 as components
+except Exception:
+    components = None
 
 
 ROOT = Path(__file__).resolve().parent
@@ -202,6 +206,8 @@ SOLAR_ELECTRICAL_GROUP_ID = "electrical"
 SOLAR_CULTURE_GROUP_ID = "culture"
 SOLAR_REINDEER_GROUP_ID = "reindeer"
 SOLAR_COASTAL_GROUP_ID = "coastal"
+SOLAR_LAND_USE_GROUP_ID = "land_use"
+SOLAR_FOREST_LAYER_ID = "forest_land_cover"
 SOLAR_FILTER_GROUP_SPECS: dict[str, dict[str, Any]] = {
     SOLAR_PROTECTED_GROUP_ID: {
         "label": PROTECTED_NATURE_LABEL,
@@ -220,6 +226,28 @@ SOLAR_FILTER_GROUP_SPECS: dict[str, dict[str, Any]] = {
         "source_color": "#16a34a",
         "buffer_color": "#16a34a",
         "caption": f"{PROTECTED_NATURE_LABEL} används som avdrag i storskalig solpotential.",
+    },
+    SOLAR_LAND_USE_GROUP_ID: {
+        "label": "Markanvändning: skog",
+        "source_label": "Sol källa: skog",
+        "buffer_label": "Solavdrag: skog",
+        "layer_ids": (SOLAR_FOREST_LAYER_ID,),
+        "default_layer_ids": (SOLAR_FOREST_LAYER_ID,),
+        "layer_ids_key": "large_land_use_layer_ids",
+        "active_key": "large_land_use_active",
+        "buffer_key": "forest_buffer_m",
+        "draft_active_key": "solar_draft_land_use_active",
+        "draft_buffer_key": "solar_draft_forest_buffer_m",
+        "buffer_default_m": 0.0,
+        "buffer_min_m": 0.0,
+        "buffer_max_m": 1000.0,
+        "buffer_step_m": 50.0,
+        "source_color": "#166534",
+        "buffer_color": "#14532d",
+        "active_help": (
+            "Tar bort markdekke/arealdekke skog från storskalig solpotential med samma polygon-, buffert- och H3-aggregeringslogik som skyddad natur och kultur."
+        ),
+        "caption": "Skogsfiltret ligger separat från skyddad natur och bygger på N500 markdekke där `objtype = Skog`.",
     },
     SOLAR_ROAD_GROUP_ID: {
         "label": "Vägar",
@@ -333,6 +361,8 @@ DEFAULT_SOLAR_APPLIED_CONFIG = {
     "large_population_active": False,
     "large_protected_layer_ids": [],
     "large_protected_active": False,
+    "large_land_use_layer_ids": [],
+    "large_land_use_active": False,
     "large_road_layer_ids": [],
     "large_road_active": False,
     "large_electrical_layer_ids": [],
@@ -346,6 +376,7 @@ DEFAULT_SOLAR_APPLIED_CONFIG = {
     "panel_area_m2_per_person": 10.0,
     "population_buffer_m": 250.0,
     "protected_buffer_m": 0.0,
+    "forest_buffer_m": 0.0,
     "road_buffer_m": 100.0,
     "solar_grid_max_distance_m": 2000.0,
     "culture_buffer_m": 0.0,
@@ -3676,7 +3707,11 @@ def _solar_filter_union_buffer_frame(
             if isinstance(feature, dict) and feature.get("geometry"):
                 features.append(feature)
     population_frames = [item["__population_share_frame__"] for item in features if isinstance(item, dict) and "__population_share_frame__" in item]
-    features = [item for item in features if not (isinstance(item, dict) and "__population_share_frame__" in item)]
+    features = [
+        item
+        for item in features
+        if not (isinstance(item, dict) and "__population_share_frame__" in item)
+    ]
     fallback_share = _distance_table_filter_share_frame(region, int(target_resolution), fallback_configs)
     extra_share_frames = list(population_frames)
     if not fallback_share.empty:
@@ -5237,6 +5272,20 @@ def _saved_solar_params() -> dict[str, float] | None:
     return dict(params) if isinstance(params, dict) else None
 
 
+def _render_html_map(map_html: str, height: int = 820) -> None:
+    iframe = getattr(st, "iframe", None)
+    if callable(iframe):
+        iframe(map_html, width="stretch", height=height)
+        return
+    if components is None:
+        st.error(
+            "Kartan kan inte renderas med den installerade Streamlit-versionen. "
+            "Uppgradera Streamlit eller använd en version med st.iframe."
+        )
+        return
+    components.html(map_html, height=height)
+
+
 def _render_layers(
     region: dict[str, Any],
     layers: list[dict[str, Any]],
@@ -5264,7 +5313,7 @@ def _render_layers(
     )
     map_left, map_center, map_right = st.columns([0.04, 0.92, 0.04], gap="small")
     with map_center:
-        components.html(map_html, height=820)
+        _render_html_map(map_html, height=820)
         if opacity_key_prefix:
             _hex_opacity_controls(adjusted_layers, opacity_key_prefix)
             _render_opacity_control(opacity_key_prefix)
@@ -9929,6 +9978,7 @@ def _unified_workspace_tab(
                             st.caption("Avståndet är totalt från befolkningsunderlaget. Trøndelag använder 250 m befolkningsrutor från centroider som proxy.")
                         for solar_filter_group_id in (
                             SOLAR_PROTECTED_GROUP_ID,
+                            SOLAR_LAND_USE_GROUP_ID,
                             SOLAR_ROAD_GROUP_ID,
                             SOLAR_ELECTRICAL_GROUP_ID,
                             SOLAR_CULTURE_GROUP_ID,
