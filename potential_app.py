@@ -4253,6 +4253,7 @@ def _solar_potential_polygon_layer(
 
 
 def _solar_establishment_frame(
+    region: dict[str, Any],
     small_frame: pd.DataFrame,
     large_frame: pd.DataFrame,
     solar_area_need_km2: float,
@@ -4306,6 +4307,12 @@ def _solar_establishment_frame(
         }
     candidates = pd.DataFrame(rows)
     if h3_resolution is not None:
+        candidates = _apply_landscape_priority_to_allocation_frame(
+            candidates,
+            region,
+            "solar",
+            int(h3_resolution),
+        )
         candidates = _apply_social_acceptance_priority_to_solar_candidates(
             candidates,
             social_acceptance_manifest,
@@ -4313,9 +4320,9 @@ def _solar_establishment_frame(
             int(h3_resolution),
             float(social_acceptance_allocation_priority_pct or 0.0),
         )
-    if "social_acceptance_priority_score" in candidates.columns and float(social_acceptance_allocation_priority_pct or 0.0) > 0.0:
+    if "allocation_priority_score" in candidates.columns:
         candidates = candidates.sort_values(
-            ["sort_group", "social_acceptance_priority_score", "potential_score", "potential_area_km2", "hex_id"],
+            ["sort_group", "allocation_priority_score", "potential_score", "potential_area_km2", "hex_id"],
             ascending=[True, False, False, False, True],
         )
     else:
@@ -4349,6 +4356,9 @@ def _solar_establishment_frame(
                 "outside_et": bool(getattr(row, "outside_et", False)),
                 "expansion_ring": int(getattr(row, "expansion_ring", 0) or 0),
                 "allocation_phase": "Inom LP",
+                "landscape_priority_score": float(getattr(row, "landscape_priority_score", 0.0) or 0.0),
+                "allocation_priority_score": float(getattr(row, "allocation_priority_score", 0.0) or 0.0),
+                "allocation_priority_reason": str(getattr(row, "allocation_priority_reason", "") or ""),
                 "social_acceptance_value": float(getattr(row, "social_acceptance_value", 1.0) or 1.0),
                 "social_acceptance_allocation_priority_pct": float(
                     getattr(row, "social_acceptance_allocation_priority_pct", 0.0) or 0.0
@@ -4391,11 +4401,18 @@ def _rollup_solar_establishment_frame(
     work["allocated_twh"] = _numeric_column("allocated_twh", 0.0)
     work["selected_rank"] = _numeric_column("selected_rank", 0.0).astype(int)
     work["potential_score"] = _numeric_column("potential_score", 0.0)
+    work["landscape_priority_score"] = _numeric_column("landscape_priority_score", 0.0)
+    work["allocation_priority_score"] = _numeric_column("allocation_priority_score", 0.0)
+    work["social_acceptance_priority_score"] = _numeric_column("social_acceptance_priority_score", 0.0)
+    work["social_acceptance_value"] = _numeric_column("social_acceptance_value", 1.0)
+    work["social_acceptance_allocation_priority_pct"] = _numeric_column("social_acceptance_allocation_priority_pct", 0.0)
     work["expansion_ring"] = _numeric_column("expansion_ring", 0.0).astype(int)
     if "outside_et" not in work.columns:
         work["outside_et"] = False
     if "source_group" not in work.columns:
         work["source_group"] = ""
+    if "allocation_priority_reason" not in work.columns:
+        work["allocation_priority_reason"] = ""
     work["outside_et"] = work["outside_et"].fillna(False).astype(bool)
     work["outside_area_km2"] = work["allocated_area_km2"].where(work["outside_et"], 0.0)
     work["inside_area_km2"] = work["allocated_area_km2"].where(~work["outside_et"], 0.0)
@@ -4411,6 +4428,12 @@ def _rollup_solar_establishment_frame(
             selected_rank=("selected_rank", "min"),
             source_group=("source_group", _source_group_label),
             potential_score=("potential_score", "max"),
+            landscape_priority_score=("landscape_priority_score", "max"),
+            allocation_priority_score=("allocation_priority_score", "max"),
+            allocation_priority_reason=("allocation_priority_reason", _source_group_label),
+            social_acceptance_priority_score=("social_acceptance_priority_score", "max"),
+            social_acceptance_value=("social_acceptance_value", "mean"),
+            social_acceptance_allocation_priority_pct=("social_acceptance_allocation_priority_pct", "max"),
             potential_area_km2=("potential_area_km2", "sum"),
             allocated_area_km2=("allocated_area_km2", "sum"),
             allocated_twh=("allocated_twh", "sum"),
@@ -4482,11 +4505,33 @@ def _expand_solar_area_outside_lp(
     outside = pd.DataFrame({"hex_id": outside_hexes})
     if outside.empty:
         return selected_frame, proposal_stats
+    priority_cols = [
+        column
+        for column in [
+            "hex_id",
+            "landscape_priority_score",
+            "allocation_priority_score",
+            "allocation_priority_reason",
+            "social_acceptance_priority_score",
+            "social_acceptance_value",
+            "social_acceptance_allocation_priority_pct",
+        ]
+        if column in work.columns
+    ]
+    if len(priority_cols) > 1:
+        outside = outside.merge(work[priority_cols].drop_duplicates(subset=["hex_id"]), on="hex_id", how="left")
     outside["expansion_ring"] = outside["hex_id"].map(distance_lookup).fillna(999999).astype(int)
     outside = outside[outside["expansion_ring"].lt(999999)].copy()
     if outside.empty:
         return selected_frame, proposal_stats
-    outside = outside.sort_values(["expansion_ring", "hex_id"], ascending=[True, True]).reset_index(drop=True)
+    outside["allocation_priority_score"] = pd.to_numeric(
+        outside.get("allocation_priority_score", pd.Series(0.0, index=outside.index)),
+        errors="coerce",
+    ).fillna(0.0).clip(lower=0.0, upper=1.0)
+    outside = outside.sort_values(
+        ["expansion_ring", "allocation_priority_score", "hex_id"],
+        ascending=[True, False, True],
+    ).reset_index(drop=True)
 
     remaining = shortage
     start_rank = int(len(selected_frame)) + 1
@@ -4517,6 +4562,14 @@ def _expand_solar_area_outside_lp(
                 "outside_et": True,
                 "expansion_ring": int(row.expansion_ring),
                 "allocation_phase": "Utanför LP",
+                "landscape_priority_score": float(getattr(row, "landscape_priority_score", 0.0) or 0.0),
+                "allocation_priority_score": float(getattr(row, "allocation_priority_score", 0.0) or 0.0),
+                "allocation_priority_reason": str(getattr(row, "allocation_priority_reason", "") or ""),
+                "social_acceptance_priority_score": float(getattr(row, "social_acceptance_priority_score", 0.0) or 0.0),
+                "social_acceptance_value": float(getattr(row, "social_acceptance_value", 1.0) or 1.0),
+                "social_acceptance_allocation_priority_pct": float(
+                    getattr(row, "social_acceptance_allocation_priority_pct", 0.0) or 0.0
+                ),
             }
         )
         if remaining <= 1e-9:
@@ -5562,19 +5615,24 @@ def _apply_social_acceptance_priority_to_wind_allocation_frame(
     work, priority_fraction = _merge_social_acceptance_for_priority(frame, manifest, scenario_id, target_resolution, priority_pct)
     if priority_fraction <= 0.0 or work.empty:
         return work
-    core_source = work["core_score"] if "core_score" in work.columns else pd.Series(0.0, index=work.index)
-    share_source = work["potential_area_share_pct"] if "potential_area_share_pct" in work.columns else pd.Series(0.0, index=work.index)
-    core_score = pd.to_numeric(core_source, errors="coerce").fillna(0.0).clip(lower=0.0, upper=1.0)
-    potential_share = pd.to_numeric(share_source, errors="coerce").fillna(0.0).clip(lower=0.0, upper=100.0).div(100.0)
-    technical_score = ((0.7 * core_score) + (0.3 * potential_share)).clip(lower=0.0, upper=1.0)
+    if "allocation_priority_score" in work.columns:
+        technical_score = pd.to_numeric(work["allocation_priority_score"], errors="coerce").fillna(0.0).clip(lower=0.0, upper=1.0)
+    else:
+        core_source = work["core_score"] if "core_score" in work.columns else pd.Series(0.0, index=work.index)
+        share_source = work["potential_area_share_pct"] if "potential_area_share_pct" in work.columns else pd.Series(0.0, index=work.index)
+        core_score = pd.to_numeric(core_source, errors="coerce").fillna(0.0).clip(lower=0.0, upper=1.0)
+        potential_share = pd.to_numeric(share_source, errors="coerce").fillna(0.0).clip(lower=0.0, upper=100.0).div(100.0)
+        technical_score = ((0.7 * core_score) + (0.3 * potential_share)).clip(lower=0.0, upper=1.0)
     acceptance = pd.to_numeric(work["social_acceptance_value"], errors="coerce").fillna(1.0).clip(lower=0.0, upper=1.0)
     work["technical_priority_score"] = technical_score
-    work["core_score_before_acceptance"] = core_score
+    core_before_source = work["core_score"] if "core_score" in work.columns else pd.Series(0.0, index=work.index)
+    work["core_score_before_acceptance"] = pd.to_numeric(core_before_source, errors="coerce").fillna(0.0).clip(lower=0.0, upper=1.0)
     work["social_acceptance_priority_score"] = ((1.0 - priority_fraction) * technical_score + priority_fraction * acceptance).clip(
         lower=0.0,
         upper=1.0,
     )
-    work["core_score"] = work["social_acceptance_priority_score"]
+    work["allocation_priority_score"] = work["social_acceptance_priority_score"]
+    work["core_score"] = work["allocation_priority_score"]
     return work
 
 
@@ -5588,14 +5646,18 @@ def _apply_social_acceptance_priority_to_solar_candidates(
     work, priority_fraction = _merge_social_acceptance_for_priority(frame, manifest, scenario_id, target_resolution, priority_pct)
     if priority_fraction <= 0.0 or work.empty:
         return work
-    score_source = work["potential_score"] if "potential_score" in work.columns else pd.Series(0.0, index=work.index)
-    technical_score = pd.to_numeric(score_source, errors="coerce").fillna(0.0).clip(lower=0.0, upper=100.0).div(100.0)
+    if "allocation_priority_score" in work.columns:
+        technical_score = pd.to_numeric(work["allocation_priority_score"], errors="coerce").fillna(0.0).clip(lower=0.0, upper=1.0)
+    else:
+        score_source = work["potential_score"] if "potential_score" in work.columns else pd.Series(0.0, index=work.index)
+        technical_score = pd.to_numeric(score_source, errors="coerce").fillna(0.0).clip(lower=0.0, upper=100.0).div(100.0)
     acceptance = pd.to_numeric(work["social_acceptance_value"], errors="coerce").fillna(1.0).clip(lower=0.0, upper=1.0)
     work["technical_priority_score"] = technical_score
     work["social_acceptance_priority_score"] = ((1.0 - priority_fraction) * technical_score + priority_fraction * acceptance).clip(
         lower=0.0,
         upper=1.0,
     )
+    work["allocation_priority_score"] = work["social_acceptance_priority_score"]
     return work
 
 
@@ -6488,6 +6550,202 @@ def _target_resolution_distance_frame(
     return work[["hex_id", "distance_m", "intersects"]].copy()
 
 
+def _allocation_priority_distance_cap_m(group: Any) -> float:
+    candidates = [
+        float(getattr(group, "analysis_max_m", 0.0) or 0.0),
+        float(getattr(group, "analysis_default_m", 0.0) or 0.0) * 2.0,
+        float(getattr(group, "analysis_step_m", 0.0) or 0.0) * 20.0,
+    ]
+    cap = max([value for value in candidates if math.isfinite(value) and value > 0.0] or [1000.0])
+    return max(cap, 1.0)
+
+
+def _allocation_priority_layer_groups(technology: str) -> list[dict[str, Any]]:
+    groups, layers, registry_meta = load_acceptance_registry()
+    availability = _wind_layer_status_lookup(registry_meta)
+    raw_groups: list[tuple[str, list[str]]] = []
+    if str(technology) == "solar":
+        raw_groups.append((WIND_SETTLEMENT_GROUP_ID, [WIND_POPULATION_SOURCE_LAYER_ID]))
+        for group_id in SOLAR_FILTER_GROUP_IDS:
+            raw_groups.append((group_id, list(_solar_filter_layer_ids(group_id))))
+    else:
+        for group_id, layer_ids in WIND_GROUP_LAYER_DEFAULTS.items():
+            raw_groups.append((group_id, list(layer_ids)))
+
+    specs: list[dict[str, Any]] = []
+    seen_group_ids: set[str] = set()
+    for group_id, layer_ids in raw_groups:
+        if group_id in seen_group_ids:
+            continue
+        seen_group_ids.add(group_id)
+        group = groups.get(group_id)
+        if group is None:
+            continue
+        ready_layer_ids = [
+            str(layer_id)
+            for layer_id in layer_ids
+            if str(layer_id) in layers and _wind_layer_is_ready(str(layer_id), availability)
+        ]
+        if not ready_layer_ids:
+            continue
+        specs.append(
+            {
+                "group_id": str(group_id),
+                "group": group,
+                "layer_ids": ready_layer_ids,
+                "label": group_label(group, WIND_CONTROL_LANGUAGE, group.label),
+                "analysis_kind": str(group.analysis_kind),
+            }
+        )
+    return specs
+
+
+def _allocation_priority_group_score(
+    analysis_kind: str,
+    min_distance_m: pd.Series,
+    any_intersection: pd.Series,
+    cap_m: float,
+) -> tuple[pd.Series, str]:
+    distance = pd.to_numeric(min_distance_m, errors="coerce")
+    intersects = any_intersection.fillna(False).astype(bool)
+    cap = max(float(cap_m or 0.0), 1.0)
+    if str(analysis_kind) == "proximity_feasibility":
+        score = (1.0 - (distance / cap)).clip(lower=0.0, upper=1.0).fillna(0.0)
+        score.loc[intersects] = 1.0
+        return score, "proximity"
+    score = (distance / cap).clip(lower=0.0, upper=1.0).fillna(0.0)
+    score.loc[intersects] = 0.0
+    return score, "clearance"
+
+
+def _allocation_priority_reason(row: Any, components: list[dict[str, str]]) -> str:
+    strengths: list[str] = []
+    compromises: list[str] = []
+    for component in components:
+        try:
+            value = float(getattr(row, component["column"], 0.0) or 0.0)
+        except Exception:
+            value = 0.0
+        label = str(component["label"]).lower()
+        if component["role"] == "proximity":
+            if value >= 0.67:
+                strengths.append(f"nära {label}")
+            elif value <= 0.33:
+                compromises.append(f"långt från {label}")
+        else:
+            if value >= 0.67:
+                strengths.append(f"långt från {label}")
+            elif value <= 0.33:
+                compromises.append(f"nära {label}")
+    parts: list[str] = []
+    if strengths:
+        parts.append("Styrkor: " + ", ".join(strengths[:3]))
+    if compromises:
+        parts.append("Kompromiss: " + ", ".join(compromises[:2]))
+    return ". ".join(parts) if parts else "Balanserad placering enligt landskaps- och teknikranking."
+
+
+def _apply_landscape_priority_to_allocation_frame(
+    frame: pd.DataFrame,
+    region: dict[str, Any],
+    technology: str,
+    target_resolution: int,
+) -> pd.DataFrame:
+    if frame.empty or "hex_id" not in frame.columns:
+        return frame
+    display_geometry_path = _h3_display_geometry_path(region, int(target_resolution))
+    if not display_geometry_path:
+        return frame
+
+    work = frame.copy()
+    work["hex_id"] = work["hex_id"].astype(str)
+    groups, _, registry_meta = load_acceptance_registry()
+    component_cols: list[str] = []
+    component_meta: list[dict[str, str]] = []
+    for spec in _allocation_priority_layer_groups(str(technology)):
+        group_id = str(spec["group_id"])
+        group = groups.get(group_id)
+        if group is None:
+            continue
+        parts: list[pd.DataFrame] = []
+        for layer_id in spec["layer_ids"]:
+            layer_frame = _target_resolution_distance_frame(
+                distance_table_for_layer(registry_meta, str(layer_id)),
+                int(target_resolution),
+                display_geometry_path,
+            )
+            if not layer_frame.empty:
+                parts.append(layer_frame)
+        if not parts:
+            continue
+        merged = work[["hex_id"]].copy()
+        distance_cols: list[str] = []
+        intersect_cols: list[str] = []
+        for idx, part in enumerate(parts):
+            distance_col = f"distance_{idx}"
+            intersect_col = f"intersects_{idx}"
+            merged = merged.merge(
+                part.rename(columns={"distance_m": distance_col, "intersects": intersect_col}),
+                on="hex_id",
+                how="left",
+            )
+            distance_cols.append(distance_col)
+            intersect_cols.append(intersect_col)
+        if not distance_cols:
+            continue
+        intersection_frame = pd.DataFrame(
+            {
+                column: merged[column].where(merged[column].notna(), False).astype(bool)
+                for column in intersect_cols
+            }
+        )
+        score, role = _allocation_priority_group_score(
+            str(spec["analysis_kind"]),
+            merged[distance_cols].min(axis=1, skipna=True),
+            intersection_frame.any(axis=1),
+            _allocation_priority_distance_cap_m(group),
+        )
+        column = f"allocation_priority_component_{group_id}"
+        work[column] = score.astype(float).clip(lower=0.0, upper=1.0)
+        component_cols.append(column)
+        component_meta.append({"column": column, "label": str(spec["label"]), "role": role})
+
+    if component_cols:
+        work["landscape_priority_score"] = work[component_cols].mean(axis=1, skipna=True).fillna(0.0).clip(lower=0.0, upper=1.0)
+        reason_frame = work[component_cols].copy()
+        work["allocation_priority_reason"] = [
+            _allocation_priority_reason(row, component_meta)
+            for row in reason_frame.itertuples(index=False)
+        ]
+    else:
+        work["landscape_priority_score"] = 0.0
+        work["allocation_priority_reason"] = "Prioriteras efter befintlig potential; inga distanskomponenter hittades."
+
+    if str(technology) == "wind":
+        share_source = work["potential_area_share_pct"] if "potential_area_share_pct" in work.columns else pd.Series(0.0, index=work.index)
+        core_source = work["core_score"] if "core_score" in work.columns else pd.Series(0.0, index=work.index)
+        share = pd.to_numeric(share_source, errors="coerce").fillna(0.0).clip(lower=0.0, upper=100.0).div(100.0)
+        core = pd.to_numeric(core_source, errors="coerce").fillna(0.0).clip(lower=0.0, upper=1.0)
+        work["allocation_priority_score"] = (
+            (0.65 * work["landscape_priority_score"]) + (0.20 * share) + (0.15 * core)
+        ).clip(lower=0.0, upper=1.0)
+        work["core_score_before_allocation_priority"] = core
+        work["core_score"] = work["allocation_priority_score"]
+    else:
+        if "potential_score" in work.columns:
+            potential_source = work["potential_score"]
+        elif "solar_score" in work.columns:
+            potential_source = work["solar_score"]
+        else:
+            potential_source = work.get("potential_area_share_pct", pd.Series(0.0, index=work.index))
+        potential = pd.to_numeric(potential_source, errors="coerce").fillna(0.0).clip(lower=0.0, upper=100.0).div(100.0)
+        work["allocation_priority_score"] = (
+            (0.75 * work["landscape_priority_score"]) + (0.25 * potential)
+        ).clip(lower=0.0, upper=1.0)
+    work["technical_priority_score"] = work["allocation_priority_score"]
+    return work.drop(columns=component_cols, errors="ignore")
+
+
 def _population_buffer_share_frame(
     region: dict[str, Any],
     target_resolution: int,
@@ -6772,13 +7030,25 @@ def _rollup_energy_area_proposal_frame(
     work["allocated_twh"] = _numeric_column("allocated_twh", 0.0)
     work["selected_rank"] = _numeric_column("selected_rank", 0.0).astype(int)
     work["core_score"] = _numeric_column("core_score", 0.0)
+    work["landscape_priority_score"] = _numeric_column("landscape_priority_score", 0.0)
+    work["allocation_priority_score"] = _numeric_column("allocation_priority_score", 0.0)
+    work["social_acceptance_priority_score"] = _numeric_column("social_acceptance_priority_score", 0.0)
+    work["social_acceptance_value"] = _numeric_column("social_acceptance_value", 1.0)
+    work["social_acceptance_allocation_priority_pct"] = _numeric_column("social_acceptance_allocation_priority_pct", 0.0)
     work["zone_size"] = _numeric_column("zone_size", 0.0).astype(int)
     work["expansion_ring"] = _numeric_column("expansion_ring", 0.0).astype(int)
+    if "allocation_priority_reason" not in work.columns:
+        work["allocation_priority_reason"] = ""
     if "outside_et" not in work.columns:
         work["outside_et"] = False
     work["outside_et"] = work["outside_et"].fillna(False).astype(bool)
     work["outside_area_km2"] = work["allocated_area_km2"].where(work["outside_et"], 0.0)
     work["inside_area_km2"] = work["allocated_area_km2"].where(~work["outside_et"], 0.0)
+
+    def _first_text(values: pd.Series) -> str:
+        labels = [str(value) for value in values.dropna().tolist() if str(value)]
+        unique = list(dict.fromkeys(labels))
+        return ", ".join(unique[:3])
 
     rolled = (
         work.groupby("hex_id", as_index=False)
@@ -6790,6 +7060,12 @@ def _rollup_energy_area_proposal_frame(
             outside_area_km2=("outside_area_km2", "sum"),
             inside_area_km2=("inside_area_km2", "sum"),
             core_score=("core_score", "max"),
+            landscape_priority_score=("landscape_priority_score", "max"),
+            allocation_priority_score=("allocation_priority_score", "max"),
+            allocation_priority_reason=("allocation_priority_reason", _first_text),
+            social_acceptance_priority_score=("social_acceptance_priority_score", "max"),
+            social_acceptance_value=("social_acceptance_value", "mean"),
+            social_acceptance_allocation_priority_pct=("social_acceptance_allocation_priority_pct", "max"),
             zone_size=("zone_size", "sum"),
             expansion_ring=("expansion_ring", "max"),
         )
@@ -6829,6 +7105,12 @@ def _establishment_source_frame(
         f"{technology}_allocated_area_km2",
         f"{technology}_allocated_gwh",
         f"{technology}_allocated_hex_share_pct",
+        f"{technology}_landscape_priority_score",
+        f"{technology}_allocation_priority_score",
+        f"{technology}_allocation_priority_reason",
+        f"{technology}_social_acceptance_priority_score",
+        f"{technology}_social_acceptance_value",
+        f"{technology}_social_acceptance_allocation_priority_pct",
         f"{technology}_outside_lp",
         f"{technology}_conflict_area_km2",
         f"{technology}_conflict",
@@ -6865,6 +7147,21 @@ def _establishment_source_frame(
         allocated_gwh = _numeric_source("allocated_twh", 0.0) * 1000.0
     work[f"{technology}_allocated_gwh"] = allocated_gwh.clip(lower=0.0)
     work[f"{technology}_allocated_hex_share_pct"] = _numeric_source("allocated_hex_share_pct", 0.0).clip(lower=0.0, upper=100.0)
+    work[f"{technology}_landscape_priority_score"] = _numeric_source("landscape_priority_score", 0.0).clip(lower=0.0, upper=1.0)
+    work[f"{technology}_allocation_priority_score"] = _numeric_source("allocation_priority_score", 0.0).clip(lower=0.0, upper=1.0)
+    work[f"{technology}_social_acceptance_priority_score"] = _numeric_source("social_acceptance_priority_score", 0.0).clip(
+        lower=0.0,
+        upper=1.0,
+    )
+    work[f"{technology}_social_acceptance_value"] = _numeric_source("social_acceptance_value", 1.0).clip(lower=0.0, upper=1.0)
+    work[f"{technology}_social_acceptance_allocation_priority_pct"] = _numeric_source(
+        "social_acceptance_allocation_priority_pct",
+        0.0,
+    ).clip(lower=0.0, upper=100.0)
+    if "allocation_priority_reason" in work.columns:
+        work[f"{technology}_allocation_priority_reason"] = work["allocation_priority_reason"].fillna("").astype(str)
+    else:
+        work[f"{technology}_allocation_priority_reason"] = ""
     if "outside_et" in work.columns:
         work[f"{technology}_outside_lp"] = work["outside_et"].fillna(False).astype(bool)
     else:
@@ -7829,6 +8126,27 @@ def _scenario_allocation_marker_feature_collection(
     if frame.empty:
         return {"type": "FeatureCollection", "features": features}
 
+    def _priority_html(row: Any, technology: str, label: str) -> str:
+        allocated_area = float(getattr(row, f"{technology}_allocated_area_km2", 0.0) or 0.0)
+        if allocated_area <= 0.0:
+            return ""
+        landscape_score = float(getattr(row, f"{technology}_landscape_priority_score", 0.0) or 0.0)
+        allocation_score = float(getattr(row, f"{technology}_allocation_priority_score", 0.0) or 0.0)
+        social_pct = float(getattr(row, f"{technology}_social_acceptance_allocation_priority_pct", 0.0) or 0.0)
+        social_score = float(getattr(row, f"{technology}_social_acceptance_priority_score", 0.0) or 0.0)
+        reason = html.escape(str(getattr(row, f"{technology}_allocation_priority_reason", "") or ""))
+        lines = [
+            f"<strong>{label}: varför här?</strong>",
+            f"Landskaps-/teknikranking: {landscape_score * 100.0:.0f}%",
+        ]
+        if social_pct > 0.0:
+            lines.append(f"Slutlig ranking efter social acceptans ({social_pct:.0f}%): {social_score * 100.0:.0f}%")
+        else:
+            lines.append(f"Slutlig ranking: {allocation_score * 100.0:.0f}%")
+        if reason:
+            lines.append(f"Förklaring: {reason}")
+        return "<br>".join(lines) + "<br>"
+
     for row in frame.itertuples(index=False):
         wind_suitable = bool(getattr(row, "wind_suitable", False))
         solar_suitable = bool(getattr(row, "solar_suitable", False))
@@ -7856,6 +8174,8 @@ def _scenario_allocation_marker_feature_collection(
             f"Child-hex: {child_hex}<br>"
             f"Vind fördelad yta: {wind_area:.3f} km²<br>"
             f"Sol fördelad yta: {solar_area:.3f} km²<br>"
+            f"{_priority_html(row, 'wind', 'Vind')}"
+            f"{_priority_html(row, 'solar', 'Sol')}"
             f"{note}"
         )
         features.append(
@@ -8217,9 +8537,13 @@ def _expand_wind_area_outside_et(
     if outside.empty:
         return selected_frame, proposal_stats
 
+    outside["allocation_priority_score"] = pd.to_numeric(
+        outside.get("allocation_priority_score", outside.get("core_score", pd.Series(0.0, index=outside.index))),
+        errors="coerce",
+    ).fillna(0.0).clip(lower=0.0, upper=1.0)
     outside = outside.sort_values(
-        ["expansion_ring", "core_score", "zone_size", "hex_id"],
-        ascending=[True, True, True, True],
+        ["expansion_ring", "allocation_priority_score", "zone_size", "hex_id"],
+        ascending=[True, False, False, True],
     ).reset_index(drop=True)
 
     remaining_area = et_shortage
@@ -10064,7 +10388,7 @@ def _unified_workspace_tab(
                         format="%d%%",
                         key=_social_acceptance_allocation_priority_state_key(region),
                         help=(
-                            "0% använder dagens tekniska prioritering. "
+                            "0% använder lagrets interna landskaps-/teknikranking. "
                             "100% låter hög social acceptans väga tungt när scenariohexar väljs först."
                         ),
                     )
@@ -10418,6 +10742,7 @@ def _unified_workspace_tab(
         )
         if energy_model_state.get("available"):
             solar_proposal_frame, solar_proposal_stats = _solar_establishment_frame(
+                region,
                 solar_v1_analysis_frame if show_solar_v1 and solar_small_population_active else pd.DataFrame(),
                 user_solar_analysis_frame if show_user_solar else pd.DataFrame(),
                 float(energy_model_state.get("solar_area_need_km2", 0.0) or 0.0),
@@ -10429,8 +10754,14 @@ def _unified_workspace_tab(
                 social_acceptance_scenario,
                 social_acceptance_allocation_priority_pct,
             )
-            solar_proposal_frame, solar_proposal_stats = _expand_solar_area_outside_lp(
+            solar_expansion_source_frame = _apply_landscape_priority_to_allocation_frame(
                 combined_solar_analysis_frame,
+                region,
+                "solar",
+                analysis_h3_resolution,
+            )
+            solar_proposal_frame, solar_proposal_stats = _expand_solar_area_outside_lp(
+                solar_expansion_source_frame,
                 solar_proposal_frame,
                 solar_proposal_stats,
                 analysis_display_geometry_path,
@@ -10443,7 +10774,7 @@ def _unified_workspace_tab(
             energy_model_state["solar_proposal_stats"] = solar_proposal_stats
             if not solar_proposal_frame.empty:
                 unified_notes.append(
-                    f"Solens scenarioyta allokeras först från {SOLAR_SMALL_SCALE_LABEL} och därefter {SOLAR_LARGE_SCALE_LABEL}; placeringen visas med små child-hex."
+                    f"Solens scenarioyta använder en intern landskaps-/teknikranking inom etableringshex; placeringen visas med små child-hex."
                 )
         _add_perf_timing(
             performance_log,
@@ -10531,8 +10862,14 @@ def _unified_workspace_tab(
                 wind_area_need = float(energy_model_state.get("wind_area_need_km2", 0.0) or 0.0)
                 wind_twh_need = float(energy_model_state.get("wind_twh", 0.0) or 0.0)
                 wind_factor = float(energy_model_state.get("wind_km2_per_twh", math.nan) or math.nan)
-                wind_allocation_frame = _apply_social_acceptance_priority_to_wind_allocation_frame(
+                wind_allocation_frame = _apply_landscape_priority_to_allocation_frame(
                     custom_wind_analysis_frame,
+                    region,
+                    "wind",
+                    analysis_h3_resolution,
+                )
+                wind_allocation_frame = _apply_social_acceptance_priority_to_wind_allocation_frame(
+                    wind_allocation_frame,
                     social_manifest,
                     social_acceptance_scenario,
                     analysis_h3_resolution,
@@ -10545,7 +10882,7 @@ def _unified_workspace_tab(
                     float(energy_model_state.get("auto_min_potential_share_pct", 65.0) or 65.0),
                 )
                 proposal_frame, proposal_stats = _expand_wind_area_outside_et(
-                    custom_wind_analysis_frame,
+                    wind_allocation_frame,
                     proposal_frame,
                     proposal_stats,
                     analysis_display_geometry_path,
@@ -10567,7 +10904,7 @@ def _unified_workspace_tab(
                 energy_model_state["proposal_stats"] = proposal_stats
                 if not proposal_frame.empty:
                     unified_notes.append(
-                        "Vindens scenarioyta räknar täckning med potentiell area per hex. Placeringen visas med små child-hex ovanpå potentiallagret."
+                        "Vindens scenarioyta använder en intern landskaps-/teknikranking inom etableringshex. Placeringen visas med små child-hex ovanpå potentiallagret."
                     )
                 elif wind_area_need > 0:
                     unified_notes.append("Energimodelleringen hittade inga vindceller som uppfyller minsta kärn-/potentialkrav.")
