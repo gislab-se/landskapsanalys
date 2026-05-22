@@ -5015,7 +5015,37 @@ def _pdf_landscape_manifest(landscape_manifest: dict[str, Any]) -> dict[str, Any
     manifest["landscape_geojson"] = pdf_path
     manifest["factor_scores"] = pdf_path
     manifest["analysis_id"] = f"{landscape_manifest.get('analysis_id', 'landscape')}_pdf"
+    if landscape_manifest.get("pdf_landscape_source_h3_resolution") is not None:
+        manifest["source_h3_resolution"] = int(landscape_manifest["pdf_landscape_source_h3_resolution"])
+        manifest["default_h3_resolution"] = int(landscape_manifest["pdf_landscape_source_h3_resolution"])
+    if landscape_manifest.get("pdf_landscape_available_h3_resolutions"):
+        manifest["available_h3_resolutions"] = list(landscape_manifest["pdf_landscape_available_h3_resolutions"])
+    if landscape_manifest.get("pdf_landscape_type_labels"):
+        manifest["landscape_type_labels"] = dict(landscape_manifest["pdf_landscape_type_labels"])
+    if landscape_manifest.get("pdf_landscape_type_colors"):
+        manifest["landscape_type_colors"] = dict(landscape_manifest["pdf_landscape_type_colors"])
+    manifest["use_region_display_geometries"] = bool(
+        landscape_manifest.get("pdf_landscape_use_region_display_geometries", True)
+    )
     return manifest
+
+
+@st.cache_data(show_spinner=False)
+def _unclipped_landscape_frame(
+    landscape_manifest: dict[str, Any],
+    resolution: int,
+) -> pd.DataFrame:
+    return landscape_frame_for_resolution(landscape_manifest, resolution)
+
+
+def _landscape_display_geometry_path_for_manifest(
+    region: dict[str, Any],
+    landscape_manifest: dict[str, Any],
+    resolution: int,
+) -> str | None:
+    if not bool(landscape_manifest.get("use_region_display_geometries", True)):
+        return None
+    return _h3_display_geometry_path(region, int(resolution))
 
 
 def _solar_legend_items(solar_rules: dict[str, Any]) -> list[dict[str, str]]:
@@ -11083,9 +11113,9 @@ def _unified_workspace_tab(
                         pdf_landscape_label,
                         lambda resolution: _landscape_type_layer(
                             pdf_landscape_label,
-                            _landscape_frame(region, pdf_manifest, int(resolution)),
+                            _unclipped_landscape_frame(pdf_manifest, int(resolution)),
                             pdf_manifest,
-                            _h3_display_geometry_path(region, int(resolution)),
+                            _landscape_display_geometry_path_for_manifest(region, pdf_manifest, int(resolution)),
                         ),
                     )
                 )
