@@ -1,0 +1,6 @@
+"include","source_layer","landscape_type_id","landscape_type_name_sv","type_part","needs_split","review_note"
+TRUE,"LT01_klippigt_kustlandskap","","","",FALSE,""
+TRUE,"LT02_sandigt_kustlandskap","","","",FALSE,""
+TRUE,"LT03_jordbruksdominerat_sprickdalslandskap","","","",FALSE,""
+TRUE,"LT04_skogsklatt_sprickdalslandskap","","","",FALSE,""
+TRUE,"LT05_slatt_och_jordbrukslandskap","","","",FALSE,""
