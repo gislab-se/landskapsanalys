@@ -1,0 +1,8 @@
+"category","examples","reason"
+"Acceptansdata","acceptance_low, acceptance_medium, acceptance_high","Exkluderas eftersom IVL själva ska samla in och analysera acceptans."
+"R10-export och R10-derived parentfält","bornholm_res10_hex_variables.csv, h3_parent_res9","Exkluderas eftersom leveransen nu ska vara R9 och ha färre rader."
+"Dubbla areaenheter","*_area_m2, *_area_km2 när motsvarande *_share finns","Andelar är lättare att jämföra mellan hexagoner; m2/km2 tas bara med om de är den enda relevanta enheten."
+"Full kontextmatris","mean_*_k10/k50/k250/k1000, std_*_k10/k50/k250/k1000","För många och för modellnära variabler. Endast ett litet k100-urval behålls."
+"Interna vikter och diagnostik","total_raw, total_base, weight_*","Bra för metodrevision men svårtolkat som externt forskningsunderlag."
+"Detaljerade geologi-subtyper","många jordart_* och prekvart_* delklasser","Mestadels sammanfattade genom faktorer och ett fåtal mer direkta kust-/sandvariabler."
+"Genererade potentialvariabler","solar potential area, high_potential_share","Hålls utanför för att skilja observerad GIS-kontext från senare potential- eller scenarioantaganden."

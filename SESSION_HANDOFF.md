@@ -1,112 +1,85 @@
-﻿# Session Handoff
-
-## How We Use This File
-- End of each session: update `What Was Done` and `Next Session: Start Here`.
-- Start of next session: read `Next Session: Start Here` first.
-- Keep this file short, operational, and current.
+# Session Handoff
 
 ## Last Updated
-- Date: 2026-03-13
-- Project: `landskapsanalys`
+- Date: 2026-05-28
+- Repo: `C:/tmp/landskapsanalys-v1-bornholm`
+- Current task: Bornholm IVL R9 export package for external acceptance-study context.
 
 ## What Was Done
-1. Built and verified the first active R9 `landskapsanalys` workflow.
-   - Legacy bridge kept as archived reference: `landskapsanalys_gc4_res9`
-   - Current active model: `landskapsanalys_9lager_res9`
-2. Added a new R9 analysis script:
-   - `script/landskapsanalys/01_build_bornholm_r9_gc4_bridge.R`
-   - `script/landskapsanalys/02_build_bornholm_r9_landskapsanalys_9lager_res9.R`
-3. Expanded the first serious R9 factor run from 4 to 9 input layers.
-   - Added: `fredskov`, `jordbruksmark`, `relief`, `skyddade vattendrag`
-   - Replaced total roads with two layers:
-     - `roads_medium`
-     - `roads_large`
-4. Built a versioned reporting structure.
-   - Active report source:
-     - `docs/geocontext/landskapsanalys.qmd`
-   - Archived versions:
-     - `docs/geocontext/archive/landskapsanalys_gc4_res9.qmd`
-     - `docs/geocontext/archive/landskapsanalys_9lager_res9.qmd`
-5. Improved the active report for interpretation and QA.
-   - Added a more pedagogical silhouette explanation.
-   - Made the factor-loading figure larger and easier to read.
-   - Added fullscreen/open-in-new-tab links for interactive maps.
-   - Added an interactive factor map with one switchable layer per factor.
-6. Preserved method/provenance notes.
-   - `docs/geocontext/GC4_RUNBOOK.md`
-   - `docs/geocontext/GC4_TO_R9_FACTOR_MIGRATION.md`
-   - `docs/geocontext/WHEN_TO_EXTRACT_GEOCONTEXT.md`
-   - `docs/geocontext/GEOCONTEXT_REPO_BLUEPRINT.md`
-   - `docs/geocontext/LANDSKAPSANALYS_METHOD_REPORT.md`
+1. Built a broad first-draft R10 export script:
+   - `scripts/export_bornholm_res10_hex_variables.R`
+   - Local generated output exists under `docs/geocontext/exports/bornholm_res10_hex_variables/`
+   - The R10 CSV is very large, about 391 MB, and should be treated as a local/generated draft.
 
-## Current Active Model
-- `analysis_id`: `landskapsanalys_9lager_res9`
-- Hex grid: `R9`
-- Input layers: `9`
-- Context variables: `90`
-- Factors: `5`
-- Selected cluster solution: `K = 8`
+2. Built the reduced IVL R9 export:
+   - `scripts/export_bornholm_ivl_r9_variables.R`
+   - Output folder: `docs/geocontext/exports/bornholm_ivl_r9_variables/`
+   - Main CSV: `bornholm_ivl_r9_variables.csv`
+   - Codebook: `bornholm_ivl_r9_variables_codebook.csv`
+   - Excluded-variable notes: `bornholm_ivl_r9_excluded_variables.csv`
+   - Selection notes: `bornholm_ivl_r9_variable_selection_notes.md`
+   - Summary: `bornholm_ivl_r9_variables_summary.csv`
 
-## Current Input Layers
-1. `Permanent population`
-2. `Road length (medium)`
-3. `Road length (large)`
-4. `Ecological connectivity`
-5. `Cultural and historical conservation values`
-6. `Fredskov`
-7. `Agricultural land (Markblokke)`
-8. `Relief`
-9. `Protected watercourses`
+3. Built a companion mapview script for Magnus:
+   - `scripts/render_bornholm_ivl_r9_mapviews.R`
+   - It joins the IVL CSV to the active R9 hex GPKG and renders six thematic HTML maps.
+   - Local generated HTML maps exist under:
+     - `docs/geocontext/exports/bornholm_ivl_r9_variables/mapview/index.html`
 
-## Key Outputs
-- Active report:
-  - `docs/geocontext/landskapsanalys.qmd`
-  - `docs/geocontext/landskapsanalys.html`
-- Standalone interactive maps:
-  - `docs/geocontext/maps/landskapsanalys_9lager_res9_cluster_map.html`
-  - `docs/geocontext/maps/landskapsanalys_9lager_res9_factor_mapview.html`
-- Versioned data output:
-  - `data/interim/landskapsanalys_versions/landskapsanalys_9lager_res9/`
+## IVL Export Snapshot
+- Analysis source: `landskapsanalys_v3_2_contourterrain68_res9`
+- Rows: 7,286 active H3 R9 hexagons
+- Columns: 57
+- No acceptance columns included.
+- Area m2/km2 columns were skipped where a comparable share variable exists.
+- Only 9 selected `context_k100_mean_*` / `context_k100_std_*` variables were retained.
+- `mean` = average surrounding context in the model k100 neighborhood.
+- `std` = surrounding heterogeneity/variation in the same neighborhood.
+- `k100` is a model neighborhood scale, not 100 meters.
 
-## Interpretation Snapshot
-- `F1`: forest/ecological structure
-- `F2`: agricultural land + relief variation
-- `F3`: permanent population
-- `F4`: medium vs large roads
-- `F5`: cultural-historical conservation
+## Rebuild Commands
+From repo root:
 
-## Important Method Notes
-1. Equal standard deviations across factor-score columns are expected here.
-   - Inputs are standardized before factor analysis.
-   - Factor scores are computed on a normalized scale.
-   - Use `Proportion Var` / `SS loadings`, not score SD, to judge factor importance.
-2. Silhouette is a model-selection aid, not a truth-test.
-   - It compares within-cluster similarity to the nearest alternative cluster.
-   - It uses distances in factor space, not map distance in meters.
-3. The report is now good enough for interpretation work, not just debugging.
+```powershell
+Rscript scripts\export_bornholm_ivl_r9_variables.R
+Rscript scripts\render_bornholm_ivl_r9_mapviews.R
+```
 
-## Next Session: Start Here
-1. Open repo root:
-   - `C:/gislab/landskapsanalys`
-2. Read this quick-start note first:
-   - `docs/geocontext/NEXT_SESSION_QUICKSTART.md`
-3. Then open the active report source and the main build script:
-   - `docs/geocontext/landskapsanalys.qmd`
-   - `script/landskapsanalys/02_build_bornholm_r9_landskapsanalys_9lager_res9.R`
-4. If outputs need to be refreshed, rerun in this order:
-   - `Rscript script/landskapsanalys/02_build_bornholm_r9_landskapsanalys_9lager_res9.R`
-   - `quarto render docs/geocontext/landskapsanalys.qmd`
-5. Use the current 9-layer run as the baseline for all next experiments.
-6. Next analytical priority:
-   - run `with / without` `landscapes_worthy_of_preservation_pdk_bevaringsvaerdigelandskaber_bol_32`
-7. After that, start the planned model split:
-   - one `naturgeografisk` run
-   - one `kulturgeografisk` run
-8. Keep these duplicate-layer decisions visible in future factor selection:
-   - keep step 27 cultural-historical conservation
-   - exclude step 15 WFS duplicate from factor input
+Portable mapview usage, if sending files outside the repo:
 
-## Notes / Risks
-- The repo still contains many local generated artifacts and unrelated modified files. Keep future commits focused.
-- `docs/geocontext/maps/` contains useful generated HTML outputs, but they are large.
-- The semi-manual R9 split work remains important, but the immediate priority is now the active `landskapsanalys` model track.
+```powershell
+Rscript render_bornholm_ivl_r9_mapviews.R bornholm_ivl_r9_variables.csv landskapsanalys_v3_2_contourterrain68_res9_hex.gpkg mapview
+```
+
+## Important Local Paths
+- IVL CSV:
+  - `C:/tmp/landskapsanalys-v1-bornholm/docs/geocontext/exports/bornholm_ivl_r9_variables/bornholm_ivl_r9_variables.csv`
+- IVL codebook:
+  - `C:/tmp/landskapsanalys-v1-bornholm/docs/geocontext/exports/bornholm_ivl_r9_variables/bornholm_ivl_r9_variables_codebook.csv`
+- Mapview index:
+  - `C:/tmp/landskapsanalys-v1-bornholm/docs/geocontext/exports/bornholm_ivl_r9_variables/mapview/index.html`
+- R9 geometry used by mapview:
+  - `docs/geocontext/model_comparisons/data/landskapsanalys_v3_2_contourterrain68_res9/landskapsanalys_v3_2_contourterrain68_res9_hex.gpkg`
+
+## Commit Scope Guidance
+- Commit scripts, the small IVL CSV package, and this handoff.
+- Avoid committing local heavy generated HTML mapview outputs unless explicitly needed.
+- Avoid committing the broad R10 CSV output unless explicitly needed; it is about 391 MB.
+- Pre-existing untracked files unrelated to this task were left alone:
+  - `docs/geocontext/acceptance_framework/data/prototype_runtime/`
+  - `docs/geocontext/coastal_diagnostics/`
+  - `docs/geocontext/potential_framework/data/bornholm_landmask/bornholm_h3_land_share.csv`
+  - `scripts/build_bornholm_h3_land_share.R`
+  - `scripts/build_coastal_diagnostic_map.R`
+
+## Verification Already Run
+- `Rscript scripts\export_bornholm_ivl_r9_variables.R`
+  - wrote 7,286 rows and 57 columns.
+- `Rscript scripts\render_bornholm_ivl_r9_mapviews.R`
+  - wrote six thematic mapview HTML files and an index.
+- CSV validation:
+  - unique `hex_id`: 7,286
+  - duplicate `hex_id`: 0
+  - `h3_resolution`: 9
+  - acceptance columns: 0
+  - missing coordinates: 0
