@@ -572,7 +572,7 @@
             <a class="button primary" href="https://landskapsanalys-potential-v2-test.streamlit.app/" target="_blank" rel="noreferrer">Öppna V2 Tröndelag</a>
             <a class="button secondary" href="#regionala-versioner">Se versioner</a>
             <a class="button secondary" href="#matematiken">Se modellen</a>
-            <a class="button secondary" href="#rapportunderlag">Läs underlag</a>
+            <a class="button secondary" href="#rapportunderlag">Se metod</a>
           </div>
         </div>
 
@@ -711,80 +711,51 @@
       <section id="rapportunderlag" class="research-section" aria-labelledby="rapportunderlag-title">
         <div class="research-layout">
           <article class="research-copy">
-            <p class="research-kicker">Fördjupning</p>
-            <h2 id="rapportunderlag-title">Metodunderlag för appen</h2>
+            <p class="research-kicker">Metod</p>
+            <h2 id="rapportunderlag-title">Metod i korthet</h2>
             <p class="opening">
-              Appen kan beskrivas som ett geografiskt beslutsstöd för tidig dialog om sol- och vindetablering.
-              Den kombinerar energiscenarier, ytbehov, landskapskaraktär och etableringsrestriktioner i ett gemensamt kartgränssnitt.
+              Det här avsnittet sammanfattar stegen från energiscenario till karta. Den mer utförliga
+              modellförklaringen finns i avsnittet ovan.
             </p>
 
-            <h3>Matematisk modell</h3>
+            <h3>Från scenario till karta</h3>
             <p>
-              Matematiskt är appen en kedja av översättningar: landskapet delas in i analysceller, varje cell får
-              egenskaper och begränsningar, energimål räknas om till ytbehov och möjliga ytor summeras och rangordnas.
-              Resultatet bör därför läsas som en villkorad relation mellan energi, mark, landskap och regler, inte som
-              ett färdigt planbeslut. <a href="#matematiken">Läs avsnittet om modellens logik</a>.
+              Ett energiscenario räknas först om till ytbehov. Landskapet delas sedan in i analysceller,
+              där varje cell får egenskaper som landskapstyp, begränsningar, avstånd, möjlig etableringsyta
+              och poängvärde. Filter och restriktioner tar bort olämpliga ytor. De ytor som återstår kan
+              rangordnas och jämföras med scenariots ytbehov.
             </p>
 
-            <h3>Etableringslogik</h3>
+            <h3>Så läses resultatet</h3>
             <p>
-              Scenariofördelningen kan förstås som att hälla vatten över ett modellerat etableringslandskap.
-              Hårda restriktioner fungerar som barriärer, medan landskap, teknik och markanvändning formar en
-              prioriteringsyta där låg friktion fylls först. I GIS-termer liknar det ett inverterat höjd- eller
-              kostnadslandskap: de mest etablerbara ytorna ligger lägst i modellen och fylls före de mer konfliktfyllda.
-              Social acceptans kan läggas som ett separat justerande lager ovanpå denna grundyta, utan att ersätta
-              den landskaps- och teknikbaserade etableringslogiken.
+              Resultatet visar relationen mellan scenario och modellerad etableringsyta: ryms valt ytbehov
+              inom de återstående ytorna, finns yta kvar, eller uppstår ett behov utanför den beräknade
+              potentialen? Brist ska läsas som en signal att scenario, energimix, filter eller antaganden
+              behöver granskas, inte som ett färdigt planbesked.
             </p>
 
-            <h3>Syfte</h3>
+            <h3>Underlag och osäkerhet</h3>
             <p>
-              Syftet är att pröva hur framtida markanspråk för sol och vind kan översättas till rumsliga etableringsytor.
-              Modellen visar inte ett färdigt planeringsbesked, utan ett transparent underlag för att jämföra scenarier,
-              filter och regionala förutsättningar.
+              Resultaten beror på datakvalitet, upplösning och regionala antaganden. Vissa underlag kan vara
+              preliminära eller förenklade, till exempel social acceptans, småskalig sol eller scenariodata.
+              Därför ska osäkerheter redovisas öppet som en del av resultatet.
             </p>
 
-            <h3>Analytisk ram</h3>
+            <h3>Vidare underlag</h3>
             <p>
-              Arbetet utgår från landskapsanalys och geokontext: landskapet delas in i jämförbara analysceller,
-              där tekniska, ekologiska, sociala och landskapsmässiga villkor kan vägas samman. Bornholm fungerar som
-              metodreferens, medan Tröndelag V2 behandlas som en egen regional version med lokala data och eget koordinatsystem.
-            </p>
-
-            <h3>Data och beräkning</h3>
-            <p>
-              Appen använder regionala konfigurationsfiler för landskap, potentialregler, scenarier och kartgeometrier.
-              Energisystemets behov räknas om till yta, och denna yta jämförs med de etableringsytor som återstår
-              efter aktiva sol-, vind- och landskapsfilter.
-            </p>
-
-            <h3>Tolkning</h3>
-            <p>
-              Det centrala resultatet är relationen mellan scenario och landskap: ryms valt ytbehov inom den beräknade
-              potentialen, finns outnyttjad potential kvar, eller uppstår ytbehov utanför potentialen? Där appen visar
-              brist bör det läsas som en signal att scenario, energimix eller filter behöver granskas.
-            </p>
-
-            <h3>Begränsningar</h3>
-            <p>
-              Resultaten är beroende av datakvalitet, upplösning och regionala antaganden. Social acceptans, småskalig sol
-              och vissa scenariodata kan i nuläget vara preliminära eller syntetiska. Därför ska osäkerheter redovisas
-              öppet i stället för att döljas bakom en alltför definitiv kartbild.
-            </p>
-
-            <h3>Vidare utveckling</h3>
-            <p>
-              Nästa steg är att låta V3 Skaraborg/Vara ärva den robusta strukturen från Bornholm och Tröndelag,
-              samtidigt som framtida V4 får avgöras av projektets behov: en gemensam app för flera regioner eller en större landningssida.
+              Metoden ska kunna återanvändas i flera regioner, men varje regional version behöver lokala data,
+              lokala avgränsningar och eget koordinatsystem. För mer detaljerad bakgrund finns det ursprungliga
+              rapportunderlaget.
             </p>
           </article>
 
-          <aside class="research-aside" aria-label="Rapportunderlag i korthet">
-            <h3>Rapportunderlag i korthet</h3>
+          <aside class="research-aside" aria-label="Resultat i fyra steg">
+            <h3>Resultat i fyra steg</h3>
             <ol>
-              <li>Översätt energiscenarier till ytbehov.</li>
-              <li>Jämför ytbehov med landskapets möjliga etableringsytor.</li>
-              <li>Visa vad som ryms, vad som återstår och vad som hamnar utanför potentialen.</li>
-              <li>Redovisa osäkerheter som del av resultatet.</li>
+              <li>Börja med energiscenario och ytbehov.</li>
+              <li>Se vilka ytor som återstår efter filter och restriktioner.</li>
+              <li>Jämför ytbehov med möjlig etableringsyta.</li>
+              <li>Läs brist och överskott som modellresultat, inte planbesked.</li>
             </ol>
             <a class="source-link" href="https://gislab-se.github.io/landskapsanalys/sol-vindpotential/">Ursprungligt rapportunderlag</a>
           </aside>
