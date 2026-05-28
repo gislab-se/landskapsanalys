@@ -158,32 +158,17 @@
         pointer-events: none;
       }
 
-      .hero-facts {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 12px;
+      .hero-status {
         max-width: 780px;
-      }
-
-      .fact {
-        min-height: 82px;
-        padding: 14px 15px;
-        border: 1px solid rgba(255, 253, 248, 0.22);
-        border-radius: 8px;
-        background: rgba(255, 253, 248, 0.1);
-        backdrop-filter: blur(8px);
-      }
-
-      .fact strong {
-        display: block;
-        margin-bottom: 4px;
-        color: #fffdf8;
-      }
-
-      .fact span {
+        margin: 0;
+        padding-top: 2px;
         color: rgba(255, 253, 248, 0.74);
-        font-size: 0.92rem;
-        line-height: 1.42;
+        font-size: 0.95rem;
+        line-height: 1.58;
+      }
+
+      .hero-status strong {
+        color: #fffdf8;
       }
 
       main {
@@ -540,12 +525,10 @@
           margin-top: 8px;
         }
 
-        .hero-facts,
         .cards {
           grid-template-columns: 1fr;
         }
 
-        .fact,
         .card {
           min-height: auto;
         }
@@ -583,30 +566,19 @@
           <h1>SpeedLocal landskapspotential</h1>
           <p class="lead">
             En samlad ingång till regionala potentialappar, metodspår och kommande versioner.
-            V2 är numera en ren Tröndelag-version, V3 planeras för Skaraborg/Vara och multiregion hålls som ett senare vägval.
+            V2 är numera en ren Tröndelag-version, V3 planeras för Skaraborg/Vara och en gemensam app för flera regioner hålls som ett senare vägval.
           </p>
           <div class="hero-actions" aria-label="Snabblänkar">
             <a class="button primary" href="https://landskapsanalys-potential-v2-test.streamlit.app/" target="_blank" rel="noreferrer">Öppna V2 Tröndelag</a>
             <a class="button secondary" href="#regionala-versioner">Se versioner</a>
-            <a class="button secondary" href="#matematiken">Läs matematiken</a>
+            <a class="button secondary" href="#matematiken">Se modellen</a>
             <a class="button secondary" href="#rapportunderlag">Läs underlag</a>
           </div>
         </div>
 
-        <div class="hero-facts" aria-label="Versionsstatus">
-          <div class="fact">
-            <strong>V1 Bornholm</strong>
-            <span>Stabil första regional version.</span>
-          </div>
-          <div class="fact">
-            <strong>V2 Tröndelag</strong>
-            <span>Ren regional app, inte multiregion.</span>
-          </div>
-          <div class="fact">
-            <strong>V3 Skaraborg/Vara</strong>
-            <span>Nästa planerade regionala spår.</span>
-          </div>
-        </div>
+        <p class="hero-status" aria-label="Versionsstatus">
+          <strong>Status:</strong> V1 Bornholm är stabil, V2 Tröndelag är aktiv och V3 Skaraborg/Vara är planerad.
+        </p>
       </div>
     </header>
 
@@ -660,7 +632,7 @@
             <h3>Skaraborg/Vara</h3>
             <p>
               Nästa regionala version. Kortet finns här för att visa riktningen, men appen ska inte presenteras
-              som färdig innan data, manifest och regional logik är på plats.
+              som färdig innan data, metodval och regional logik är på plats.
             </p>
             <div class="button-row">
               <a class="button disabled" href="#" aria-disabled="true">Kommer senare</a>
@@ -688,16 +660,16 @@
       <section id="matematiken" class="math-section" aria-labelledby="matematiken-title">
         <div class="math-layout">
           <article class="math-copy">
-            <p class="math-kicker">Matematisk läsning</p>
-            <h2 id="matematiken-title">Vilken fråga svarar appen på?</h2>
+            <p class="math-kicker">Modell</p>
+            <h2 id="matematiken-title">Vad beräknar appen?</h2>
             <p class="opening">
-              Appen bör inte läsas som en maskin som pekar ut den optimala platsen för sol och vind. Den svarar på en mer villkorad fråga: givet ett landskap, ett rutnät, ett antal faktorer, restriktionslager, buffertar och energiscenarier, vilka delytor framstår som möjliga, hur mycket yta finns kvar och hur kan ett scenario fördelas över de bäst rankade kandidaterna?
+              Appen bör inte läsas som en maskin som pekar ut den optimala platsen för sol och vind. Den svarar på en mer villkorad fråga: givet ett landskap, ett rutnät, ett antal faktorer, restriktionslager, buffertar och energiscenarier, vilka delytor framstår som möjliga, hur mycket yta finns kvar och hur kan ett scenario fördelas över de högst rangordnade kandidaterna enligt modellens poängvärde?
             </p>
             <p>
-              Matematiskt börjar modellen med en region, &Omega;, som en yta i planet. Bornholm och Tröndelag är inte samma typ av rumsligt objekt i praktiken: de har olika skala, olika datakällor och olika projektioner. För att de ändå ska kunna beräknas i samma app delas ytan upp i en ändlig mängd H3-hexagoner. Det kontinuerliga landskapet blir då en diskret mängd celler, H = {h<sub>1</sub>, h<sub>2</sub>, ..., h<sub>n</sub>}.
+              Matematiskt börjar modellen med en region, &Omega;, som efter projektion behandlas som en avgränsad yta i ett tvådimensionellt koordinatplan, &#x211D;<sup>2</sup>. Det betyder inte att landskapet i sig är platt, utan att area, avstånd och filter beräknas i ett plant kartkoordinatsystem. För att olika regioner ändå ska kunna beräknas med samma logik delas ytan upp med H3, ett rutnätssystem där landskapet representeras av hexagonala analysceller. H3 kan visas i olika upplösningar, ofta kallade R6, R7 eller R8. Det R:et ska inte blandas ihop med &#x211D; i &#x211D;<sup>2</sup>, där &#x211D; betyder de reella talen. Det kontinuerliga landskapet blir då en diskret mängd celler, H = {h<sub>1</sub>, h<sub>2</sub>, ..., h<sub>n</sub>}.
             </p>
             <p>
-              Varje cell får ett antal egenskaper: landskapsfaktorer, klustertillhörighet, andel buffert, avstånd till källager, potentiell yta och eventuell social acceptans. Dessa egenskaper omvandlas till funktioner som går från hexagoner till tal eller klasser: solpotential, vindpotential, etableringsbar area, landskapstyp och scenarioyta. Det appen visar är alltså inte landskapet självt, utan resultatet av en kedja av transformationer från geometri till beräkningsbara storheter.
+              Varje cell får ett antal egenskaper: landskapsfaktorer, klustertillhörighet, andel buffert, avstånd till underlagslager, potentiell yta och eventuell social acceptans. Dessa egenskaper omvandlas till funktioner som går från analysceller till tal eller klasser: solpotential, vindpotential, etableringsbar area, landskapstyp och scenarioyta. Det appen visar är alltså inte landskapet självt, utan resultatet av en kedja av transformationer från geometri till beräkningsbara storheter.
             </p>
             <p>
               Potential är därför inte en naturlig egenskap som finns ute i terrängen. Den är en modellvariabel. För sol kan den tolkas som landskapets kapacitet minus känslighet för kust, relief, skyddad natur och bebyggelse, ibland justerad av tekniska villkor som närhet till nät. För vind kombineras landskapsbedömning med avstånd, hårda exkluderingar och sammanhängande kärnzoner. I båda fallen blandas mätbara geometrier med normativa val: vikter, trösklar och tolkningar av vad som ska räknas som robust eller känsligt landskap.
@@ -706,10 +678,10 @@
               Scenarierna lägger till en andra matematisk fråga. Energisystemet anger behov i TWh, medan kartan behöver area. Därför översätts energi till ytbehov genom faktorer som km² per TWh. Appens centrala test blir sedan enkelt men kraftfullt: är summan av möjlig yta större än eller lika med scenariots ytbehov? Om svaret är nej uppstår ett behov utanför den beräknade potentialen. Om svaret är ja kan appen visa hur scenariot ryms inom de modellerade etableringsytorna.
             </p>
             <p>
-              När appen placerar scenariohexagoner gör den inte en global optimering. Den löser inte ett problem där alla möjliga kombinationer av platser jämförs mot ett enda optimalt mål. I stället använder den en greedy-logik: kandidater rangordnas, de bästa väljs först och ytbehovet fylls tills scenariot är täckt eller den möjliga ytan tar slut. Det är begripligt, snabbt och stabilt, men det är inte ett bevis för att en viss placering är bäst i absolut mening.
+              När appen placerar scenariohexagoner gör den inte en global optimering. Den löser inte ett problem där alla möjliga kombinationer av platser jämförs mot ett enda optimalt mål. I stället använder den en stegvis urvalslogik: kandidater rangordnas efter modellens poängvärde, de högst rangordnade väljs först och ytbehovet fylls tills scenariot är täckt eller den möjliga ytan tar slut. Det är begripligt, snabbt och stabilt, men det är inte ett bevis för att en viss placering är bäst i absolut mening.
             </p>
             <p>
-              Den djupare frågan är därför inte bara var det finns potential, utan hur landskapets kvaliteter översätts till tal. Appen gör politik, ekologi, teknik och rumslig form jämförbara genom samma beräkningsspråk: geometri blir hexagoner, hexagoner blir faktorer, faktorer blir score, score blir klasser, klasser blir area och area jämförs med scenario. Det är en användbar matematisk modell, men alla svar är villkorade av datakvalitet, upplösning och de antaganden som ligger i modellen.
+              Den djupare frågan är därför inte bara var det finns potential, utan hur landskapets kvaliteter översätts till tal. Appen gör politik, ekologi, teknik och rumslig form jämförbara genom samma beräkningsspråk: geometri blir analysceller, analysceller blir faktorer, faktorer blir poängvärden, poängvärden blir klasser, klasser blir area och area jämförs med scenario. Det är en användbar matematisk modell, men alla svar är villkorade av datakvalitet, upplösning och de antaganden som ligger i modellen.
             </p>
             <p>
               Rätt läst säger appen alltså inte: här ska vi bygga. Den säger: om vi accepterar dessa data och dessa regler, så ser den modellerade relationen mellan energi, yta och landskap ut så här.
@@ -719,12 +691,16 @@
           <aside class="math-panel" aria-label="Matematisk modell i korthet">
             <h3>Modellen i korthet</h3>
             <div class="math-formula">
-              &Omega; &subset; R<sup>2</sup><br>
+              &Omega; &subset; &#x211D;<sup>2</sup><br>
               H = {h<sub>1</sub>, ..., h<sub>n</sub>}<br>
-              score: H &rarr; [0,100]<br>
-              area_need = TWh * km<sup>2</sup>/TWh<br>
-              &sum; area(h<sub>i</sub>) &ge; area_need?
+              C &subseteq; H<br>
+              poäng: C &rarr; [0,100]<br>
+              ytbehov = energimål &times; km<sup>2</sup>/TWh<br>
+              &sum;<sub>h<sub>i</sub> &isin; C</sub> area(h<sub>i</sub>) &ge; ytbehov?
             </div>
+            <p>
+              &Omega; är regionen i ett plant kartkoordinatsystem. &#x211D; betyder de reella talen, medan R6, R7 och R8 är H3-upplösningar. C är de celler som återstår efter att filter och restriktioner har tillämpats.
+            </p>
             <p>
               Det viktigaste resultatet är inte en enskild perfekt plats, utan relationen mellan modellerad potential, ytbehov, filter och osäkerhet.
             </p>
@@ -747,7 +723,7 @@
               Matematiskt är appen en kedja av översättningar: landskapet delas in i analysceller, varje cell får
               egenskaper och begränsningar, energimål räknas om till ytbehov och möjliga ytor summeras och rangordnas.
               Resultatet bör därför läsas som en villkorad relation mellan energi, mark, landskap och regler, inte som
-              ett färdigt planbeslut. <a href="#matematiken">Läs essän om matematiken bakom appens fråga</a>.
+              ett färdigt planbeslut. <a href="#matematiken">Läs avsnittet om modellens logik</a>.
             </p>
 
             <h3>Etableringslogik</h3>
@@ -771,12 +747,12 @@
             <p>
               Arbetet utgår från landskapsanalys och geokontext: landskapet delas in i jämförbara analysceller,
               där tekniska, ekologiska, sociala och landskapsmässiga villkor kan vägas samman. Bornholm fungerar som
-              metodreferens, medan Tröndelag V2 behandlas som en egen regional version med lokala data och eget CRS.
+              metodreferens, medan Tröndelag V2 behandlas som en egen regional version med lokala data och eget koordinatsystem.
             </p>
 
             <h3>Data och beräkning</h3>
             <p>
-              Appen använder regionala manifest för landskap, potentialregler, scenarier och kartgeometrier.
+              Appen använder regionala konfigurationsfiler för landskap, potentialregler, scenarier och kartgeometrier.
               Energisystemets behov räknas om till yta, och denna yta jämförs med de etableringsytor som återstår
               efter aktiva sol-, vind- och landskapsfilter.
             </p>
@@ -798,7 +774,7 @@
             <h3>Vidare utveckling</h3>
             <p>
               Nästa steg är att låta V3 Skaraborg/Vara ärva den robusta strukturen från Bornholm och Tröndelag,
-              samtidigt som framtida V4 får avgöras av projektets behov: multiregion eller en större landningssida.
+              samtidigt som framtida V4 får avgöras av projektets behov: en gemensam app för flera regioner eller en större landningssida.
             </p>
           </article>
 
@@ -819,8 +795,8 @@
         <div>
           <h2 id="status-title">Versionslogik just nu</h2>
           <p>
-            Den här sidan är projektets nya nav tills vidare. Den lovar inte multiregion innan det faktiskt finns,
-            men lämnar plats för att en framtida V4 antingen blir multiregion eller en större publik projektsida.
+            Den här sidan är projektets nya nav tills vidare. Den lovar inte en gemensam app för flera regioner innan det faktiskt finns,
+            men lämnar plats för att en framtida V4 antingen blir en sådan app eller en större publik projektsida.
           </p>
         </div>
         <div class="note-list" aria-label="Kort status">
