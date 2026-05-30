@@ -163,6 +163,8 @@ UI_ONLY_RERUN_KEY = "potential_ui_only_rerun"
 UI_ONLY_RERUN_REASON_KEY = "potential_ui_only_rerun_reason"
 WORKSPACE_RENDER_CACHE_KEY = "potential_workspace_render_cache_v2"
 WORKSPACE_CALCULATION_VERSION = "solar_filter_establishment_v2"
+TUTORIAL_FORCE_OPEN_KEY = "potential_tutorial_force_open"
+TUTORIAL_STORAGE_KEY = "potential_tutorial_trondelag_v1_dismissed"
 # Kept only so shared registry helpers can resolve the Trondelag layer registry.
 REGION_SELECT_KEY = "potential_selected_region_id"
 DEFAULT_REGION_ID = "trondelag"
@@ -409,6 +411,13 @@ APP_TRANSLATIONS: dict[str, dict[str, str]] = {
         "Svenska": "Svensk",
         "English": "Engelsk",
         "Språk": "Sprog/Språk",
+        "Visa guide": "Vis guide",
+        "Föregående": "Forrige",
+        "Nästa": "Næste",
+        "Hoppa över": "Spring over",
+        "Stäng": "Luk",
+        "Klar": "Færdig",
+        "Öppna inte automatiskt igen": "Åbn ikke automatisk igen",
         "Region": "Region",
         "Scenarier": "Scenarier",
         "Scenario": "Scenario",
@@ -483,6 +492,13 @@ APP_TRANSLATIONS: dict[str, dict[str, str]] = {
         "Svenska": "Swedish",
         "English": "English",
         "Språk": "Language",
+        "Visa guide": "Show guide",
+        "Föregående": "Previous",
+        "Nästa": "Next",
+        "Hoppa över": "Skip",
+        "Stäng": "Close",
+        "Klar": "Done",
+        "Öppna inte automatiskt igen": "Do not open automatically again",
         "Region": "Region",
         "Scenarier": "Scenarios",
         "Scenario": "Scenario",
@@ -585,6 +601,535 @@ def _render_language_switcher(panel: Any | None = None) -> None:
             st.session_state[APP_LANGUAGE_KEY] = code
             _request_ui_only_rerun("språk")
             st.rerun()
+
+
+def _trondelag_tutorial_available(region: dict[str, Any]) -> bool:
+    return str(region.get("region_id", "") or "").lower() == "trondelag"
+
+
+def _render_tutorial_launcher(region: dict[str, Any], panel: Any | None = None) -> bool:
+    if not _trondelag_tutorial_available(region):
+        return False
+
+    target = panel or st.sidebar
+    target.divider()
+    clicked = target.button(
+        _t("Visa guide"),
+        key="potential_tutorial_open_button",
+        help="Öppna en kort genomgång av Trøndelag-vyn.",
+        width="stretch",
+    )
+    if clicked:
+        st.session_state[TUTORIAL_FORCE_OPEN_KEY] = True
+    return bool(st.session_state.pop(TUTORIAL_FORCE_OPEN_KEY, False))
+
+
+def _trondelag_tutorial_steps(region: dict[str, Any]) -> list[dict[str, str]]:
+    region_label = str(region.get("display_name", "Trondelag") or "Trondelag")
+    return [
+        {
+            "selector": ".workspace-header",
+            "title": f"{region_label}: snabb orientering",
+            "body": (
+                "Överst ser du region, scenario, H3-upplösning och CRS. Trøndelag är fast region i den här vyn, "
+                "så kontrollerna nedanför påverkar samma regionala arbetsyta."
+            ),
+        },
+        {
+            "selector": "section[data-testid=\"stSidebar\"]",
+            "title": "Sidopanelen styr kartan",
+            "body": (
+                "Här slår du på landskap, vind, sol, energimodellering och social acceptans. "
+                "Expanderarna håller avancerade val undan tills du behöver dem."
+            ),
+        },
+        {
+            "selector": "section[data-testid=\"stSidebar\"]",
+            "title": "Geografier och H3",
+            "body": (
+                "I Geografier väljer du landskapslager och H3-visning. Trøndelag exponerar R7, R6 och R5 i appen; "
+                "R9 används inte i den interaktiva vyn."
+            ),
+        },
+        {
+            "selector": "section[data-testid=\"stSidebar\"]",
+            "title": "Vind, sol och filter",
+            "body": (
+                "Vind- och solpanelerna bygger potentiell etableringsyta från aktiva lager och buffertar. "
+                "Befolkning i Trøndelag visas som en 250 m grid-/centroidproxy, inte som individuella befolkningspunkter."
+            ),
+        },
+        {
+            "anchor": "map",
+            "target": "nextIframe",
+            "title": "Kartan visar resultatet",
+            "body": (
+                "Kartan kombinerar landskap, potentiell etableringsyta och scenariofördelning. "
+                "Lagerkontrollen i kartan kan tända och släcka enskilda lager utan att ändra beräkningen."
+            ),
+        },
+        {
+            "selector": "div[data-testid=\"column\"]:has(#right-panel-content-anchor)",
+            "anchor": "right-panel",
+            "title": "Högerpanelen förklarar läget",
+            "body": (
+                "Högerpanelen sammanfattar om vald mix ryms inom potentialen, vilka lager som visas och vilka "
+                "antaganden som ligger bakom den senaste körningen."
+            ),
+        },
+        {
+            "selector": "section[data-testid=\"stSidebar\"]",
+            "title": "Öppna guiden igen",
+            "body": (
+                "Du kan starta den här guiden manuellt med knappen Visa guide. Kryssa i rutan här om den inte ska "
+                "öppnas automatiskt vid nästa besök."
+            ),
+        },
+    ]
+
+
+def _render_tutorial_component(region: dict[str, Any], force_open: bool = False) -> None:
+    if not _trondelag_tutorial_available(region):
+        return
+    if components is None:
+        if force_open:
+            st.warning("Guiden kräver Streamlit components och kan inte visas i den här miljön.")
+        return
+
+    payload = json.dumps(
+        {
+            "forceOpen": bool(force_open),
+            "storageKey": TUTORIAL_STORAGE_KEY,
+            "steps": _trondelag_tutorial_steps(region),
+            "labels": {
+                "previous": _t("Föregående"),
+                "next": _t("Nästa"),
+                "skip": _t("Hoppa över"),
+                "close": _t("Stäng"),
+                "done": _t("Klar"),
+                "doNotAutoOpen": _t("Öppna inte automatiskt igen"),
+                "step": "Steg" if _language() != "en" else "Step",
+                "of": "av" if _language() != "en" else "of",
+            },
+        },
+        ensure_ascii=False,
+    ).replace("</", "<\\/")
+
+    component_html = """
+<div id="potential-tutorial-component-root" aria-hidden="true"></div>
+<script>
+(() => {
+  const payload = __PAYLOAD__;
+  let parentWindow;
+  let parentDocument;
+  try {
+    parentWindow = window.parent;
+    parentDocument = parentWindow.document;
+  } catch (error) {
+    return;
+  }
+  if (!parentWindow || !parentDocument || !Array.isArray(payload.steps) || payload.steps.length === 0) {
+    return;
+  }
+
+  const storage = (() => {
+    try {
+      return parentWindow.localStorage;
+    } catch (error) {
+      try {
+        return window.localStorage;
+      } catch (innerError) {
+        return null;
+      }
+    }
+  })();
+
+  const shouldAutoOpen = !storage || storage.getItem(payload.storageKey) !== "1";
+  if (!payload.forceOpen && !shouldAutoOpen) {
+    return;
+  }
+
+  if (typeof parentWindow.__potentialTutorialCleanup === "function") {
+    parentWindow.__potentialTutorialCleanup();
+  }
+
+  const styleId = "potential-tutorial-style";
+  if (!parentDocument.getElementById(styleId)) {
+    const style = parentDocument.createElement("style");
+    style.id = styleId;
+    style.textContent = `
+      #potential-tutorial-root {
+        position: fixed;
+        inset: 0;
+        z-index: 2147483000;
+        pointer-events: none;
+        font-family: "Source Sans Pro", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      #potential-tutorial-root .pt-dim {
+        position: fixed;
+        background: rgba(17, 24, 39, 0.58);
+        pointer-events: auto;
+        transition: top 140ms ease, left 140ms ease, width 140ms ease, height 140ms ease;
+      }
+      #potential-tutorial-root .pt-highlight {
+        position: fixed;
+        border: 2px solid #f8fafc;
+        box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.82), 0 14px 34px rgba(15, 23, 42, 0.28);
+        border-radius: 8px;
+        pointer-events: none;
+        transition: top 140ms ease, left 140ms ease, width 140ms ease, height 140ms ease;
+      }
+      #potential-tutorial-root .pt-popover {
+        position: fixed;
+        width: min(360px, calc(100vw - 32px));
+        max-height: calc(100vh - 32px);
+        overflow: auto;
+        border: 1px solid rgba(15, 23, 42, 0.14);
+        border-radius: 8px;
+        background: #ffffff;
+        color: #111827;
+        box-shadow: 0 18px 50px rgba(15, 23, 42, 0.26);
+        padding: 0.95rem;
+        pointer-events: auto;
+      }
+      #potential-tutorial-root .pt-topline {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        margin-bottom: 0.35rem;
+      }
+      #potential-tutorial-root .pt-count {
+        color: #4b5563;
+        font-size: 0.78rem;
+        font-weight: 700;
+      }
+      #potential-tutorial-root .pt-close {
+        width: 2rem;
+        height: 2rem;
+        border: 0;
+        border-radius: 6px;
+        background: #f3f4f6;
+        color: #111827;
+        cursor: pointer;
+        font-size: 1.05rem;
+        line-height: 1;
+      }
+      #potential-tutorial-root h2 {
+        margin: 0 0 0.42rem 0;
+        color: #111827;
+        font-size: 1.05rem;
+        line-height: 1.22;
+        letter-spacing: 0;
+      }
+      #potential-tutorial-root p {
+        margin: 0;
+        color: #374151;
+        font-size: 0.92rem;
+        line-height: 1.42;
+      }
+      #potential-tutorial-root .pt-checkbox {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.48rem;
+        margin: 0.82rem 0 0.9rem 0;
+        color: #374151;
+        font-size: 0.86rem;
+        line-height: 1.25;
+      }
+      #potential-tutorial-root .pt-checkbox input {
+        width: 1rem;
+        height: 1rem;
+        margin-top: 0.05rem;
+      }
+      #potential-tutorial-root .pt-actions {
+        display: flex;
+        justify-content: space-between;
+        gap: 0.45rem;
+        flex-wrap: wrap;
+      }
+      #potential-tutorial-root button {
+        font: inherit;
+      }
+      #potential-tutorial-root .pt-button {
+        min-height: 2rem;
+        border: 1px solid rgba(15, 23, 42, 0.16);
+        border-radius: 6px;
+        background: #ffffff;
+        color: #111827;
+        padding: 0.38rem 0.65rem;
+        cursor: pointer;
+        font-size: 0.86rem;
+        font-weight: 650;
+      }
+      #potential-tutorial-root .pt-button:disabled {
+        cursor: not-allowed;
+        opacity: 0.45;
+      }
+      #potential-tutorial-root .pt-button-primary {
+        border-color: #166534;
+        background: #166534;
+        color: #ffffff;
+      }
+      @media (max-width: 680px) {
+        #potential-tutorial-root .pt-popover {
+          left: 16px !important;
+          right: 16px !important;
+          width: auto;
+        }
+      }
+    `;
+    parentDocument.head.appendChild(style);
+  }
+
+  const root = parentDocument.createElement("div");
+  root.id = "potential-tutorial-root";
+  root.innerHTML = `
+    <div class="pt-dim" data-dim="top"></div>
+    <div class="pt-dim" data-dim="left"></div>
+    <div class="pt-dim" data-dim="right"></div>
+    <div class="pt-dim" data-dim="bottom"></div>
+    <div class="pt-highlight"></div>
+    <section class="pt-popover" role="dialog" aria-live="polite" aria-label="Tutorial">
+      <div class="pt-topline">
+        <div class="pt-count"></div>
+        <button type="button" class="pt-close" aria-label="${payload.labels.close}">&times;</button>
+      </div>
+      <h2></h2>
+      <p></p>
+      <label class="pt-checkbox">
+        <input type="checkbox" />
+        <span></span>
+      </label>
+      <div class="pt-actions">
+        <button type="button" class="pt-button pt-skip"></button>
+        <span>
+          <button type="button" class="pt-button pt-prev"></button>
+          <button type="button" class="pt-button pt-button-primary pt-next"></button>
+        </span>
+      </div>
+    </section>
+  `;
+  parentDocument.body.appendChild(root);
+
+  const dims = {
+    top: root.querySelector('[data-dim="top"]'),
+    left: root.querySelector('[data-dim="left"]'),
+    right: root.querySelector('[data-dim="right"]'),
+    bottom: root.querySelector('[data-dim="bottom"]'),
+  };
+  const highlight = root.querySelector(".pt-highlight");
+  const popover = root.querySelector(".pt-popover");
+  const count = root.querySelector(".pt-count");
+  const title = root.querySelector("h2");
+  const body = root.querySelector("p");
+  const remember = root.querySelector(".pt-checkbox input");
+  const rememberLabel = root.querySelector(".pt-checkbox span");
+  const closeButton = root.querySelector(".pt-close");
+  const skipButton = root.querySelector(".pt-skip");
+  const prevButton = root.querySelector(".pt-prev");
+  const nextButton = root.querySelector(".pt-next");
+  let index = 0;
+  let activeTarget = null;
+
+  rememberLabel.textContent = payload.labels.doNotAutoOpen;
+  skipButton.textContent = payload.labels.skip;
+  prevButton.textContent = payload.labels.previous;
+  if (storage && storage.getItem(payload.storageKey) === "1") {
+    remember.checked = true;
+  }
+
+  const cleanup = () => {
+    parentWindow.removeEventListener("resize", updatePosition);
+    parentWindow.removeEventListener("scroll", updatePosition, true);
+    parentDocument.removeEventListener("keydown", onKeyDown, true);
+    if (root.parentNode) {
+      root.parentNode.removeChild(root);
+    }
+    parentWindow.__potentialTutorialCleanup = null;
+  };
+
+  const persistPreference = () => {
+    if (!storage) {
+      return;
+    }
+    if (remember.checked) {
+      storage.setItem(payload.storageKey, "1");
+    } else {
+      storage.removeItem(payload.storageKey);
+    }
+  };
+
+  const close = () => {
+    persistPreference();
+    cleanup();
+  };
+
+  const markerFor = (anchor) => {
+    if (!anchor) {
+      return null;
+    }
+    return parentDocument.querySelector(`[data-potential-tutorial-anchor="${anchor}"]`) || parentDocument.getElementById(anchor);
+  };
+
+  const resolveSelector = (selector) => {
+    if (!selector) {
+      return null;
+    }
+    try {
+      return parentDocument.querySelector(selector);
+    } catch (error) {
+      return null;
+    }
+  };
+
+  const findNextIframe = (anchor) => {
+    const marker = markerFor(anchor);
+    const frames = Array.from(parentDocument.querySelectorAll('div[data-testid="stIFrame"]'))
+      .filter((node) => node.getBoundingClientRect().height > 120);
+    if (!frames.length) {
+      return null;
+    }
+    if (!marker) {
+      return frames[0];
+    }
+    const markerTop = marker.getBoundingClientRect().top;
+    return frames.find((node) => node.getBoundingClientRect().top >= markerTop - 24) || frames[0];
+  };
+
+  const resolveTarget = (step) => {
+    if (step.target === "nextIframe") {
+      return findNextIframe(step.anchor);
+    }
+    const selected = resolveSelector(step.selector);
+    if (selected) {
+      return selected;
+    }
+    const marker = markerFor(step.anchor);
+    if (!marker) {
+      return null;
+    }
+    return (
+      marker.closest("section[data-testid='stSidebar']") ||
+      marker.closest("div[data-testid='column']") ||
+      marker.closest("div[data-testid='stVerticalBlock']") ||
+      marker.closest("div[data-testid='stElementContainer']") ||
+      marker.parentElement
+    );
+  };
+
+  const setBox = (node, top, left, width, height) => {
+    node.style.top = `${Math.max(0, top)}px`;
+    node.style.left = `${Math.max(0, left)}px`;
+    node.style.width = `${Math.max(0, width)}px`;
+    node.style.height = `${Math.max(0, height)}px`;
+  };
+
+  const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+  function updatePosition() {
+    const viewportWidth = parentWindow.innerWidth;
+    const viewportHeight = parentWindow.innerHeight;
+    let top = 72;
+    let left = 24;
+    let width = Math.min(420, viewportWidth - 48);
+    let height = 160;
+
+    if (activeTarget && parentDocument.body.contains(activeTarget)) {
+      const rect = activeTarget.getBoundingClientRect();
+      const pad = 8;
+      top = clamp(rect.top - pad, 8, viewportHeight - 24);
+      left = clamp(rect.left - pad, 8, viewportWidth - 24);
+      width = clamp(rect.width + pad * 2, 24, viewportWidth - left - 8);
+      height = clamp(rect.height + pad * 2, 24, viewportHeight - top - 8);
+    }
+
+    setBox(dims.top, 0, 0, viewportWidth, top);
+    setBox(dims.left, top, 0, left, height);
+    setBox(dims.right, top, left + width, viewportWidth - left - width, height);
+    setBox(dims.bottom, top + height, 0, viewportWidth, viewportHeight - top - height);
+    setBox(highlight, top, left, width, height);
+
+    const popoverWidth = Math.min(360, viewportWidth - 32);
+    const popoverHeight = popover.offsetHeight || 240;
+    let popoverLeft = left + width + 16;
+    if (popoverLeft + popoverWidth > viewportWidth - 16) {
+      popoverLeft = left - popoverWidth - 16;
+    }
+    if (popoverLeft < 16) {
+      popoverLeft = clamp(left + 8, 16, viewportWidth - popoverWidth - 16);
+    }
+    let popoverTop = clamp(top + 8, 16, viewportHeight - popoverHeight - 16);
+    if (viewportWidth <= 680) {
+      popoverLeft = 16;
+      popoverTop = clamp(top + height + 12, 16, viewportHeight - popoverHeight - 16);
+    }
+    popover.style.left = `${popoverLeft}px`;
+    popover.style.top = `${popoverTop}px`;
+  }
+
+  const render = () => {
+    const step = payload.steps[index];
+    activeTarget = resolveTarget(step);
+    title.textContent = step.title || "";
+    body.textContent = step.body || "";
+    count.textContent = `${payload.labels.step} ${index + 1} ${payload.labels.of} ${payload.steps.length}`;
+    prevButton.disabled = index === 0;
+    nextButton.textContent = index === payload.steps.length - 1 ? payload.labels.done : payload.labels.next;
+    if (activeTarget && typeof activeTarget.scrollIntoView === "function") {
+      try {
+        activeTarget.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+      } catch (error) {
+        activeTarget.scrollIntoView();
+      }
+    }
+    parentWindow.setTimeout(updatePosition, 180);
+    parentWindow.requestAnimationFrame(updatePosition);
+    nextButton.focus({ preventScroll: true });
+  };
+
+  const go = (delta) => {
+    index = clamp(index + delta, 0, payload.steps.length - 1);
+    render();
+  };
+
+  const onKeyDown = (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      close();
+    } else if (event.key === "ArrowRight") {
+      event.preventDefault();
+      if (index === payload.steps.length - 1) {
+        close();
+      } else {
+        go(1);
+      }
+    } else if (event.key === "ArrowLeft" && index > 0) {
+      event.preventDefault();
+      go(-1);
+    }
+  };
+
+  closeButton.addEventListener("click", close);
+  skipButton.addEventListener("click", close);
+  prevButton.addEventListener("click", () => go(-1));
+  nextButton.addEventListener("click", () => {
+    if (index === payload.steps.length - 1) {
+      close();
+    } else {
+      go(1);
+    }
+  });
+  parentWindow.addEventListener("resize", updatePosition);
+  parentWindow.addEventListener("scroll", updatePosition, true);
+  parentDocument.addEventListener("keydown", onKeyDown, true);
+  parentWindow.__potentialTutorialCleanup = cleanup;
+
+  parentWindow.setTimeout(render, 350);
+})();
+</script>
+""".replace("__PAYLOAD__", payload)
+    components.html(component_html, height=0)
 
 
 def _request_ui_only_rerun(reason: str) -> None:
@@ -1716,7 +2261,7 @@ def _workspace_header(region: dict[str, Any], scenario_state: dict[str, Any], h3
     scenario_label = str(scenario_state.get("scenario") or "-")
     st.markdown(
         f"""
-        <div class="workspace-header">
+        <div class="workspace-header" data-potential-tutorial-anchor="workspace-header">
           <div>
             <div class="workspace-eyebrow">{region_label} · scenario {scenario_label} · H3 {h3_label}</div>
             <div class="workspace-title-row">
@@ -5396,6 +5941,7 @@ def _render_layers(
     )
     map_left, map_center, map_right = st.columns([0.04, 0.92, 0.04], gap="small")
     with map_center:
+        st.markdown('<span data-potential-tutorial-anchor="map"></span>', unsafe_allow_html=True)
         _render_html_map(map_html, height=820)
         if opacity_key_prefix:
             _hex_opacity_controls(adjusted_layers, opacity_key_prefix)
@@ -10113,6 +10659,7 @@ def _render_missing_data_workspace(
 
     summary_target = right_panel or st.container()
     with summary_target:
+        st.markdown('<span data-potential-tutorial-anchor="right-panel"></span>', unsafe_allow_html=True)
         st.subheader(_t("Karta"))
         st.caption("Karta och lagerkontroll visas när H3-geometrier och minst ett lager finns.")
         with st.expander(f"{_t('Lager som visas')} (0)", expanded=False):
@@ -11273,6 +11820,7 @@ def _unified_workspace_tab(
 
     summary_target = right_panel or st.container()
     with summary_target:
+        st.markdown('<span data-potential-tutorial-anchor="right-panel"></span>', unsafe_allow_html=True)
         _render_establishment_focus(energy_model_state)
         _combined_summary(
             {
@@ -11383,7 +11931,9 @@ def main() -> None:
     with main_panel:
         _workspace_header(region, scenario_state, h3_resolution)
         _unified_workspace_tab(region, scenario_state, context, left_panel, right_panel)
+    force_tutorial_open = _render_tutorial_launcher(region, st.sidebar)
     _render_language_switcher(st.sidebar)
+    _render_tutorial_component(region, force_open=force_tutorial_open)
 
 
 if __name__ == "__main__":
