@@ -665,13 +665,39 @@ def _trondelag_tutorial_steps(region: dict[str, Any]) -> list[dict[str, Any]]:
         },
         {
             "anchor": "map",
-            "target": "iframeSelector",
+            "target": "iframeLegendSection",
+            "legendSectionTitle": COMBINED_ESTABLISHMENT_LAYER_LABEL,
+            "fallbackTarget": "iframeSelector",
             "iframeSelectors": [".map-legend"],
-            "fallbackTarget": "nextIframe",
-            "title": "Läs resultatet i kartan",
+            "title": "Potentiell etableringsyta",
             "body": (
                 "Resultatkartan visar den sammanvägda potentialen: grön betyder både vind och sol, gul bara sol, blå bara vind och röd ej lämpligt. "
-                "Scenariofördelning och ytbehov utanför potential kan visas som extra lager när ett scenario inte ryms."
+                "Detta är grundpotentialen utifrån de antaganden och avgränsningar som är aktiva."
+            ),
+        },
+        {
+            "anchor": "map",
+            "target": "iframeLegendSection",
+            "legendSectionTitle": SCENARIO_ALLOCATION_LAYER_LABEL,
+            "fallbackTarget": "iframeSelector",
+            "iframeSelectors": [".map-legend"],
+            "title": "Scenariofördelning i etableringshex",
+            "body": (
+                "Scenariofördelningen visar hur scenariots ytbehov placeras inom etableringshex. "
+                "Färgerna visar vind, sol eller kombinationen vind och sol. Det är en scenariovisning, inte samma sak som grundpotentialen."
+            ),
+        },
+        {
+            "anchor": "map",
+            "target": "iframeLegendSection",
+            "legendSectionTitle": OUTSIDE_LP_NEED_LAYER_LABEL,
+            "fallbackTarget": "iframeSelector",
+            "iframeSelectors": [".map-legend"],
+            "scrollWindowToTarget": True,
+            "title": "Ytbehov utanför landskapets potential",
+            "body": (
+                "Ytbehov utanför landskapets potential visar schematisk vind- eller solyta som behövs när scenariot inte ryms i den beräknade potentialen. "
+                "Det gör skillnaden mellan landskapets möjliga yta och scenariots efterfrågan synlig."
             ),
         },
         {
@@ -680,7 +706,7 @@ def _trondelag_tutorial_steps(region: dict[str, Any]) -> list[dict[str, Any]]:
             "fallbackTarget": "nextIframe",
             "title": "Grönt är ett öppet startläge",
             "body": (
-                "I startläget kan mycket vara grönt eftersom få avgränsande lager eller restriktioner är aktiva. "
+                "I startläget är kartan grön eftersom inga avgränsande lager eller restriktioner är aktiva. "
                 "Grönt betyder därför möjligt enligt nuvarande antaganden, inte ett färdigt rekommenderat område."
             ),
         },
@@ -691,6 +717,8 @@ def _trondelag_tutorial_steps(region: dict[str, Any]) -> list[dict[str, Any]]:
                 "Under Geografier finns Landskapspotential Vind och Landskapspotential Sol. Där justerar du de antaganden, lager, avstånd "
                 "och restriktioner som påverkar vind- respektive solpotentialen."
             ),
+            "closeAllExpanders": True,
+            "sidebarScrollTop": True,
             "openTexts": ["Geografier"],
             "highlightTexts": [WIND_LANDSCAPE_POTENTIAL_LABEL, SOLAR_LANDSCAPE_POTENTIAL_LABEL],
         },
@@ -698,11 +726,15 @@ def _trondelag_tutorial_steps(region: dict[str, Any]) -> list[dict[str, Any]]:
             "selector": "section[data-testid=\"stSidebar\"]",
             "title": "Ändra vindantaganden och använd dem",
             "body": (
-                "Öppna vindpotentialen, justera till exempel Befolkning och bebyggelse och klicka sedan Använd ändringar. "
-                "Om inga vindlager är valda används en ofiltrerad vindpotential som startläge tills du aktiverar avgränsande lager."
+                "Öppna vindpotentialen och gör dina filterval, till exempel Befolkning och bebyggelse. "
+                "Klicka sedan Använd ändringar för att räkna om kartan och resultatet med de valda antagandena."
             ),
+            "closeAllExpanders": True,
+            "sidebarScrollTop": True,
             "openTexts": ["Geografier", WIND_LANDSCAPE_POTENTIAL_LABEL, "Befolkning och bebyggelse"],
-            "highlightTexts": ["Befolkning och bebyggelse", "Använd ändringar"],
+            "scrollToText": "Använd ändringar",
+            "scrollAlign": 0.58,
+            "highlightTexts": ["Använd ändringar"],
         },
         {
             "selector": "div[data-testid=\"column\"]:has(#right-panel-content-anchor)",
@@ -1143,6 +1175,47 @@ def _render_tutorial_component(region: dict[str, Any], force_open: bool = False)
     return null;
   };
 
+  const findIframeLegendSectionTarget = (step) => {
+    const iframeInfo = iframeDocumentForStep(step);
+    if (!iframeInfo) {
+      return null;
+    }
+    const wanted = normalizedText(step.legendSectionTitle);
+    if (!wanted) {
+      return null;
+    }
+    const sections = Array.from(iframeInfo.doc.querySelectorAll(".map-legend-section"));
+    const heading = sections.find((node) => normalizedText(node.textContent) === wanted);
+    if (!heading) {
+      return null;
+    }
+    const legend = heading.closest(".map-legend");
+    if (legend && legend.scrollHeight > legend.clientHeight + 4) {
+      legend.scrollTop = Math.max(0, heading.offsetTop - 8);
+    }
+    const nodes = [heading];
+    let next = heading.nextElementSibling;
+    while (next && !next.classList.contains("map-legend-section")) {
+      if (next.classList.contains("map-legend-row")) {
+        nodes.push(next);
+      }
+      next = next.nextElementSibling;
+    }
+    const target = combineRects(nodes);
+    if (!target) {
+      return null;
+    }
+    return virtualRect(() => {
+      const frameRect = iframeInfo.iframe.getBoundingClientRect();
+      const rect = target.getBoundingClientRect();
+      const left = frameRect.left + rect.left;
+      const top = frameRect.top + rect.top;
+      const right = left + rect.width;
+      const bottom = top + rect.height;
+      return { left, top, right, bottom, width: rect.width, height: rect.height };
+    });
+  };
+
   const findGreenMapAreaTarget = (step) => {
     const iframeInfo = iframeDocumentForStep(step);
     if (!iframeInfo) {
@@ -1236,9 +1309,96 @@ def _render_tutorial_component(region: dict[str, Any], force_open: bool = False)
     });
   };
 
+  const sidebarScrollContainers = () => {
+    const sidebar = parentDocument.querySelector('section[data-testid="stSidebar"]');
+    if (!sidebar) {
+      return [];
+    }
+    const candidates = [sidebar, ...Array.from(sidebar.querySelectorAll("*"))].filter((node) => {
+      const rect = node.getBoundingClientRect ? node.getBoundingClientRect() : null;
+      if (!rect || rect.height < 80) {
+        return false;
+      }
+      const style = parentWindow.getComputedStyle(node);
+      return (
+        node.scrollHeight > node.clientHeight + 8 &&
+        ["auto", "scroll", "overlay"].includes(style.overflowY)
+      );
+    });
+    return candidates.length ? candidates : [sidebar];
+  };
+
+  const setSidebarScrollTop = (top = 0) => {
+    sidebarScrollContainers().forEach((node) => {
+      node.scrollTop = top;
+    });
+  };
+
+  const scrollSidebarToElement = (element, align = 0.5) => {
+    if (!element || !element.getBoundingClientRect) {
+      return;
+    }
+    sidebarScrollContainers().forEach((node) => {
+      if (!node.contains(element)) {
+        return;
+      }
+      const containerRect = node.getBoundingClientRect();
+      const elementRect = element.getBoundingClientRect();
+      const desiredTop = containerRect.top + containerRect.height * clamp(align, 0.1, 0.9);
+      node.scrollTop += elementRect.top - desiredTop;
+    });
+  };
+
+  const scrollSidebarToText = (label, align = 0.5) => {
+    const target = findElementByText(label);
+    if (target) {
+      scrollSidebarToElement(target, align);
+    }
+  };
+
+  const scrollTargetIntoViewport = (target) => {
+    if (!target || !target.getBoundingClientRect) {
+      return;
+    }
+    const rect = target.getBoundingClientRect();
+    const margin = 24;
+    let deltaY = 0;
+    if (rect.bottom > parentWindow.innerHeight - margin) {
+      deltaY = rect.bottom - parentWindow.innerHeight + margin;
+    } else if (rect.top < margin) {
+      deltaY = rect.top - margin;
+    }
+    if (Math.abs(deltaY) > 1) {
+      parentWindow.scrollBy(0, deltaY);
+      const sidebar = parentDocument.querySelector('section[data-testid="stSidebar"]');
+      const candidates = [
+        parentDocument.scrollingElement,
+        parentDocument.documentElement,
+        parentDocument.body,
+        ...Array.from(parentDocument.querySelectorAll("*")),
+      ].filter((node, index, nodes) => {
+        if (!node || nodes.indexOf(node) !== index || (sidebar && sidebar.contains(node))) {
+          return false;
+        }
+        const nodeRect = node.getBoundingClientRect ? node.getBoundingClientRect() : null;
+        return (
+          nodeRect &&
+          nodeRect.height > 200 &&
+          node.scrollHeight > node.clientHeight + 8
+        );
+      });
+      candidates.forEach((node) => {
+        node.scrollTop += deltaY;
+      });
+    }
+  };
+
   const resolveTarget = (step) => {
     if (step.target === "iframeSelector") {
       return findIframeSelectorTarget(step) || (step.fallbackTarget === "nextIframe" ? findNextIframe(step.anchor) : null);
+    }
+    if (step.target === "iframeLegendSection") {
+      return findIframeLegendSectionTarget(step) || (step.fallbackTarget === "iframeSelector" ? findIframeSelectorTarget(step) : null);
     }
     if (step.target === "iframeGreenArea") {
       return findGreenMapAreaTarget(step) || (step.fallbackTarget === "nextIframe" ? findNextIframe(step.anchor) : null);
@@ -1332,7 +1492,17 @@ def _render_tutorial_component(region: dict[str, Any], force_open: bool = False)
       closeSidebarExpanders();
     }
     openExpandersForStep(step);
+    if (step.sidebarScrollTop) {
+      setSidebarScrollTop(0);
+    }
+    if (step.scrollToText) {
+      scrollSidebarToText(step.scrollToText, Number(step.scrollAlign || 0.5));
+    }
     activeTarget = resolveTarget(step);
+    if (step.scrollWindowToTarget) {
+      scrollTargetIntoViewport(activeTarget);
+      activeTarget = resolveTarget(step);
+    }
     title.textContent = step.title || "";
     body.textContent = step.body || "";
     count.textContent = `${payload.labels.step} ${index + 1} ${payload.labels.of} ${payload.steps.length}`;

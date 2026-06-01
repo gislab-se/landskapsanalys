@@ -76,7 +76,7 @@ const allDetails = Array.from((sidebar || document).querySelectorAll('details'))
   return { text: (summary ? summary.textContent : node.textContent || '').replace(/\s+/g, ' ').trim(), open: node.open, rect: rect(node) };
 });
 const labels = {};
-['Geografier', 'Landskapspotential Vind', 'Landskapspotential Sol', 'Befolkning och bebyggelse', 'Använd ändringar', 'Visa guide'].forEach((label) => {
+['Geografier', 'Landskapspotential Vind', 'Landskapspotential Sol', 'Befolkning och bebyggelse', 'Använd ändringar', 'Social acceptans', 'Visa guide'].forEach((label) => {
   const wanted = label.toLowerCase();
   const details = Array.from(document.querySelectorAll('details')).find((node) => {
     const summary = node.querySelector('summary');
@@ -89,6 +89,75 @@ const labels = {};
   });
   labels[label] = rect(details || button);
 });
+const legendSections = {};
+let legendOverall = null;
+const combineRects = (rects) => {
+  const visibleRects = rects.filter((item) => item && item.width > 2 && item.height > 2);
+  if (!visibleRects.length) return null;
+  const left = Math.min(...visibleRects.map((item) => item.left));
+  const top = Math.min(...visibleRects.map((item) => item.top));
+  const right = Math.max(...visibleRects.map((item) => item.right));
+  const bottom = Math.max(...visibleRects.map((item) => item.bottom));
+  return {
+    left, top, right, bottom,
+    width: right - left, height: bottom - top,
+    cx: left + (right - left) / 2, cy: top + (bottom - top) / 2
+  };
+};
+if (frames.length) {
+  try {
+    const iframe = frames[0].iframe;
+    const frameRect = iframe.getBoundingClientRect();
+    const doc = iframe.contentDocument;
+    const legendRect = rect(doc.querySelector('.map-legend'));
+    if (legendRect) {
+      const left = frameRect.left + legendRect.left;
+      const top = frameRect.top + legendRect.top;
+      const right = frameRect.left + legendRect.right;
+      const bottom = frameRect.top + legendRect.bottom;
+      legendOverall = {
+        left, top, right, bottom,
+        width: right - left, height: bottom - top,
+        cx: left + (right - left) / 2, cy: top + (bottom - top) / 2
+      };
+    }
+    ['Potentiell etableringsyta', 'Scenariofördelning i etableringshex', 'Ytbehov utanför landskapets potential'].forEach((label) => {
+      const wanted = label.toLowerCase();
+      const heading = Array.from(doc.querySelectorAll('.map-legend-section')).find((node) => {
+        const text = (node.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+        return text === wanted;
+      });
+      if (!heading) {
+        legendSections[label] = null;
+        return;
+      }
+      const nodes = [heading];
+      let next = heading.nextElementSibling;
+      while (next && !next.classList.contains('map-legend-section')) {
+        if (next.classList.contains('map-legend-row')) {
+          nodes.push(next);
+        }
+        next = next.nextElementSibling;
+      }
+      const sectionRect = combineRects(nodes.map(rect));
+      if (!sectionRect) {
+        legendSections[label] = null;
+        return;
+      }
+      const left = frameRect.left + sectionRect.left;
+      const top = frameRect.top + sectionRect.top;
+      const right = frameRect.left + sectionRect.right;
+      const bottom = frameRect.top + sectionRect.bottom;
+      legendSections[label] = {
+        left, top, right, bottom,
+        width: right - left, height: bottom - top,
+        cx: left + (right - left) / 2, cy: top + (bottom - top) / 2
+      };
+    });
+  } catch (error) {
+    legendSections.error = String(error);
+  }
+}
 return {
   count: count ? count.textContent.trim() : '',
   title: title ? title.textContent.trim() : '',
@@ -98,6 +167,8 @@ return {
   map: rect(mapFrame),
   details: allDetails,
   labels,
+  legendOverall,
+  legendSections,
   frames: frames.map((item) => ({
     rect: item.rect,
     visibleArea: item.visibleArea,
@@ -262,10 +333,11 @@ def _similar_map_checker(
     label: str,
     *,
     require_corner_or_full: bool = False,
+    tolerance: float = 24.0,
 ):
     def check(data: dict[str, Any]) -> None:
         _is_map_highlight(data, require_corner_or_full=require_corner_or_full)
-        _assert_similar_highlight(data["highlight"], expected, label)
+        _assert_similar_highlight(data["highlight"], expected, label, tolerance=tolerance)
 
     return check
 
@@ -305,6 +377,32 @@ def _is_map_highlight(data: dict[str, Any], *, require_corner_or_full: bool = Fa
             )
 
 
+def _assert_legend_step(data: dict[str, Any], title: str, section_label: str, *, allow_legend_fallback: bool = False) -> None:
+    if data.get("title") != title:
+        raise AssertionError(f"Expected {title!r}, got {data.get('title')!r}.")
+    section = (data.get("legendSections") or {}).get(section_label)
+    if not section:
+        if not allow_legend_fallback:
+            raise AssertionError(f"Legend section {section_label!r} was not found.")
+        legend = data.get("legendOverall")
+        if not legend:
+            raise AssertionError(f"Legend section {section_label!r} and legend fallback were not found.")
+        if _overlap_area(data["highlight"], legend) <= max(20.0, legend["width"] * legend["height"] * 0.15):
+            raise AssertionError(f"{title} highlight does not cover the map legend fallback.")
+        return
+    highlight = data["highlight"]
+    overlap_area = _overlap_area(highlight, section)
+    section_area = section["width"] * section["height"]
+    if overlap_area < max(20.0, section_area * 0.55):
+        raise AssertionError(
+            f"{title} highlight does not cover legend section {section_label!r}: "
+            f"highlight={json.dumps(highlight, sort_keys=True)} section={json.dumps(section, sort_keys=True)}"
+        )
+    sidebar = data.get("sidebar")
+    if sidebar and _overlap_area(highlight, sidebar) > 0:
+        raise AssertionError(f"{title} highlight overlaps sidebar.")
+
+
 def _label_visible(data: dict[str, Any], label: str) -> bool:
     rect = (data.get("labels") or {}).get(label)
     return bool(rect and rect.get("width", 0) > 2 and rect.get("height", 0) > 2)
@@ -321,6 +419,21 @@ def _assert_step7(data: dict[str, Any]) -> None:
     solar = data["labels"]["Landskapspotential Sol"]
     if _overlap_area(highlight, wind) <= 0 or _overlap_area(highlight, solar) <= 0:
         raise AssertionError("Step 7 highlight does not cover both wind and solar potential controllers.")
+    social = data["labels"].get("Social acceptans")
+    if social and _overlap_area(highlight, social) > 0:
+        raise AssertionError("Step 7 highlight overlaps Social acceptans.")
+
+
+def _assert_step8(data: dict[str, Any]) -> None:
+    if data.get("title") != "Ändra vindantaganden och använd dem":
+        raise AssertionError(f"Expected step 8 title, got {data.get('title')!r}.")
+    for label in ["Geografier", "Landskapspotential Vind", "Använd ändringar"]:
+        if not _label_visible(data, label):
+            raise AssertionError(f"{label!r} is not visible on step 8.")
+    highlight = data["highlight"]
+    apply_button = data["labels"]["Använd ändringar"]
+    if _overlap_area(highlight, apply_button) <= 0:
+        raise AssertionError("Step 8 highlight does not cover Använd ändringar.")
 
 
 def _print_snapshot(data: dict[str, Any]) -> None:
@@ -348,55 +461,102 @@ def run(url: str, headed: bool, timeout: int, screenshot_dir: Path | None) -> in
         driver.refresh()
         _wait_for_tutorial(driver, timeout)
 
-        _navigate_to_title(driver, "Läs resultatet i kartan", timeout)
-        step5 = _wait_for_checked_state(
+        _navigate_to_title(driver, "Potentiell etableringsyta", timeout)
+        establishment = _wait_for_checked_state(
             driver,
-            "Läs resultatet i kartan",
+            "Potentiell etableringsyta",
             timeout,
-            lambda data: _is_map_highlight(data, require_corner_or_full=True),
+            lambda data: _assert_legend_step(data, "Potentiell etableringsyta", "Potentiell etableringsyta"),
         )
-        _print_snapshot(step5)
+        _print_snapshot(establishment)
 
         _click(driver, "#potential-tutorial-root .pt-next")
-        step6 = _wait_for_checked_state(
+        scenario = _wait_for_checked_state(
+            driver,
+            "Scenariofördelning i etableringshex",
+            timeout,
+            lambda data: _assert_legend_step(
+                data,
+                "Scenariofördelning i etableringshex",
+                "Scenariofördelning i etableringshex",
+                allow_legend_fallback=True,
+            ),
+        )
+        _print_snapshot(scenario)
+
+        _click(driver, "#potential-tutorial-root .pt-next")
+        outside_need = _wait_for_checked_state(
+            driver,
+            "Ytbehov utanför landskapets potential",
+            timeout,
+            lambda data: _assert_legend_step(
+                data,
+                "Ytbehov utanför landskapets potential",
+                "Ytbehov utanför landskapets potential",
+                allow_legend_fallback=True,
+            ),
+        )
+        _print_snapshot(outside_need)
+
+        _click(driver, "#potential-tutorial-root .pt-next")
+        green_start = _wait_for_checked_state(
             driver,
             "Grönt är ett öppet startläge",
             timeout,
             _is_map_highlight,
         )
-        _print_snapshot(step6)
+        _print_snapshot(green_start)
 
         _close_sidebar_expanders(driver)
         _click(driver, "#potential-tutorial-root .pt-next")
-        step7 = _wait_for_checked_state(
+        controllers = _wait_for_checked_state(
             driver,
             "Vind och sol styrs under Geografier",
             timeout,
             _assert_step7,
         )
-        _print_snapshot(step7)
+        _print_snapshot(controllers)
+
+        _click(driver, "#potential-tutorial-root .pt-next")
+        apply_step = _wait_for_checked_state(
+            driver,
+            "Ändra vindantaganden och använd dem",
+            timeout,
+            _assert_step8,
+        )
+        _print_snapshot(apply_step)
 
         _click(driver, "#potential-tutorial-root .pt-prev")
-        back6 = _wait_for_checked_state(
+        back_controllers = _wait_for_checked_state(
+            driver,
+            "Vind och sol styrs under Geografier",
+            timeout,
+            _assert_step7,
+        )
+        _print_snapshot(back_controllers)
+
+        _click(driver, "#potential-tutorial-root .pt-prev")
+        back_green = _wait_for_checked_state(
             driver,
             "Grönt är ett öppet startläge",
             timeout,
-            _similar_map_checker(step6["highlight"], "Step 6 previous-navigation"),
+            _similar_map_checker(green_start["highlight"], "Green-start previous-navigation", tolerance=96.0),
         )
-        _print_snapshot(back6)
+        _print_snapshot(back_green)
 
         _click(driver, "#potential-tutorial-root .pt-prev")
-        back5 = _wait_for_checked_state(
+        back_outside_need = _wait_for_checked_state(
             driver,
-            "Läs resultatet i kartan",
+            "Ytbehov utanför landskapets potential",
             timeout,
-            _similar_map_checker(
-                step5["highlight"],
-                "Step 5 previous-navigation",
-                require_corner_or_full=True,
+            lambda data: _assert_legend_step(
+                data,
+                "Ytbehov utanför landskapets potential",
+                "Ytbehov utanför landskapets potential",
+                allow_legend_fallback=True,
             ),
         )
-        _print_snapshot(back5)
+        _print_snapshot(back_outside_need)
 
         _click(driver, "#potential-tutorial-root .pt-next")
         _wait_for_checked_state(
@@ -414,6 +574,15 @@ def run(url: str, headed: bool, timeout: int, screenshot_dir: Path | None) -> in
             _assert_step7,
         )
         _print_snapshot(again7)
+
+        _click(driver, "#potential-tutorial-root .pt-next")
+        again8 = _wait_for_checked_state(
+            driver,
+            "Ändra vindantaganden och använd dem",
+            timeout,
+            _assert_step8,
+        )
+        _print_snapshot(again8)
 
         if screenshot_dir:
             screenshot_dir.mkdir(parents=True, exist_ok=True)
