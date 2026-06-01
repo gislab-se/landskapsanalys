@@ -656,6 +656,16 @@ def _trondelag_tutorial_steps(region: dict[str, Any]) -> list[dict[str, Any]]:
         },
         {
             "selector": "section[data-testid=\"stSidebar\"]",
+            "title": "Energiscenario och markintensitet",
+            "body": (
+                "Energiscenario styr hur mycket energi som ska testas i modellen. Markintensitet styr hur mycket mark som behövs per TWh "
+                "och kan väljas låg, mellan eller hög oberoende av energiscenariot. Därför kan du till exempel testa hög energinivå "
+                "med mellan markintensitet."
+            ),
+            "openTexts": ["Energimodellering"],
+        },
+        {
+            "selector": "section[data-testid=\"stSidebar\"]",
             "title": "Lägg till social acceptans",
             "body": (
                 "Social acceptans hjälper dig förstå var potentialen kan vara mer eller mindre realistisk utifrån landskapets användning, "
@@ -683,8 +693,8 @@ def _trondelag_tutorial_steps(region: dict[str, Any]) -> list[dict[str, Any]]:
             "iframeSelectors": [".map-legend"],
             "title": "Scenariofördelning i etableringshex",
             "body": (
-                "Scenariofördelningen visar hur scenariots ytbehov placeras inom etableringshex. "
-                "Färgerna visar vind, sol eller kombinationen vind och sol. Det är en scenariovisning, inte samma sak som grundpotentialen."
+                "Scenariofördelningen fyller de mest lämpade etableringshexen först, ungefär som vatten i landskapets djupaste hålor. "
+                "Blå och gul visar separat vind- respektive solyta. Grön kombination används sparsamt, först när ytan inte ryms separat."
             ),
         },
         {
@@ -704,6 +714,9 @@ def _trondelag_tutorial_steps(region: dict[str, Any]) -> list[dict[str, Any]]:
             "anchor": "map",
             "target": "iframeGreenArea",
             "fallbackTarget": "nextIframe",
+            "closeAllExpanders": True,
+            "sidebarScrollTop": True,
+            "stableHighlight": True,
             "title": "Grönt är ett öppet startläge",
             "body": (
                 "I startläget är kartan grön eftersom inga avgränsande lager eller restriktioner är aktiva. "
@@ -953,6 +966,8 @@ def _render_tutorial_component(region: dict[str, Any], force_open: bool = False)
 
   const root = parentDocument.createElement("div");
   root.id = "potential-tutorial-root";
+  const stableHighlightCache = parentWindow.__potentialTutorialStableHighlightCache || new Map();
+  parentWindow.__potentialTutorialStableHighlightCache = stableHighlightCache;
   root.innerHTML = `
     <div class="pt-dim" data-dim="top"></div>
     <div class="pt-dim" data-dim="left"></div>
@@ -1223,12 +1238,14 @@ def _render_tutorial_component(region: dict[str, Any], force_open: bool = False)
     }
     return virtualRect(() => {
       const frameRect = iframeInfo.iframe.getBoundingClientRect();
-      const width = Math.min(frameRect.width * 0.48, 520);
-      const height = Math.min(frameRect.height * 0.52, 460);
-      const left = frameRect.left + frameRect.width * 0.30;
-      const top = frameRect.top + frameRect.height * 0.30;
-      const right = Math.min(frameRect.right - 12, left + width);
-      const bottom = Math.min(frameRect.bottom - 12, top + height);
+      const width = Math.min(parentWindow.innerWidth * 0.24, 520, Math.max(24, frameRect.width - 24));
+      const height = Math.min(parentWindow.innerHeight * 0.35, 460, Math.max(24, frameRect.height - 24));
+      const preferredLeft = parentWindow.innerWidth * 0.38;
+      const preferredTop = parentWindow.innerHeight * 0.48;
+      const left = Math.min(Math.max(preferredLeft, frameRect.left + 12), frameRect.right - width - 12);
+      const top = Math.min(Math.max(preferredTop, frameRect.top + 12), frameRect.bottom - height - 12);
+      const right = left + width;
+      const bottom = top + height;
       return { left, top, right, bottom, width: right - left, height: bottom - top };
     });
   };
@@ -1502,6 +1519,27 @@ def _render_tutorial_component(region: dict[str, Any], force_open: bool = False)
     if (step.scrollWindowToTarget) {
       scrollTargetIntoViewport(activeTarget);
       activeTarget = resolveTarget(step);
+    }
+    if (step.stableHighlight && activeTarget && activeTarget.getBoundingClientRect) {
+      const key = `${index}:${step.title || ""}`;
+      const viewport = `${parentWindow.innerWidth}x${parentWindow.innerHeight}`;
+      const cached = stableHighlightCache.get(key);
+      if (cached && cached.viewport === viewport) {
+        const cachedRect = cached.rect;
+        activeTarget = virtualRect(() => ({ ...cachedRect }));
+      } else {
+        const rect = activeTarget.getBoundingClientRect();
+        const stableRect = {
+          left: rect.left,
+          top: rect.top,
+          right: rect.right,
+          bottom: rect.bottom,
+          width: rect.width,
+          height: rect.height,
+        };
+        stableHighlightCache.set(key, { viewport, rect: stableRect });
+        activeTarget = virtualRect(() => ({ ...stableRect }));
+      }
     }
     title.textContent = step.title || "";
     body.textContent = step.body || "";
@@ -2312,12 +2350,42 @@ def _planning_scenario_option_label(option: dict[str, Any] | None) -> str:
         energy_scale = float(option.get("energy_scale", 1.0) or 1.0)
     except Exception:
         energy_scale = 1.0
-    area_scenario_id = str(option.get("area_demand_scenario", "mid") or "mid")
-    return f"{label} · {energy_scale:g}x energi · markintensitet {_area_scenario_label(area_scenario_id)}"
+    return f"{label} · {energy_scale:g}x energi"
 
 
 def _energy_key_label(energy_key: str) -> str:
     return {"wind": "Vind", "solar": "Sol"}.get(str(energy_key), str(energy_key))
+
+
+def _area_intensity_factor_table(scenario_table: pd.DataFrame) -> pd.DataFrame:
+    if scenario_table.empty:
+        return pd.DataFrame(columns=["Teknik", "Låg", "Mellan", "Hög"])
+    rows: list[dict[str, object]] = []
+    for energy_key in ("wind", "solar"):
+        match = scenario_table[scenario_table["energy_key"].astype(str) == energy_key]
+        if match.empty:
+            continue
+        row = match.iloc[0]
+        rows.append(
+            {
+                "Teknik": _energy_key_label(energy_key),
+                "Låg": float(row["low_km2_per_twh"]),
+                "Mellan": float(row["mid_km2_per_twh"]),
+                "Hög": float(row["high_km2_per_twh"]),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def _area_intensity_cap_notes(scenario_table: pd.DataFrame) -> list[str]:
+    if scenario_table.empty or "cap_note" not in scenario_table.columns:
+        return []
+    notes: list[str] = []
+    for _, row in scenario_table.iterrows():
+        note = str(row.get("cap_note", "") or "").strip()
+        if note:
+            notes.append(f"{_energy_key_label(str(row.get('energy_key', '')))}: {note}")
+    return notes
 
 
 def _energy_mix_share(mix: pd.DataFrame, energy_key: str) -> float:
@@ -2455,7 +2523,7 @@ def _render_energy_modeling_panel(
     if st.session_state.get(scenario_key) not in planning_ids:
         st.session_state[scenario_key] = default_planning_id
     planning_id = panel.selectbox(
-        {"en": "Energy scenario and land intensity", "da_no": "Energiscenario og arealintensitet"}.get(_language(), "Energiscenario och markintensitet"),
+        {"en": "Energy scenario", "da_no": "Energiscenario"}.get(_language(), "Energiscenario"),
         options=planning_ids,
         key=scenario_key,
         format_func=lambda value: _planning_scenario_option_label(planning_by_id.get(str(value), {"id": value})),
@@ -2468,17 +2536,33 @@ def _render_energy_modeling_panel(
     source_scenario = str(selected_planning.get("source_scenario", "")).strip()
     planning_year = int(selected_planning.get("planning_year", planning_cfg.get("planning_year", 2050)) or 2050)
     energy_scale = float(selected_planning.get("energy_scale", 1.0) or 1.0)
-    area_scenario_id = str(selected_planning.get("area_demand_scenario", "mid") or "mid")
-    if area_scenario_id not in AREA_SCENARIO_ORDER:
-        area_scenario_id = "mid"
+    area_scenario_key = f"energy_model_area_scenario_{region_id}"
+    default_area_scenario_id = str(selected_planning.get("area_demand_scenario", "mid") or "mid")
+    if default_area_scenario_id not in AREA_SCENARIO_ORDER:
+        default_area_scenario_id = "mid"
+    if st.session_state.get(area_scenario_key) not in AREA_SCENARIO_ORDER:
+        st.session_state[area_scenario_key] = default_area_scenario_id
+    area_scenario_id = str(
+        panel.selectbox(
+            {"en": "Land intensity", "da_no": "Arealintensitet"}.get(_language(), "Markintensitet"),
+            options=list(AREA_SCENARIO_ORDER),
+            key=area_scenario_key,
+            format_func=_area_scenario_label,
+        )
+    )
     source_label = scenario_display_label(source_scenario, scenario_descriptions) if source_scenario else "-"
+    scenario_table = pd.DataFrame(area_payload.get("scenario_table", pd.DataFrame()))
+    intensity_table = _area_intensity_factor_table(scenario_table)
+    if not intensity_table.empty:
+        panel.dataframe(intensity_table.round(2), width="stretch", hide_index=True, height=108)
+        panel.caption("Markintensitet i km²/TWh. Värdena bygger på AreaDemand och manifeststyrda caps.")
 
     panel.caption(
-        "Dummy/prototypdata: valet är ett paket med energiskala och markintensitet. "
-        "Markintensitet styr ytbehov i km²/TWh och är separat från landskapets potential i kartan."
+        "Dummy/prototypdata: energiscenario styr TWh och energiskala. "
+        "Markintensitet styr ytbehov i km²/TWh oberoende av energiscenariot."
     )
     panel.caption(
-        f"Valt paket: {_planning_scenario_option_label(selected_planning)} · "
+        f"Valt: {_planning_scenario_option_label(selected_planning)} · markintensitet {_area_scenario_label(area_scenario_id)} · "
         f"modellkälla: {source_label}, {planning_year}"
     )
 
@@ -2555,30 +2639,10 @@ def _render_energy_modeling_panel(
     wind_twh = float(wind_row["twh"].fillna(0.0).sum()) if not wind_row.empty else 0.0
     wind_factor = float(wind_row["km2_per_twh"].dropna().iloc[0]) if not wind_row.empty and not wind_row["km2_per_twh"].dropna().empty else math.nan
 
-    metric_cols = panel.columns(4)
-    metric_cols[0].metric("Vind", f"{wind_twh:.2f} TWh")
-    metric_cols[1].metric("Sol", f"{solar_twh:.2f} TWh")
-    metric_cols[2].metric("Vindyta", f"{wind_area_need:.2f} km²")
-    metric_cols[3].metric("Solyta", f"{solar_area_need:.2f} km²")
-
-    planning_area_by_scenario: dict[str, float] = {}
-    for scenario_option in planning_options:
-        option_id = str(scenario_option.get("id"))
-        option_mix = _balance_wind_solar_mix(select_planning_mix(mix, scenario_option), solar_share_pct)
-        option_area_scenario = str(scenario_option.get("area_demand_scenario", "mid") or "mid")
-        if option_area_scenario not in AREA_SCENARIO_ORDER:
-            option_area_scenario = "mid"
-        scenario_frame = calculate_area_demand(option_mix, area_bundle_obj, option_area_scenario, technology_to_times)
-        row = scenario_frame[scenario_frame["energy_key"].astype(str) == primary_technology]
-        planning_area_by_scenario[option_id] = float(row["area_need_km2"].fillna(0.0).sum()) if not row.empty else 0.0
-    with panel.container(border=True):
-        _render_hex_area_card(
-            planning_area_by_scenario,
-            hex_area,
-            str(planning_id),
-            scenario_order=planning_ids,
-            label_func=lambda value: _planning_scenario_option_label(planning_by_id.get(str(value), {"id": value})),
-        )
+    panel.caption(
+        "Ytbehovet beräknas från valt energiscenario och vald markintensitet. "
+        "De fulla siffrorna visas i högerpanelens tabeller och under Beräkning och datakvalitet."
+    )
 
     show_key = f"energy_model_show_proposal_{region.get('region_id', 'region')}"
     show_proposal = panel.checkbox(_t("Visa föreslagen etableringsyta"), value=True, key=show_key)
@@ -2599,10 +2663,12 @@ def _render_energy_modeling_panel(
             st.dataframe(local_reference_table.round(4), width="stretch", hide_index=True, height=180)
         warning_table = pd.DataFrame(area_payload.get("warning_table", pd.DataFrame()))
         if not warning_table.empty:
-            st.warning("AreaDemand innehåller outliers som har exkluderats från scenariofaktorer.")
+            st.warning("AreaDemand innehåller datakvalitetsvarningar eller manifeststyrda caps.")
             st.dataframe(warning_table, width="stretch", hide_index=True, height=180)
-        scenario_table = pd.DataFrame(area_payload.get("scenario_table", pd.DataFrame()))
         if not scenario_table.empty:
+            cap_notes = _area_intensity_cap_notes(scenario_table)
+            if cap_notes:
+                st.info("Manifeststyrda caps: " + " · ".join(cap_notes))
             st.dataframe(scenario_table.round(3), width="stretch", hide_index=True)
 
     debug_payload = {
@@ -5230,21 +5296,50 @@ def _solar_potential_polygon_layer(
 
 
 def _solar_establishment_frame(
-    region: dict[str, Any],
+    region: dict[str, Any] | pd.DataFrame,
     small_frame: pd.DataFrame,
-    large_frame: pd.DataFrame,
+    large_frame: pd.DataFrame | float,
     solar_area_need_km2: float,
     solar_twh_need: float,
     solar_km2_per_twh: float,
-    hex_area_km2: float,
-    h3_resolution: int | None = None,
-    social_acceptance_manifest: dict[str, Any] | None = None,
-    social_acceptance_scenario: str = SOCIAL_ACCEPTANCE_DEFAULT_SCENARIO_ID,
+    hex_area_km2: float | int | dict[str, Any] | None,
+    h3_resolution: int | dict[str, Any] | None = None,
+    social_acceptance_manifest: dict[str, Any] | str | None = None,
+    social_acceptance_scenario: str | float = SOCIAL_ACCEPTANCE_DEFAULT_SCENARIO_ID,
     social_acceptance_allocation_priority_pct: float = 0.0,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
+    if not isinstance(region, dict):
+        legacy_small_frame = region if isinstance(region, pd.DataFrame) else pd.DataFrame()
+        legacy_large_frame = small_frame if isinstance(small_frame, pd.DataFrame) else pd.DataFrame()
+        legacy_area_need_km2 = large_frame
+        legacy_twh_need = solar_area_need_km2
+        legacy_km2_per_twh = solar_twh_need
+        legacy_hex_area_km2 = solar_km2_per_twh
+        legacy_h3_resolution = hex_area_km2
+        legacy_manifest = h3_resolution
+        legacy_scenario = social_acceptance_manifest
+        legacy_priority_pct = social_acceptance_scenario
+        region = {}
+        small_frame = legacy_small_frame
+        large_frame = legacy_large_frame
+        solar_area_need_km2 = float(legacy_area_need_km2 or 0.0)
+        solar_twh_need = float(legacy_twh_need or 0.0)
+        solar_km2_per_twh = float(legacy_km2_per_twh or math.nan)
+        hex_area_km2 = float(legacy_hex_area_km2 or 0.0)
+        h3_resolution = int(legacy_h3_resolution) if legacy_h3_resolution is not None else None
+        social_acceptance_manifest = legacy_manifest if isinstance(legacy_manifest, dict) else None
+        social_acceptance_scenario = str(legacy_scenario or SOCIAL_ACCEPTANCE_DEFAULT_SCENARIO_ID)
+        social_acceptance_allocation_priority_pct = float(legacy_priority_pct or 0.0)
+
     rows: list[dict[str, Any]] = []
+
+    def _numeric_frame_column(frame: pd.DataFrame, column: str, default: float = 0.0) -> pd.Series:
+        if column in frame.columns:
+            return pd.to_numeric(frame[column], errors="coerce").fillna(default)
+        return pd.Series(default, index=frame.index, dtype="float64")
+
     if not small_frame.empty:
-        small = small_frame[pd.to_numeric(small_frame.get("solar_v1_area_km2"), errors="coerce").fillna(0.0).gt(0.0)].copy()
+        small = small_frame[_numeric_frame_column(small_frame, "solar_v1_area_km2").gt(0.0)].copy()
         for row in small.itertuples(index=False):
             rows.append(
                 {
@@ -5258,7 +5353,7 @@ def _solar_establishment_frame(
                 }
             )
     if not large_frame.empty:
-        large = large_frame[pd.to_numeric(large_frame.get("solar_score"), errors="coerce").fillna(0.0).gt(0.0)].copy()
+        large = large_frame[_numeric_frame_column(large_frame, "solar_score").gt(0.0)].copy()
         for row in large.itertuples(index=False):
             potential_area_km2 = float(getattr(row, "potential_area_km2", 0.0) or 0.0)
             if potential_area_km2 <= 0:
@@ -8049,7 +8144,10 @@ def _rollup_energy_area_proposal_frame(
         work["allocation_priority_reason"] = ""
     if "outside_et" not in work.columns:
         work["outside_et"] = False
+    if "reserved_by_other_technology" not in work.columns:
+        work["reserved_by_other_technology"] = False
     work["outside_et"] = work["outside_et"].fillna(False).astype(bool)
+    work["reserved_by_other_technology"] = work["reserved_by_other_technology"].fillna(False).astype(bool)
     work["outside_area_km2"] = work["allocated_area_km2"].where(work["outside_et"], 0.0)
     work["inside_area_km2"] = work["allocated_area_km2"].where(~work["outside_et"], 0.0)
 
@@ -8076,6 +8174,7 @@ def _rollup_energy_area_proposal_frame(
             social_acceptance_allocation_priority_pct=("social_acceptance_allocation_priority_pct", "max"),
             zone_size=("zone_size", "sum"),
             expansion_ring=("expansion_ring", "max"),
+            reserved_by_other_technology=("reserved_by_other_technology", "max"),
         )
         .sort_values(["selected_rank", "hex_id"])
         .reset_index(drop=True)
@@ -8119,6 +8218,7 @@ def _establishment_source_frame(
         f"{technology}_social_acceptance_priority_score",
         f"{technology}_social_acceptance_value",
         f"{technology}_social_acceptance_allocation_priority_pct",
+        f"{technology}_last_resort_overlap",
         f"{technology}_outside_lp",
         f"{technology}_conflict_area_km2",
         f"{technology}_conflict",
@@ -8166,6 +8266,10 @@ def _establishment_source_frame(
         "social_acceptance_allocation_priority_pct",
         0.0,
     ).clip(lower=0.0, upper=100.0)
+    if "reserved_by_other_technology" in work.columns:
+        work[f"{technology}_last_resort_overlap"] = work["reserved_by_other_technology"].fillna(False).astype(bool)
+    else:
+        work[f"{technology}_last_resort_overlap"] = False
     if "allocation_priority_reason" in work.columns:
         work[f"{technology}_allocation_priority_reason"] = work["allocation_priority_reason"].fillna("").astype(str)
     else:
@@ -8361,6 +8465,10 @@ def _combined_establishment_frame(
         if outside_col not in base.columns:
             base[outside_col] = False
         base[outside_col] = base[outside_col].map(lambda value: False if pd.isna(value) else bool(value))
+        overlap_col = f"{technology}_last_resort_overlap"
+        if overlap_col not in base.columns:
+            base[overlap_col] = False
+        base[overlap_col] = base[overlap_col].map(lambda value: False if pd.isna(value) else bool(value))
         conflict_col = f"{technology}_conflict"
         if conflict_col not in base.columns:
             base[conflict_col] = False
@@ -8450,6 +8558,10 @@ def _trondelag_rollup_potential_establishment_frame(
             if column in work.columns:
                 work[column] = work[column].map(lambda value: False if pd.isna(value) else bool(value)).astype(int)
                 agg_spec[column] = (column, "max")
+        overlap_col = f"{technology}_last_resort_overlap"
+        if overlap_col in work.columns:
+            work[overlap_col] = work[overlap_col].map(lambda value: False if pd.isna(value) else bool(value)).astype(int)
+            agg_spec[overlap_col] = (overlap_col, "max")
 
     rolled = (
         work.groupby("hex_id", as_index=False)
@@ -8489,6 +8601,10 @@ def _trondelag_rollup_potential_establishment_frame(
             if column not in base.columns:
                 base[column] = False
             base[column] = base[column].map(lambda value: False if pd.isna(value) else bool(value))
+        overlap_col = f"{technology}_last_resort_overlap"
+        if overlap_col not in base.columns:
+            base[overlap_col] = False
+        base[overlap_col] = base[overlap_col].map(lambda value: False if pd.isna(value) else bool(value))
         phase_col = f"{technology}_phase"
         if phase_col not in base.columns:
             base[phase_col] = ""
@@ -8570,6 +8686,7 @@ def _combined_potential_establishment_frame(
                 f"{technology}_conflict",
                 f"{technology}_expansion_ring",
                 f"{technology}_phase",
+                f"{technology}_last_resort_overlap",
             ]
         )
     allocation_columns.extend(["outside_lp_shortage", "outside_lp_reason"])
@@ -8611,6 +8728,13 @@ def _combined_potential_establishment_frame(
             elif column not in base.columns:
                 base[column] = False
             base[column] = base[column].map(lambda value: False if pd.isna(value) else bool(value))
+        overlap_col = f"{technology}_last_resort_overlap"
+        allocation_overlap_col = f"{overlap_col}__allocation"
+        if allocation_overlap_col in base.columns:
+            base[overlap_col] = base[allocation_overlap_col].map(lambda value: False if pd.isna(value) else bool(value))
+        elif overlap_col not in base.columns:
+            base[overlap_col] = False
+        base[overlap_col] = base[overlap_col].map(lambda value: False if pd.isna(value) else bool(value))
         phase_col = f"{technology}_phase"
         allocation_phase_col = f"{phase_col}__allocation"
         if allocation_phase_col in base.columns:
@@ -9092,7 +9216,7 @@ SCENARIO_ALLOCATION_SPECS: dict[str, dict[str, str]] = {
         "legend_color": "#f59e0b",
     },
     "both": {
-        "label": "Scenarioyta: vind och sol",
+        "label": "Scenarioyta: vind och sol (sista utväg)",
         "fill": "#166534",
         "stroke": "#052e16",
         "legend_color": "#166534",
@@ -9100,9 +9224,17 @@ SCENARIO_ALLOCATION_SPECS: dict[str, dict[str, str]] = {
 }
 
 
-def _scenario_allocation_class(wind_suitable: bool, solar_suitable: bool) -> str:
+def _scenario_allocation_class(
+    wind_suitable: bool,
+    solar_suitable: bool,
+    wind_area_km2: float = 0.0,
+    solar_area_km2: float = 0.0,
+    both_required: bool = False,
+) -> str:
     if wind_suitable and solar_suitable:
-        return "both"
+        if both_required:
+            return "both"
+        return "wind" if float(wind_area_km2 or 0.0) >= float(solar_area_km2 or 0.0) else "solar"
     if wind_suitable:
         return "wind"
     if solar_suitable:
@@ -9156,9 +9288,14 @@ def _scenario_allocation_marker_feature_collection(
         return "<br>".join(lines) + "<br>"
 
     for row in frame.itertuples(index=False):
-        wind_suitable = bool(getattr(row, "wind_suitable", False))
-        solar_suitable = bool(getattr(row, "solar_suitable", False))
-        class_id = _scenario_allocation_class(wind_suitable, solar_suitable)
+        wind_area = float(getattr(row, "wind_allocated_area_km2", 0.0) or 0.0)
+        solar_area = float(getattr(row, "solar_allocated_area_km2", 0.0) or 0.0)
+        wind_suitable = bool(getattr(row, "wind_suitable", False)) and wind_area > 0.0
+        solar_suitable = bool(getattr(row, "solar_suitable", False)) and solar_area > 0.0
+        both_required = bool(getattr(row, "wind_last_resort_overlap", False)) or bool(
+            getattr(row, "solar_last_resort_overlap", False)
+        )
+        class_id = _scenario_allocation_class(wind_suitable, solar_suitable, wind_area, solar_area, both_required)
         if not class_id:
             continue
         spec = SCENARIO_ALLOCATION_SPECS[class_id]
@@ -9167,14 +9304,18 @@ def _scenario_allocation_marker_feature_collection(
         geometry = _h3_polygon_geometry(child_hex)
         if geometry is None:
             continue
-        wind_area = float(getattr(row, "wind_allocated_area_km2", 0.0) or 0.0)
-        solar_area = float(getattr(row, "solar_allocated_area_km2", 0.0) or 0.0)
-        note = (
-            "Markören visar scenarioyta i en större hex där båda teknikerna används. "
-            "I prototypen samnyttjas samma H3-cell av vind och sol, så ytorna summeras per teknik men cellens fysiska area dubbleras inte."
-            if class_id == "both"
-            else "Markören visar scenariots placering inom en större etableringshex."
-        )
+        if class_id == "both":
+            note = (
+                "Markören visar scenarioyta i en större hex där båda teknikerna används. "
+                "Grön används först när separat vind- eller solyta inte räcker och cellen därför används som sista utväg."
+            )
+        elif wind_suitable and solar_suitable:
+            note = (
+                "Parent-hexen innehåller båda teknikerna i underliggande celler. Färgen visar den dominerande tekniken, "
+                "eftersom kombination inte behövs som sista utväg här."
+            )
+        else:
+            note = "Markören visar scenariots placering från den mest lämpade ytan först enligt aktiva filter och prioriteringar."
         popup = (
             f"<strong>{SCENARIO_ALLOCATION_LAYER_LABEL}</strong><br>"
             f"{spec['label']}<br>"
@@ -9199,7 +9340,7 @@ def _scenario_allocation_marker_feature_collection(
                     "solar_allocated_area_km2": solar_area,
                     "fill": spec["fill"],
                     "stroke": spec["stroke"],
-                    "stroke_weight": 0.48,
+                    "stroke_weight": 0.0,
                     "fill_opacity": 0.88,
                     "tooltip_title": spec["label"],
                     "tooltip_body": f"Vind {wind_area:.2f} km² · sol {solar_area:.2f} km²",
@@ -9235,10 +9376,10 @@ def _scenario_allocation_marker_layer(
         "legend_id": "scenario_allocation",
         "legend_title": SCENARIO_ALLOCATION_LAYER_LABEL,
         "default_visible": bool(default_visible) if default_visible is not None else int(target_resolution) <= 9 and feature_count <= 12000,
-        "stroke": True,
-        "stroke_opacity": 0.86,
+        "stroke": False,
+        "stroke_opacity": 0.0,
         "fill_opacity": 0.88,
-        "weight": 0.48,
+        "weight": 0.0,
         "z_index": 540,
         "layer_kind": "hex",
         "opacity_family": SCENARIO_ALLOCATION_LAYER_LABEL,
@@ -9496,6 +9637,7 @@ def _expand_wind_area_outside_et(
     proposal_stats: dict[str, Any],
     display_geometry_path: str | None,
     hex_area_km2: float,
+    avoid_hex_ids: set[str] | None = None,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
     if source_frame.empty or not display_geometry_path or hex_area_km2 <= 0:
         return selected_frame, proposal_stats
@@ -9549,9 +9691,11 @@ def _expand_wind_area_outside_et(
         outside.get("allocation_priority_score", outside.get("core_score", pd.Series(0.0, index=outside.index))),
         errors="coerce",
     ).fillna(0.0).clip(lower=0.0, upper=1.0)
+    reserved_hexes = {str(hex_id) for hex_id in (avoid_hex_ids or set())}
+    outside["reserved_by_other_technology"] = outside["hex_id"].astype(str).isin(reserved_hexes)
     outside = outside.sort_values(
-        ["expansion_ring", "allocation_priority_score", "zone_size", "hex_id"],
-        ascending=[True, False, False, True],
+        ["reserved_by_other_technology", "expansion_ring", "allocation_priority_score", "zone_size", "hex_id"],
+        ascending=[True, True, False, False, True],
     ).reset_index(drop=True)
 
     remaining_area = et_shortage
@@ -9564,6 +9708,7 @@ def _expand_wind_area_outside_et(
         record = row._asdict()
         record["selected_rank"] = start_rank + offset
         record["outside_et"] = True
+        record["reserved_by_other_technology"] = bool(getattr(row, "reserved_by_other_technology", False))
         record["allocation_phase"] = "Utanför LP"
         record["potential_area_km2"] = 0.0
         record["allocated_area_km2"] = allocated_area
@@ -9593,6 +9738,8 @@ def _expand_wind_area_outside_et(
             "outside_candidate_hex": int(len(outside)),
             "outside_candidate_area_km2": float(len(outside) * float(hex_area_km2)),
             "max_expansion_ring": int(outside_frame["expansion_ring"].max()),
+            "outside_reserved_candidate_hex": int(outside["reserved_by_other_technology"].sum()),
+            "outside_selected_reserved_hex": int(outside_frame["reserved_by_other_technology"].sum()),
         }
     )
     return combined, proposal_stats
@@ -10971,10 +11118,17 @@ def _missing_solar_controls(status_rows: list[dict[str, Any]]) -> None:
 def _missing_energy_controls(status_rows: list[dict[str, Any]]) -> None:
     st.caption(_disabled_note("Scenarier/energimodell", status_rows))
     st.selectbox(
-        {"en": "Energy scenario and land intensity", "da_no": "Energiscenario og arealintensitet"}.get(_language(), "Energiscenario och markintensitet"),
+        {"en": "Energy scenario", "da_no": "Energiscenario"}.get(_language(), "Energiscenario"),
         options=["Låg", "Mellan", "Hög"],
         index=1,
         key="missing_energy_scenario",
+        disabled=True,
+    )
+    st.selectbox(
+        {"en": "Land intensity", "da_no": "Arealintensitet"}.get(_language(), "Markintensitet"),
+        options=["Låg", "Mellan", "Hög"],
+        index=1,
+        key="missing_area_intensity",
         disabled=True,
     )
     st.radio(
@@ -11871,6 +12025,10 @@ def _unified_workspace_tab(
                 wind_area_need = float(energy_model_state.get("wind_area_need_km2", 0.0) or 0.0)
                 wind_twh_need = float(energy_model_state.get("wind_twh", 0.0) or 0.0)
                 wind_factor = float(energy_model_state.get("wind_km2_per_twh", math.nan) or math.nan)
+                solar_reserved_hex_ids = set()
+                solar_reserved_frame = energy_model_state.get("solar_proposal_frame", pd.DataFrame())
+                if isinstance(solar_reserved_frame, pd.DataFrame) and not solar_reserved_frame.empty and "hex_id" in solar_reserved_frame.columns:
+                    solar_reserved_hex_ids = set(solar_reserved_frame["hex_id"].astype(str))
                 wind_allocation_frame = _apply_landscape_priority_to_allocation_frame(
                     custom_wind_analysis_frame,
                     region,
@@ -11889,6 +12047,7 @@ def _unified_workspace_tab(
                     wind_area_need,
                     analysis_hex_area_km2,
                     float(energy_model_state.get("auto_min_potential_share_pct", 65.0) or 65.0),
+                    avoid_hex_ids=solar_reserved_hex_ids,
                 )
                 proposal_frame, proposal_stats = _expand_wind_area_outside_et(
                     wind_allocation_frame,
@@ -11896,6 +12055,7 @@ def _unified_workspace_tab(
                     proposal_stats,
                     analysis_display_geometry_path,
                     analysis_hex_area_km2,
+                    avoid_hex_ids=solar_reserved_hex_ids,
                 )
                 if not proposal_frame.empty:
                     if wind_factor > 0 and math.isfinite(wind_factor):
@@ -11913,7 +12073,7 @@ def _unified_workspace_tab(
                 energy_model_state["proposal_stats"] = proposal_stats
                 if not proposal_frame.empty:
                     unified_notes.append(
-                        "Vindens scenarioyta använder en intern landskaps-/teknikranking inom etableringshex. Placeringen visas med små child-hex ovanpå potentiallagret."
+                        "Vindens scenarioyta använder en intern landskaps-/teknikranking inom etableringshex. Den undviker redan placerad solyta så långt det finns vindyta kvar; grön kombination används som sista utväg."
                     )
                 elif wind_area_need > 0:
                     unified_notes.append("Energimodelleringen hittade inga vindceller som uppfyller minsta kärn-/potentialkrav.")
@@ -12030,7 +12190,7 @@ def _unified_workspace_tab(
                 )
             else:
                 unified_notes.append(
-                    f"{SCENARIO_ALLOCATION_LAYER_LABEL} visar scenariots placering som mörkare teknikfärgade child-hex ovanpå potentiallagret."
+                    f"{SCENARIO_ALLOCATION_LAYER_LABEL} visar scenariots placering som teknikfärgade child-hex: blå/gul först, grön bara när separat yta inte räcker."
                 )
         outside_lp_need_layers = _outside_lp_need_family_layers(
             region,

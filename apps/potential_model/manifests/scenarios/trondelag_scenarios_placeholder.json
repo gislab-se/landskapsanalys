@@ -60,6 +60,11 @@
           "wind": {"min": 0.01, "max": 100.0},
           "solar": {"min": 0.01, "max": 200.0}
         }
+      },
+      "scenario_factor_caps": {
+        "high_km2_per_twh": {
+          "wind": 100.0
+        }
       }
     },
     "planning": {

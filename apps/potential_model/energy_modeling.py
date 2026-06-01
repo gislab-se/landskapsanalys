@@ -92,6 +92,7 @@ DEFAULT_AREA_DEMAND_CONFIG: dict[str, Any] = {
             "solar": {"min": 0.01, "max": 200.0},
         },
     },
+    "scenario_factor_caps": {},
     "local_reference": {
         "section_label": "Bornholm",
         "technology_map": {
@@ -621,6 +622,46 @@ def _local_energy_reference_table(workbook_path: Path, area_cfg: dict[str, Any])
     return pd.DataFrame(rows)
 
 
+def _cap_for_factor(
+    area_cfg: dict[str, Any],
+    factor_column: str,
+    energy_key: str,
+    times_tech: str,
+    literature_key: str,
+) -> float | None:
+    caps = area_cfg.get("scenario_factor_caps") or {}
+    column_caps = caps.get(str(factor_column)) if isinstance(caps, dict) else None
+    if not isinstance(column_caps, dict):
+        return None
+    for key in (energy_key, times_tech, literature_key):
+        if key in column_caps:
+            try:
+                return float(column_caps[key])
+            except Exception:
+                return None
+    return None
+
+
+def _apply_factor_caps(
+    area_cfg: dict[str, Any],
+    values: dict[str, float],
+    energy_key: str,
+    times_tech: str,
+    literature_key: str,
+) -> tuple[dict[str, float], list[str], dict[str, float]]:
+    capped_values = dict(values)
+    notes: list[str] = []
+    original_values: dict[str, float] = {}
+    for factor_column, value in values.items():
+        cap = _cap_for_factor(area_cfg, factor_column, energy_key, times_tech, literature_key)
+        if cap is None or not math.isfinite(float(value)) or float(value) <= cap:
+            continue
+        original_values[factor_column] = float(value)
+        capped_values[factor_column] = cap
+        notes.append(f"{factor_column}: {float(value):.2f} -> {cap:.2f} km2/TWh")
+    return capped_values, notes, original_values
+
+
 def load_area_demand_bundle(manifest: dict[str, Any] | None, root: Path) -> AreaDemandBundle:
     area_cfg = deep_merge(DEFAULT_AREA_DEMAND_CONFIG, ((manifest or {}).get("energy_model") or {}).get("area_demand") or {})
     workbook_path = _path_from_config(area_cfg.get("path"), root)
@@ -723,9 +764,21 @@ def load_area_demand_bundle(manifest: dict[str, Any] | None, root: Path) -> Area
             )
             continue
 
-        low_value = min(float(row["low_km2_per_twh"]) for row in used_observations if row["low_km2_per_twh"] is not None)
-        mid_value = float(median(float(row["mid_km2_per_twh"]) for row in used_observations if row["mid_km2_per_twh"] is not None))
-        high_value = max(float(row["high_km2_per_twh"]) for row in used_observations if row["high_km2_per_twh"] is not None)
+        raw_values = {
+            "low_km2_per_twh": min(float(row["low_km2_per_twh"]) for row in used_observations if row["low_km2_per_twh"] is not None),
+            "mid_km2_per_twh": float(median(float(row["mid_km2_per_twh"]) for row in used_observations if row["mid_km2_per_twh"] is not None)),
+            "high_km2_per_twh": max(float(row["high_km2_per_twh"]) for row in used_observations if row["high_km2_per_twh"] is not None),
+        }
+        capped_values, cap_notes, original_values = _apply_factor_caps(
+            area_cfg,
+            raw_values,
+            energy_key,
+            str(times_tech),
+            literature_key,
+        )
+        low_value = capped_values["low_km2_per_twh"]
+        mid_value = capped_values["mid_km2_per_twh"]
+        high_value = capped_values["high_km2_per_twh"]
         factors_by_scenario["low"][str(times_tech)] = low_value
         factors_by_scenario["mid"][str(times_tech)] = mid_value
         factors_by_scenario["high"][str(times_tech)] = high_value
@@ -737,10 +790,29 @@ def load_area_demand_bundle(manifest: dict[str, Any] | None, root: Path) -> Area
                 "low_km2_per_twh": low_value,
                 "mid_km2_per_twh": mid_value,
                 "high_km2_per_twh": high_value,
+                "raw_low_km2_per_twh": raw_values["low_km2_per_twh"],
+                "raw_mid_km2_per_twh": raw_values["mid_km2_per_twh"],
+                "raw_high_km2_per_twh": raw_values["high_km2_per_twh"],
+                "cap_note": "; ".join(cap_notes),
                 "status": "supported",
             }
         )
+        for factor_column, original_value in original_values.items():
+            warning_rows.append(
+                {
+                    "times_tech": times_tech,
+                    "energy_key": energy_key,
+                    "source": "scenario_factor_caps",
+                    "raw_value": f"{original_value:.6g}",
+                    "warning": (
+                        f"{factor_column} capped from {original_value:.2f} to "
+                        f"{capped_values[factor_column]:.2f} km2/TWh by manifest."
+                    ),
+                }
+            )
 
+    cap_cfg = area_cfg.get("scenario_factor_caps") or {}
+    cap_text = " Manifestets scenario_factor_caps appliceras efter att scenariovardena har raknats fram." if cap_cfg else ""
     return AreaDemandBundle(
         factors_by_scenario=factors_by_scenario,
         scenario_table=pd.DataFrame(scenario_rows),
@@ -751,6 +823,7 @@ def load_area_demand_bundle(manifest: dict[str, Any] | None, root: Path) -> Area
         rules_text=(
             "Lag = minsta observerade km2/TWh, Mellan = median av mittvarden, "
             "Hog = storsta observerade km2/TWh. Outliers enligt manifestets quality_rules exkluderas."
+            + cap_text
         ),
         source_path=str(workbook_path),
     )
@@ -795,6 +868,7 @@ def allocate_wind_area_from_core_hexes(
     area_need_km2: float,
     hex_area_km2: float,
     min_share_pct: float = 65.0,
+    avoid_hex_ids: set[str] | None = None,
 ) -> tuple[pd.DataFrame, dict[str, float]]:
     empty = pd.DataFrame(
         columns=[
@@ -808,6 +882,7 @@ def allocate_wind_area_from_core_hexes(
             "core_score",
             "zone_size",
             "selected_rank",
+            "reserved_by_other_technology",
         ]
     )
     if frame.empty or area_need_km2 <= 0 or hex_area_km2 <= 0:
@@ -844,6 +919,8 @@ def allocate_wind_area_from_core_hexes(
         {True: "Karn-LP", False: "Kompletterande LP"}
     )
     candidates["priority_group"] = candidates["allocation_phase"].map({"Karn-LP": 0, "Kompletterande LP": 1}).fillna(1).astype(int)
+    reserved_hexes = {str(hex_id) for hex_id in (avoid_hex_ids or set())}
+    candidates["reserved_by_other_technology"] = candidates["hex_id"].astype(str).isin(reserved_hexes)
     if "potential_area_km2" in candidates.columns:
         candidates["potential_area_km2"] = pd.to_numeric(candidates["potential_area_km2"], errors="coerce").fillna(0.0).clip(lower=0.0)
     else:
@@ -864,8 +941,16 @@ def allocate_wind_area_from_core_hexes(
             "extension_candidate_hex": 0,
         }
     candidates = candidates.sort_values(
-        ["priority_group", "core_score", "zone_size", "potential_area_share_pct", "potential_area_km2", "hex_id"],
-        ascending=[True, False, False, False, False, True],
+        [
+            "reserved_by_other_technology",
+            "priority_group",
+            "core_score",
+            "zone_size",
+            "potential_area_share_pct",
+            "potential_area_km2",
+            "hex_id",
+        ],
+        ascending=[True, True, False, False, False, False, True],
     ).reset_index(drop=True)
 
     remaining_area = float(area_need_km2)
@@ -877,6 +962,7 @@ def allocate_wind_area_from_core_hexes(
             break
         record = row._asdict()
         record["selected_rank"] = rank
+        record["reserved_by_other_technology"] = bool(getattr(row, "reserved_by_other_technology", False))
         record["allocated_area_km2"] = allocated_area
         record["allocated_hex_share_pct"] = (allocated_area / max(float(hex_area_km2), 1e-9)) * 100.0
         remaining_area = max(0.0, remaining_area - allocated_area)
@@ -905,5 +991,7 @@ def allocate_wind_area_from_core_hexes(
         "extension_candidate_hex": int(candidates["allocation_phase"].eq("Kompletterande LP").sum()),
         "selected_primary_hex": int(phase_counts.get("Karn-LP", 0)),
         "selected_extension_hex": int(phase_counts.get("Kompletterande LP", 0)),
+        "reserved_candidate_hex": int(candidates["reserved_by_other_technology"].sum()),
+        "selected_reserved_hex": int(selected["reserved_by_other_technology"].sum()) if not selected.empty else 0,
         "min_share_pct": float(min_share_pct),
     }
