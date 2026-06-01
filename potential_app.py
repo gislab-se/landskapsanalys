@@ -624,65 +624,102 @@ def _render_tutorial_launcher(region: dict[str, Any], panel: Any | None = None) 
     return bool(st.session_state.pop(TUTORIAL_FORCE_OPEN_KEY, False))
 
 
-def _trondelag_tutorial_steps(region: dict[str, Any]) -> list[dict[str, str]]:
+def _trondelag_tutorial_steps(region: dict[str, Any]) -> list[dict[str, Any]]:
     region_label = str(region.get("display_name", "Trondelag") or "Trondelag")
     return [
         {
             "selector": ".workspace-header",
-            "title": f"{region_label}: snabb orientering",
+            "title": "Potentialappen är en prototyp",
             "body": (
-                "Överst ser du region, scenario, H3-upplösning och CRS. Trøndelag är fast region i den här vyn, "
-                "så kontrollerna nedanför påverkar samma regionala arbetsyta."
+                f"{region_label}-appen hjälper dig utforska var landskapet kan ha potential för vind och sol. "
+                "Den kombinerar geografi, energimodellering och social acceptans. Målet är inte ett färdigt svar, "
+                "utan att visa var potential kan finnas och vilka antaganden som påverkar resultatet."
             ),
         },
         {
             "selector": "section[data-testid=\"stSidebar\"]",
-            "title": "Sidopanelen styr kartan",
+            "title": "Börja med geografin",
             "body": (
-                "Här slår du på landskap, vind, sol, energimodellering och social acceptans. "
-                "Expanderarna håller avancerade val undan tills du behöver dem."
+                "Geografiska förutsättningar visar vilka delar av landskapet som över huvud taget kan vara relevanta. "
+                "Här finns landskapstyper, H3-visning och lager som kan beskriva infrastruktur, skyddade områden och rumsliga begränsningar."
             ),
+            "openTexts": ["Geografier", "Landskap", "H3-upplösning"],
         },
         {
             "selector": "section[data-testid=\"stSidebar\"]",
-            "title": "Geografier och H3",
+            "title": "Koppla yta till energi",
             "body": (
-                "I Geografier väljer du landskapslager och H3-visning. Trøndelag exponerar R7, R6 och R5 i appen; "
-                "R9 används inte i den interaktiva vyn."
+                "Energimodelleringen kopplar landskapets möjliga ytor till scenarier för vind, sol eller en mix av båda. "
+                "Scenarierna visar inte bara var det finns plats, utan vad platsen kan betyda i energisystemet."
             ),
+            "openTexts": ["Energimodellering"],
         },
         {
             "selector": "section[data-testid=\"stSidebar\"]",
-            "title": "Vind, sol och filter",
+            "title": "Lägg till social acceptans",
             "body": (
-                "Vind- och solpanelerna bygger potentiell etableringsyta från aktiva lager och buffertar. "
-                "Befolkning i Trøndelag visas som en 250 m grid-/centroidproxy, inte som individuella befolkningspunkter."
+                "Social acceptans hjälper dig förstå var potentialen kan vara mer eller mindre realistisk utifrån landskapets användning, "
+                "värden och möjliga konflikter. I Trøndelag är detta syntetiskt testdata, inte färdiga IVL-resultat."
+            ),
+            "openTexts": ["Social acceptans"],
+        },
+        {
+            "anchor": "map",
+            "target": "iframeSelector",
+            "iframeSelectors": [".map-legend"],
+            "fallbackTarget": "nextIframe",
+            "title": "Läs resultatet i kartan",
+            "body": (
+                "Resultatkartan visar den sammanvägda potentialen: grön betyder både vind och sol, gul bara sol, blå bara vind och röd ej lämpligt. "
+                "Scenariofördelning och ytbehov utanför potential kan visas som extra lager när ett scenario inte ryms."
             ),
         },
         {
             "anchor": "map",
-            "target": "nextIframe",
-            "title": "Kartan visar resultatet",
+            "target": "iframeGreenArea",
+            "fallbackTarget": "nextIframe",
+            "title": "Grönt är ett öppet startläge",
             "body": (
-                "Kartan kombinerar landskap, potentiell etableringsyta och scenariofördelning. "
-                "Lagerkontrollen i kartan kan tända och släcka enskilda lager utan att ändra beräkningen."
-            ),
-        },
-        {
-            "selector": "div[data-testid=\"column\"]:has(#right-panel-content-anchor)",
-            "anchor": "right-panel",
-            "title": "Högerpanelen förklarar läget",
-            "body": (
-                "Högerpanelen sammanfattar om vald mix ryms inom potentialen, vilka lager som visas och vilka "
-                "antaganden som ligger bakom den senaste körningen."
+                "I startläget kan mycket vara grönt eftersom få avgränsande lager eller restriktioner är aktiva. "
+                "Grönt betyder därför möjligt enligt nuvarande antaganden, inte ett färdigt rekommenderat område."
             ),
         },
         {
             "selector": "section[data-testid=\"stSidebar\"]",
-            "title": "Öppna guiden igen",
+            "title": "Vind och sol styrs under Geografier",
             "body": (
-                "Du kan starta den här guiden manuellt med knappen Visa guide. Kryssa i rutan här om den inte ska "
-                "öppnas automatiskt vid nästa besök."
+                "Under Geografier finns Landskapspotential Vind och Landskapspotential Sol. Där justerar du de antaganden, lager, avstånd "
+                "och restriktioner som påverkar vind- respektive solpotentialen."
+            ),
+            "openTexts": ["Geografier"],
+            "highlightTexts": [WIND_LANDSCAPE_POTENTIAL_LABEL, SOLAR_LANDSCAPE_POTENTIAL_LABEL],
+        },
+        {
+            "selector": "section[data-testid=\"stSidebar\"]",
+            "title": "Ändra vindantaganden och använd dem",
+            "body": (
+                "Öppna vindpotentialen, justera till exempel Befolkning och bebyggelse och klicka sedan Använd ändringar. "
+                "Om inga vindlager är valda används en ofiltrerad vindpotential som startläge tills du aktiverar avgränsande lager."
+            ),
+            "openTexts": ["Geografier", WIND_LANDSCAPE_POTENTIAL_LABEL, "Befolkning och bebyggelse"],
+            "highlightTexts": ["Befolkning och bebyggelse", "Använd ändringar"],
+        },
+        {
+            "selector": "div[data-testid=\"column\"]:has(#right-panel-content-anchor)",
+            "anchor": "right-panel",
+            "title": "Högerpanelen förklarar varför",
+            "body": (
+                "Kartan visar mönstret. Högerpanelen och tabellerna visar samma analys i text och siffror: vilken yta som prioriteras, "
+                "vilka avgränsningar som påverkar resultatet och om scenariot ryms inom potentialen."
+            ),
+        },
+        {
+            "target": "buttonText",
+            "buttonText": "Visa guide",
+            "closeAllExpanders": True,
+            "title": "Du kan alltid öppna guiden igen",
+            "body": (
+                "Starta om den korta guiden med Visa guide. Kryssa i Öppna inte automatiskt igen om du vill att appen ska hoppa över introduktionen nästa gång."
             ),
         },
     ]
@@ -983,23 +1020,244 @@ def _render_tutorial_component(region: dict[str, Any], force_open: bool = False)
     }
   };
 
+  const iframeForContainer = (container) => {
+    if (!container) {
+      return null;
+    }
+    return container.tagName && container.tagName.toLowerCase() === "iframe"
+      ? container
+      : container.querySelector("iframe");
+  };
+
+  const visibleMapFrames = () => Array.from(parentDocument.querySelectorAll("iframe"))
+    .map((iframe) => {
+      const container = iframe.closest('div[data-testid="stIFrame"]') || iframe;
+      const rect = container.getBoundingClientRect();
+      const visibleLeft = Math.max(0, rect.left);
+      const visibleTop = Math.max(0, rect.top);
+      const visibleRight = Math.min(parentWindow.innerWidth, rect.right);
+      const visibleBottom = Math.min(parentWindow.innerHeight, rect.bottom);
+      const visibleArea = Math.max(0, visibleRight - visibleLeft) * Math.max(0, visibleBottom - visibleTop);
+      return { iframe, container, rect, visibleArea };
+    })
+    .filter((item) => (
+      item.rect.width > 220 &&
+      item.rect.height > 220 &&
+      item.visibleArea > 50000 &&
+      !item.container.closest('section[data-testid="stSidebar"]')
+    ))
+    .sort((a, b) => b.visibleArea - a.visibleArea);
+
   const findNextIframe = (anchor) => {
     const marker = markerFor(anchor);
-    const frames = Array.from(parentDocument.querySelectorAll('div[data-testid="stIFrame"]'))
-      .filter((node) => node.getBoundingClientRect().height > 120);
+    const frames = visibleMapFrames();
     if (!frames.length) {
       return null;
     }
     if (!marker) {
-      return frames[0];
+      return frames[0].container;
     }
     const markerTop = marker.getBoundingClientRect().top;
-    return frames.find((node) => node.getBoundingClientRect().top >= markerTop - 24) || frames[0];
+    const afterMarker = frames
+      .filter((item) => item.rect.top >= markerTop - 24)
+      .sort((a, b) => b.visibleArea - a.visibleArea);
+    return (afterMarker[0] || frames[0]).container;
+  };
+
+  const normalizedText = (value) => String(value || "").replace(/\s+/g, " ").trim().toLowerCase();
+  const isVisible = (node) => {
+    if (!node || !node.getBoundingClientRect) {
+      return false;
+    }
+    const rect = node.getBoundingClientRect();
+    return rect.width > 2 && rect.height > 2;
+  };
+
+  const virtualRect = (rectProvider) => ({
+    __virtual: true,
+    getBoundingClientRect: rectProvider,
+  });
+
+  const combineRects = (nodes) => {
+    const rects = nodes
+      .filter((node) => node && (node.__virtual || isVisible(node)))
+      .map((node) => node.getBoundingClientRect());
+    if (!rects.length) {
+      return null;
+    }
+    return virtualRect(() => {
+      const liveRects = nodes
+        .filter((node) => node && (node.__virtual || isVisible(node)))
+        .map((node) => node.getBoundingClientRect());
+      const source = liveRects.length ? liveRects : rects;
+      const left = Math.min(...source.map((rect) => rect.left));
+      const top = Math.min(...source.map((rect) => rect.top));
+      const right = Math.max(...source.map((rect) => rect.right));
+      const bottom = Math.max(...source.map((rect) => rect.bottom));
+      return { left, top, right, bottom, width: right - left, height: bottom - top };
+    });
+  };
+
+  const iframeElementTarget = (iframe, element) => {
+    if (!iframe || !element || !isVisible(element)) {
+      return null;
+    }
+    return virtualRect(() => {
+      const frameRect = iframe.getBoundingClientRect();
+      const rect = element.getBoundingClientRect();
+      const left = frameRect.left + rect.left;
+      const top = frameRect.top + rect.top;
+      const right = left + rect.width;
+      const bottom = top + rect.height;
+      return { left, top, right, bottom, width: rect.width, height: rect.height };
+    });
+  };
+
+  const iframeDocumentForStep = (step) => {
+    const frameContainer = findNextIframe(step.anchor);
+    const iframe = iframeForContainer(frameContainer);
+    try {
+      return iframe && iframe.contentDocument ? { iframe, doc: iframe.contentDocument } : null;
+    } catch (error) {
+      return null;
+    }
+  };
+
+  const findIframeSelectorTarget = (step) => {
+    const iframeInfo = iframeDocumentForStep(step);
+    if (!iframeInfo) {
+      return null;
+    }
+    const selectors = Array.isArray(step.iframeSelectors) ? step.iframeSelectors : [];
+    for (const selector of selectors) {
+      try {
+        const element = iframeInfo.doc.querySelector(selector);
+        const target = iframeElementTarget(iframeInfo.iframe, element);
+        if (target) {
+          return target;
+        }
+      } catch (error) {
+        continue;
+      }
+    }
+    return null;
+  };
+
+  const findGreenMapAreaTarget = (step) => {
+    const iframeInfo = iframeDocumentForStep(step);
+    if (!iframeInfo) {
+      return null;
+    }
+    return virtualRect(() => {
+      const frameRect = iframeInfo.iframe.getBoundingClientRect();
+      const width = Math.min(frameRect.width * 0.48, 520);
+      const height = Math.min(frameRect.height * 0.52, 460);
+      const left = frameRect.left + frameRect.width * 0.30;
+      const top = frameRect.top + frameRect.height * 0.30;
+      const right = Math.min(frameRect.right - 12, left + width);
+      const bottom = Math.min(frameRect.bottom - 12, top + height);
+      return { left, top, right, bottom, width: right - left, height: bottom - top };
+    });
+  };
+
+  const findExpanderForLabel = (label) => {
+    const wanted = normalizedText(label);
+    if (!wanted) {
+      return null;
+    }
+    const details = Array.from(parentDocument.querySelectorAll("details"));
+    const matches = details.filter((node) => {
+      const summary = node.querySelector("summary");
+      const text = normalizedText(summary ? summary.textContent : node.textContent);
+      return text === wanted || text.includes(wanted);
+    });
+    return (
+      matches.find((node) => isVisible(node) && node.closest('section[data-testid="stSidebar"]')) ||
+      matches.find((node) => isVisible(node)) ||
+      matches.find((node) => node.closest('section[data-testid="stSidebar"]')) ||
+      matches[0] ||
+      null
+    );
+  };
+
+  const findButtonByText = (label) => {
+    const wanted = normalizedText(label);
+    if (!wanted) {
+      return null;
+    }
+    return Array.from(parentDocument.querySelectorAll("button")).find((button) => {
+      const text = normalizedText(button.textContent);
+      return isVisible(button) && (text === wanted || text.includes(wanted));
+    }) || null;
+  };
+
+  const findElementByText = (label) => findExpanderForLabel(label) || findButtonByText(label);
+
+  const combinedTextTarget = (labels) => {
+    const nodes = (Array.isArray(labels) ? labels : [])
+      .map((label) => findElementByText(label))
+      .filter(Boolean);
+    return combineRects(nodes);
+  };
+
+  const firstStepExpander = (step) => {
+    const labels = Array.isArray(step.openTexts) ? step.openTexts.map(normalizedText).filter(Boolean) : [];
+    for (const label of labels) {
+      const match = findExpanderForLabel(label);
+      if (match) {
+        return match;
+      }
+    }
+    return null;
+  };
+
+  const openExpandersForStep = (step) => {
+    const labels = Array.isArray(step.openTexts) ? step.openTexts.map(normalizedText).filter(Boolean) : [];
+    if (!labels.length) {
+      return;
+    }
+    labels.forEach((label) => {
+      const match = findExpanderForLabel(label);
+      if (match && !match.open) {
+        match.open = true;
+        match.dispatchEvent(new Event("toggle", { bubbles: true }));
+      }
+    });
+  };
+
+  const closeSidebarExpanders = () => {
+    const sidebar = parentDocument.querySelector('section[data-testid="stSidebar"]');
+    const scope = sidebar || parentDocument;
+    Array.from(scope.querySelectorAll("details")).forEach((node) => {
+      if (node.open) {
+        node.open = false;
+        node.dispatchEvent(new Event("toggle", { bubbles: true }));
+      }
+    });
   };
 
   const resolveTarget = (step) => {
+    if (step.target === "iframeSelector") {
+      return findIframeSelectorTarget(step) || (step.fallbackTarget === "nextIframe" ? findNextIframe(step.anchor) : null);
+    }
+    if (step.target === "iframeGreenArea") {
+      return findGreenMapAreaTarget(step) || (step.fallbackTarget === "nextIframe" ? findNextIframe(step.anchor) : null);
+    }
+    if (step.target === "buttonText") {
+      return findButtonByText(step.buttonText);
+    }
+    if (Array.isArray(step.highlightTexts)) {
+      const textTarget = combinedTextTarget(step.highlightTexts);
+      if (textTarget) {
+        return textTarget;
+      }
+    }
     if (step.target === "nextIframe") {
       return findNextIframe(step.anchor);
+    }
+    const stepExpander = firstStepExpander(step);
+    if (stepExpander) {
+      return stepExpander;
     }
     const selected = resolveSelector(step.selector);
     if (selected) {
@@ -1035,7 +1293,7 @@ def _render_tutorial_component(region: dict[str, Any], force_open: bool = False)
     let width = Math.min(420, viewportWidth - 48);
     let height = 160;
 
-    if (activeTarget && parentDocument.body.contains(activeTarget)) {
+    if (activeTarget && (activeTarget.__virtual || parentDocument.body.contains(activeTarget))) {
       const rect = activeTarget.getBoundingClientRect();
       const pad = 8;
       top = clamp(rect.top - pad, 8, viewportHeight - 24);
@@ -1070,6 +1328,10 @@ def _render_tutorial_component(region: dict[str, Any], force_open: bool = False)
 
   const render = () => {
     const step = payload.steps[index];
+    if (step.closeAllExpanders) {
+      closeSidebarExpanders();
+    }
+    openExpandersForStep(step);
     activeTarget = resolveTarget(step);
     title.textContent = step.title || "";
     body.textContent = step.body || "";
