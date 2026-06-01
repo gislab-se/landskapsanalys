@@ -189,6 +189,7 @@ SOLAR_POTENTIAL_POLYGON_LABEL = "Landskapspotential Sol polygon"
 SOLAR_POTENTIAL_HEX_LABEL = "Landskapspotential Sol hexagon"
 SOLAR_ESTABLISHMENT_LAYER_LABEL = "Potentiell etableringsyta Sol"
 OUTSIDE_LP_NEED_LAYER_LABEL = "Ytbehov utanför landskapets potential"
+OUTSIDE_LP_NEED_DISPLAY_MIN_KM2 = 0.005
 SOLAR_POPULATION_SOURCE_LABEL = "Sol källa: Befolkningsunderlag"
 SOLAR_POPULATION_BUFFER_LABEL = "Solbuffert: Befolkningsunderlag"
 PROTECTED_NATURE_LABEL = "Skyddad natur"
@@ -5975,6 +5976,10 @@ def _outside_need_stats_from_areas(wind_area_km2: float, solar_area_km2: float, 
     hex_area = max(float(hex_area_km2 or 0.0), 1e-9)
     wind_area = max(0.0, float(wind_area_km2 or 0.0))
     solar_area = max(0.0, float(solar_area_km2 or 0.0))
+    if wind_area < OUTSIDE_LP_NEED_DISPLAY_MIN_KM2:
+        wind_area = 0.0
+    if solar_area < OUTSIDE_LP_NEED_DISPLAY_MIN_KM2:
+        solar_area = 0.0
     wind_count = int(math.ceil(wind_area / hex_area)) if wind_area > 0 else 0
     solar_count = int(math.ceil(solar_area / hex_area)) if solar_area > 0 else 0
     return {
@@ -9034,6 +9039,10 @@ def _outside_lp_need_feature_collection(
         solar_area = float(pd.to_numeric(selected.get("solar_outside_lp_area_km2", pd.Series(dtype=float)), errors="coerce").fillna(0.0).clip(lower=0.0).sum())
     else:
         solar_area = max(0.0, float(solar_area_override_km2 or 0.0))
+    if wind_area < OUTSIDE_LP_NEED_DISPLAY_MIN_KM2:
+        wind_area = 0.0
+    if solar_area < OUTSIDE_LP_NEED_DISPLAY_MIN_KM2:
+        solar_area = 0.0
     if wind_area <= 0 and solar_area <= 0:
         return {"type": "FeatureCollection", "features": features}
 
@@ -9174,6 +9183,12 @@ def _outside_lp_need_family_layers(
     wind_area_km2: float | None = None,
     solar_area_km2: float | None = None,
 ) -> list[dict[str, Any]]:
+    if (
+        (wind_area_km2 is None or max(0.0, float(wind_area_km2 or 0.0)) < OUTSIDE_LP_NEED_DISPLAY_MIN_KM2)
+        and (solar_area_km2 is None or max(0.0, float(solar_area_km2 or 0.0)) < OUTSIDE_LP_NEED_DISPLAY_MIN_KM2)
+    ):
+        wind_area_km2 = 0.0 if wind_area_km2 is not None else None
+        solar_area_km2 = 0.0 if solar_area_km2 is not None else None
     if wind_selected.empty and solar_selected.empty and wind_area_km2 is None and solar_area_km2 is None:
         return []
     source_resolution = int(source_resolution or selected_resolution)
