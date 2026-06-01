@@ -502,7 +502,7 @@ def build_layered_hex_map_html(
       }}
 
       overlays[spec.name] = layer;
-      layerRecords.push({{ name: spec.name, layer: layer }});
+      layerRecords.push({{ name: spec.name, layer: layer, spec: spec }});
       const shouldShow = savedOverlayVisibility && Object.prototype.hasOwnProperty.call(savedOverlayVisibility, spec.name)
         ? Boolean(savedOverlayVisibility[spec.name])
         : (spec.default_visible !== false);
@@ -606,7 +606,7 @@ def build_layered_hex_map_html(
 
     autoFamilyRecords.forEach(function(family) {{
       overlays[family.controlName] = family.controller;
-      layerRecords.push({{ name: family.controlName, layer: family.controller }});
+      layerRecords.push({{ name: family.controlName, layer: family.controller, family: family }});
       const shouldShow = savedOverlayVisibility && Object.prototype.hasOwnProperty.call(savedOverlayVisibility, family.controlName)
         ? Boolean(savedOverlayVisibility[family.controlName])
         : family.defaultVisible;
@@ -654,6 +654,62 @@ def build_layered_hex_map_html(
       storeMapView();
     }});
     storeOverlayVisibility();
+
+    function recordLayerFeatureCount(layer) {{
+      if (!layer || typeof layer.getLayers !== 'function') {{
+        return 0;
+      }}
+      const children = layer.getLayers();
+      if (!children || children.length === 0) {{
+        return 0;
+      }}
+      return children.reduce(function(total, child) {{
+        if (child && typeof child.getLayers === 'function') {{
+          return total + recordLayerFeatureCount(child);
+        }}
+        return total + 1;
+      }}, 0);
+    }}
+
+    function setOverlayVisibilityByName(name, visible) {{
+      const wanted = String(name || '');
+      const record = layerRecords.find(function(item) {{ return item.name === wanted; }});
+      if (!record) {{
+        return false;
+      }}
+      const shouldShow = Boolean(visible);
+      if (shouldShow && !map.hasLayer(record.layer)) {{
+        record.layer.addTo(map);
+      }} else if (!shouldShow && map.hasLayer(record.layer)) {{
+        map.removeLayer(record.layer);
+      }}
+      if (record.family) {{
+        if (shouldShow) {{
+          syncAutoFamily(record.family);
+        }} else {{
+          record.family.controller.clearLayers();
+        }}
+      }}
+      storeOverlayVisibility();
+      updateLegendContent();
+      return true;
+    }}
+
+    window.__potentialMapSetOverlayVisibility = setOverlayVisibilityByName;
+    window.__potentialMapOverlayVisible = function(name) {{
+      const wanted = String(name || '');
+      const record = layerRecords.find(function(item) {{ return item.name === wanted; }});
+      return Boolean(record && map.hasLayer(record.layer));
+    }};
+    window.__potentialMapOverlayKnown = function(name) {{
+      const wanted = String(name || '');
+      return Boolean(layerRecords.find(function(item) {{ return item.name === wanted; }}));
+    }};
+    window.__potentialMapOverlayFeatureCount = function(name) {{
+      const wanted = String(name || '');
+      const record = layerRecords.find(function(item) {{ return item.name === wanted; }});
+      return record ? recordLayerFeatureCount(record.layer) : 0;
+    }};
 
     const note = L.control({{ position: 'topright' }});
     note.onAdd = function() {{

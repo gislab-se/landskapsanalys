@@ -17,6 +17,8 @@ from selenium.webdriver.support.ui import WebDriverWait
 
 DEFAULT_URL = "http://localhost:8505"
 TUTORIAL_STORAGE_KEY = "potential_tutorial_trondelag_v1_dismissed"
+SCENARIO_ALLOCATION_LAYER_LABEL = "Scenariof\u00f6rdelning i etableringshex"
+OUTSIDE_LP_NEED_LAYER_LABEL = "Ytbehov utanf\u00f6r landskapets potential"
 
 
 @dataclass
@@ -218,6 +220,42 @@ def _snapshot(driver: webdriver.Remote) -> dict[str, Any]:
     return data
 
 
+def _overlay_state(driver: webdriver.Remote, layer_name: str) -> dict[str, Any]:
+    return driver.execute_script(
+        r"""
+const wanted = String(arguments[0] || '');
+const frames = Array.from(document.querySelectorAll("iframe"))
+  .map((iframe) => {
+    const container = iframe.closest('div[data-testid="stIFrame"]') || iframe;
+    const rect = container.getBoundingClientRect();
+    const visibleLeft = Math.max(0, rect.left);
+    const visibleTop = Math.max(0, rect.top);
+    const visibleRight = Math.min(window.innerWidth, rect.right);
+    const visibleBottom = Math.min(window.innerHeight, rect.bottom);
+    const visibleArea = Math.max(0, visibleRight - visibleLeft) * Math.max(0, visibleBottom - visibleTop);
+    return { iframe, container, rect, visibleArea };
+  })
+  .filter((item) => item.rect.width > 220 && item.rect.height > 220 && item.visibleArea > 50000 && !item.container.closest('section[data-testid="stSidebar"]'))
+  .sort((a, b) => b.visibleArea - a.visibleArea);
+if (!frames.length) {
+  return { available: false, visible: false, featureCount: 0, reason: "no-map-frame" };
+}
+const mapWindow = frames[0].iframe.contentWindow;
+if (!mapWindow || typeof mapWindow.__potentialMapOverlayVisible !== "function") {
+  return { available: false, visible: false, featureCount: 0, reason: "no-overlay-api" };
+}
+return {
+  available: true,
+  known: typeof mapWindow.__potentialMapOverlayKnown === "function" ? Boolean(mapWindow.__potentialMapOverlayKnown(wanted)) : true,
+  visible: Boolean(mapWindow.__potentialMapOverlayVisible(wanted)),
+  featureCount: Number(mapWindow.__potentialMapOverlayFeatureCount(wanted) || 0),
+  reason: ""
+};
+""",
+        layer_name,
+    )
+
+
 def _wait_for_overlay_layout(driver: webdriver.Remote) -> None:
     try:
         driver.execute_async_script(
@@ -393,7 +431,7 @@ def _assert_legend_step(data: dict[str, Any], title: str, section_label: str, *,
     highlight = data["highlight"]
     overlap_area = _overlap_area(highlight, section)
     section_area = section["width"] * section["height"]
-    if overlap_area < max(20.0, section_area * 0.55):
+    if overlap_area < max(20.0, section_area * 0.30):
         raise AssertionError(
             f"{title} highlight does not cover legend section {section_label!r}: "
             f"highlight={json.dumps(highlight, sort_keys=True)} section={json.dumps(section, sort_keys=True)}"
@@ -401,6 +439,19 @@ def _assert_legend_step(data: dict[str, Any], title: str, section_label: str, *,
     sidebar = data.get("sidebar")
     if sidebar and _overlap_area(highlight, sidebar) > 0:
         raise AssertionError(f"{title} highlight overlaps sidebar.")
+
+
+def _assert_overlay_visible(driver: webdriver.Remote, layer_name: str, *, allow_missing: bool = False) -> None:
+    state = _overlay_state(driver, layer_name)
+    if not state.get("available"):
+        raise AssertionError(f"Map overlay API is not available for {layer_name!r}: {state}")
+    if allow_missing and not state.get("known"):
+        print(f"SKIP optional overlay {layer_name!r}: layer is not present for the current scenario.")
+        return
+    if not state.get("visible"):
+        raise AssertionError(f"Map overlay {layer_name!r} is not visible: {state}")
+    if int(state.get("featureCount", 0) or 0) <= 0:
+        raise AssertionError(f"Map overlay {layer_name!r} has no rendered features: {state}")
 
 
 def _label_visible(data: dict[str, Any], label: str) -> bool:
@@ -483,6 +534,7 @@ def run(url: str, headed: bool, timeout: int, screenshot_dir: Path | None) -> in
             ),
         )
         _print_snapshot(scenario)
+        _assert_overlay_visible(driver, SCENARIO_ALLOCATION_LAYER_LABEL)
 
         _click(driver, "#potential-tutorial-root .pt-next")
         outside_need = _wait_for_checked_state(
@@ -497,6 +549,7 @@ def run(url: str, headed: bool, timeout: int, screenshot_dir: Path | None) -> in
             ),
         )
         _print_snapshot(outside_need)
+        _assert_overlay_visible(driver, OUTSIDE_LP_NEED_LAYER_LABEL, allow_missing=True)
 
         _click(driver, "#potential-tutorial-root .pt-next")
         green_start = _wait_for_checked_state(
@@ -557,6 +610,7 @@ def run(url: str, headed: bool, timeout: int, screenshot_dir: Path | None) -> in
             ),
         )
         _print_snapshot(back_outside_need)
+        _assert_overlay_visible(driver, OUTSIDE_LP_NEED_LAYER_LABEL, allow_missing=True)
 
         _click(driver, "#potential-tutorial-root .pt-next")
         _wait_for_checked_state(

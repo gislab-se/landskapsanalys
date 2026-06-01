@@ -898,9 +898,22 @@ def allocate_wind_area_from_core_hexes(
         }
 
     candidates = frame.copy()
-    candidates["potential_area_share_pct"] = pd.to_numeric(candidates.get("potential_area_share_pct"), errors="coerce").fillna(0.0)
-    candidates["core_score"] = pd.to_numeric(candidates.get("core_score"), errors="coerce").fillna(0.0)
-    candidates["zone_size"] = pd.to_numeric(candidates.get("zone_size"), errors="coerce").fillna(0).astype(int)
+    candidates["potential_area_share_pct"] = pd.to_numeric(
+        candidates.get("potential_area_share_pct", pd.Series(0.0, index=candidates.index)),
+        errors="coerce",
+    ).fillna(0.0)
+    candidates["core_score"] = pd.to_numeric(
+        candidates.get("core_score", pd.Series(0.0, index=candidates.index)),
+        errors="coerce",
+    ).fillna(0.0)
+    candidates["zone_size"] = pd.to_numeric(
+        candidates.get("zone_size", pd.Series(0, index=candidates.index)),
+        errors="coerce",
+    ).fillna(0).astype(int)
+    candidates["allocation_priority_score"] = pd.to_numeric(
+        candidates.get("allocation_priority_score", candidates["core_score"]),
+        errors="coerce",
+    ).fillna(0.0).clip(lower=0.0, upper=1.0)
     candidates = candidates[candidates["potential_area_share_pct"].gt(0.0)].copy()
     if candidates.empty:
         return empty, {
@@ -942,15 +955,16 @@ def allocate_wind_area_from_core_hexes(
         }
     candidates = candidates.sort_values(
         [
-            "reserved_by_other_technology",
-            "priority_group",
+            "allocation_priority_score",
             "core_score",
-            "zone_size",
             "potential_area_share_pct",
+            "priority_group",
+            "zone_size",
             "potential_area_km2",
+            "reserved_by_other_technology",
             "hex_id",
         ],
-        ascending=[True, True, False, False, False, False, True],
+        ascending=[False, False, False, True, False, False, True, True],
     ).reset_index(drop=True)
 
     remaining_area = float(area_need_km2)

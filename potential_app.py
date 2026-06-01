@@ -162,7 +162,7 @@ PERFORMANCE_HISTORY_KEY = "potential_performance_history_v1"
 UI_ONLY_RERUN_KEY = "potential_ui_only_rerun"
 UI_ONLY_RERUN_REASON_KEY = "potential_ui_only_rerun_reason"
 WORKSPACE_RENDER_CACHE_KEY = "potential_workspace_render_cache_v2"
-WORKSPACE_CALCULATION_VERSION = "solar_filter_establishment_v2"
+WORKSPACE_CALCULATION_VERSION = "vector_visual_opt_in_v1"
 TUTORIAL_FORCE_OPEN_KEY = "potential_tutorial_force_open"
 TUTORIAL_STORAGE_KEY = "potential_tutorial_trondelag_v1_dismissed"
 # Kept only so shared registry helpers can resolve the Trondelag layer registry.
@@ -357,6 +357,10 @@ DEFAULT_WIND_ADVANCED_LAYER_SELECTION = {
     WIND_CULTURE_GROUP_ID: list(WIND_GROUP_LAYER_DEFAULTS.get(WIND_CULTURE_GROUP_ID, [])),
     WIND_REINDEER_GROUP_ID: list(WIND_GROUP_LAYER_DEFAULTS.get(WIND_REINDEER_GROUP_ID, [])),
 }
+SOLAR_VISUAL_SOURCE_GROUPS_KEY = "visible_source_groups"
+SOLAR_VISUAL_BUFFER_GROUPS_KEY = "visible_buffer_groups"
+SOLAR_SMALL_POPULATION_VISUAL_GROUP_ID = "small_population"
+SOLAR_LARGE_POPULATION_VISUAL_GROUP_ID = "large_population"
 DEFAULT_SOLAR_APPLIED_CONFIG = {
     "small_population_active": False,
     "large_unfiltered_land_active": True,
@@ -385,6 +389,8 @@ DEFAULT_SOLAR_APPLIED_CONFIG = {
     "culture_buffer_m": 0.0,
     "reindeer_buffer_m": 0.0,
     "coastal_buffer_m": 0.0,
+    SOLAR_VISUAL_SOURCE_GROUPS_KEY: [],
+    SOLAR_VISUAL_BUFFER_GROUPS_KEY: [],
 }
 ENERGY_PROPOSAL_LAYER_LABEL = WIND_ESTABLISHMENT_LAYER_LABEL
 WIND_AUTO_RESOLUTION_MIN_ZOOM: dict[int, int] = {10: 11, 9: 9, 8: 7, 7: 5, 6: 0}
@@ -693,9 +699,11 @@ def _trondelag_tutorial_steps(region: dict[str, Any]) -> list[dict[str, Any]]:
             "fallbackTarget": "iframeSelector",
             "iframeSelectors": [".map-legend"],
             "title": "Scenariofördelning i etableringshex",
+            "mapLayers": [SCENARIO_ALLOCATION_LAYER_LABEL],
             "body": (
                 "Scenariofördelningen fyller de mest lämpade etableringshexen först, ungefär som vatten i landskapets djupaste hålor. "
-                "Blå och gul visar separat vind- respektive solyta. Grön kombination används sparsamt, först när ytan inte ryms separat."
+                "Vind söker de djupaste vindlägena oavsett om grundpotentialen är blå eller grön. Sol söker de djupaste sollägena "
+                "oavsett om grundpotentialen är gul eller grön. Grön markör visar där båda teknikerna faktiskt delar samma scenariohex."
             ),
         },
         {
@@ -705,6 +713,7 @@ def _trondelag_tutorial_steps(region: dict[str, Any]) -> list[dict[str, Any]]:
             "fallbackTarget": "iframeSelector",
             "iframeSelectors": [".map-legend"],
             "scrollWindowToTarget": True,
+            "mapLayers": [OUTSIDE_LP_NEED_LAYER_LABEL],
             "title": "Ytbehov utanför landskapets potential",
             "body": (
                 "Ytbehov utanför landskapets potential visar schematisk vind- eller solyta som behövs när scenariot inte ryms i den beräknade potentialen. "
@@ -1171,6 +1180,29 @@ def _render_tutorial_component(region: dict[str, Any], force_open: bool = False)
     }
   };
 
+  const activateMapLayersForStep = (step) => {
+    const layerNames = Array.isArray(step.mapLayers) ? step.mapLayers : [];
+    if (!layerNames.length) {
+      return;
+    }
+    const iframeInfo = iframeDocumentForStep(step);
+    if (!iframeInfo || !iframeInfo.iframe || !iframeInfo.iframe.contentWindow) {
+      return;
+    }
+    const mapWindow = iframeInfo.iframe.contentWindow;
+    const setter = mapWindow.__potentialMapSetOverlayVisibility;
+    if (typeof setter !== "function") {
+      return;
+    }
+    layerNames.forEach((layerName) => {
+      try {
+        setter(String(layerName), true);
+      } catch (error) {
+        // The guide can still highlight the legend if the map is re-rendering.
+      }
+    });
+  };
+
   const findIframeSelectorTarget = (step) => {
     const iframeInfo = iframeDocumentForStep(step);
     if (!iframeInfo) {
@@ -1516,6 +1548,7 @@ def _render_tutorial_component(region: dict[str, Any], force_open: bool = False)
     if (step.scrollToText) {
       scrollSidebarToText(step.scrollToText, Number(step.scrollAlign || 0.5));
     }
+    activateMapLayersForStep(step);
     activeTarget = resolveTarget(step);
     if (step.scrollWindowToTarget) {
       scrollTargetIntoViewport(activeTarget);
@@ -1644,6 +1677,7 @@ def _workspace_calculation_fingerprint(
     solar_large_filter_configs: list[dict[str, Any]],
     wind_selected_layers: dict[str, list[str]],
     wind_ui_params: dict[str, Any],
+    wind_visual_options: dict[str, Any],
     energy_model_state: dict[str, Any],
 ) -> str:
     """Hash the calculation inputs, deliberately excluding UI language."""
@@ -1671,6 +1705,7 @@ def _workspace_calculation_fingerprint(
         "solar_large_filter_configs": solar_large_filter_configs,
         "wind_selected_layers": normalize_group_layer_map(wind_selected_layers),
         "wind_ui_params": wind_ui_params,
+        "wind_visual_options": wind_visual_options,
         "energy_debug_run_id": energy_model_state.get("debug_run_id"),
         "energy_available": bool(energy_model_state.get("available")),
         "energy_show_proposal": bool(energy_model_state.get("show_proposal")),
@@ -3297,6 +3332,9 @@ def _ensure_default_start_state(region: dict[str, Any], force: bool = False) -> 
     if not force and st.session_state.get(start_default_key) == START_DEFAULT_VERSION:
         return
     _apply_wind_layer_selection_state(_default_wind_layer_selection())
+    for group_id in WIND_GROUP_LAYER_DEFAULTS:
+        st.session_state[_wind_control_key("visual_source", str(group_id))] = False
+        st.session_state[_wind_control_key("visual_buffer", str(group_id))] = False
     st.session_state[WIND_EMPTY_SELECTION_ACTIVE_KEY] = True
     st.session_state[SOLAR_APPLIED_CONFIG_KEY] = dict(DEFAULT_SOLAR_APPLIED_CONFIG)
     default_display_resolution = int(region.get("default_display_h3_resolution") or region.get("default_h3_resolution") or 8)
@@ -3314,6 +3352,9 @@ def _ensure_default_start_state(region: dict[str, Any], force: bool = False) -> 
     st.session_state["show_user_solar"] = True
     st.session_state["solar_draft_small_population_active"] = False
     st.session_state["solar_draft_large_population_active"] = False
+    for group_id in _solar_visual_group_order():
+        st.session_state[_solar_visual_control_key("source", group_id)] = False
+        st.session_state[_solar_visual_control_key("buffer", group_id)] = False
     for group_id, spec in SOLAR_FILTER_GROUP_SPECS.items():
         st.session_state[str(spec["draft_active_key"])] = False
         default_layer_ids = set(_solar_default_filter_layer_ids(group_id))
@@ -3343,6 +3384,45 @@ def _solar_filter_layer_control_key(group_id: str, layer_id: str) -> str:
     if str(group_id) == SOLAR_PROTECTED_GROUP_ID:
         return _solar_protected_layer_control_key(str(layer_id))
     return f"solar_draft_{group_id}_layer__{layer_id}"
+
+
+def _solar_visual_control_key(kind: str, group_id: str) -> str:
+    return f"solar_draft_visual_{kind}__{group_id}"
+
+
+def _solar_visual_config_key(kind: str) -> str:
+    return SOLAR_VISUAL_SOURCE_GROUPS_KEY if str(kind) == "source" else SOLAR_VISUAL_BUFFER_GROUPS_KEY
+
+
+def _solar_visual_group_order() -> tuple[str, ...]:
+    return (
+        SOLAR_SMALL_POPULATION_VISUAL_GROUP_ID,
+        SOLAR_LARGE_POPULATION_VISUAL_GROUP_ID,
+        *SOLAR_FILTER_GROUP_IDS,
+    )
+
+
+def _solar_visible_group_ids(config: dict[str, Any], kind: str) -> list[str]:
+    raw = config.get(_solar_visual_config_key(kind), [])
+    if isinstance(raw, dict):
+        requested = {str(group_id) for group_id, enabled in raw.items() if bool(enabled)}
+    elif isinstance(raw, (list, tuple, set)):
+        requested = {str(group_id) for group_id in raw}
+    else:
+        requested = set()
+    return [group_id for group_id in _solar_visual_group_order() if group_id in requested]
+
+
+def _solar_visual_enabled(config: dict[str, Any], kind: str, group_id: str) -> bool:
+    return str(group_id) in set(_solar_visible_group_ids(config, kind))
+
+
+def _solar_visible_group_ids_from_session(kind: str) -> list[str]:
+    return [
+        group_id
+        for group_id in _solar_visual_group_order()
+        if bool(st.session_state.get(_solar_visual_control_key(kind, group_id), False))
+    ]
 
 
 def _solar_control_selected_filter_layer_ids(config: dict[str, Any], group_id: str) -> list[str]:
@@ -3459,6 +3539,8 @@ def _initial_solar_config_from_session() -> dict[str, Any]:
         "panel_area_m2_per_person": float(st.session_state.get("solar_v1_area_m2_per_person", 10.0) or 10.0),
         "population_buffer_m": float(st.session_state.get("solar_builder_population_buffer_m", 250.0) or 250.0),
         "protected_buffer_m": float(st.session_state.get("solar_builder_protected_buffer_m", 0.0) or 0.0),
+        SOLAR_VISUAL_SOURCE_GROUPS_KEY: _solar_visible_group_ids_from_session("source"),
+        SOLAR_VISUAL_BUFFER_GROUPS_KEY: _solar_visible_group_ids_from_session("buffer"),
     }
     for group_id, layer_ids in selected_filter_ids.items():
         spec = _solar_filter_spec(group_id)
@@ -3494,6 +3576,8 @@ def _solar_config_from_session() -> dict[str, Any]:
         "panel_area_m2_per_person": float(config.get("panel_area_m2_per_person", 10.0) or 0.0),
         "population_buffer_m": float(config.get("population_buffer_m", 250.0) or 250.0),
         "protected_buffer_m": float(config.get("protected_buffer_m", 0.0) or 0.0),
+        SOLAR_VISUAL_SOURCE_GROUPS_KEY: _solar_visible_group_ids(config, "source"),
+        SOLAR_VISUAL_BUFFER_GROUPS_KEY: _solar_visible_group_ids(config, "buffer"),
     }
     normalized.update(filter_values)
     return normalized
@@ -3504,6 +3588,11 @@ def _prime_solar_draft_state(config: dict[str, Any]) -> None:
     st.session_state.setdefault("solar_draft_large_population_active", bool(config.get("large_population_active", False)))
     st.session_state.setdefault("solar_draft_area_m2_per_person", float(config.get("panel_area_m2_per_person", 10.0) or 10.0))
     st.session_state.setdefault("solar_draft_population_buffer_m", float(config.get("population_buffer_m", 250.0) or 250.0))
+    visible_source_groups = set(_solar_visible_group_ids(config, "source"))
+    visible_buffer_groups = set(_solar_visible_group_ids(config, "buffer"))
+    for group_id in _solar_visual_group_order():
+        st.session_state.setdefault(_solar_visual_control_key("source", group_id), group_id in visible_source_groups)
+        st.session_state.setdefault(_solar_visual_control_key("buffer", group_id), group_id in visible_buffer_groups)
     for group_id, spec in SOLAR_FILTER_GROUP_SPECS.items():
         selected_layer_ids = set(_solar_control_selected_filter_layer_ids(config, group_id))
         default_layer_ids = set(_solar_default_filter_layer_ids(group_id))
@@ -3555,6 +3644,8 @@ def _solar_draft_config_from_session() -> dict[str, Any]:
         "panel_area_m2_per_person": float(st.session_state.get("solar_draft_area_m2_per_person", 10.0) or 0.0),
         "population_buffer_m": float(st.session_state.get("solar_draft_population_buffer_m", 250.0) or 250.0),
         "protected_buffer_m": float(st.session_state.get("solar_draft_protected_buffer_m", 0.0) or 0.0),
+        SOLAR_VISUAL_SOURCE_GROUPS_KEY: _solar_visible_group_ids_from_session("source"),
+        SOLAR_VISUAL_BUFFER_GROUPS_KEY: _solar_visible_group_ids_from_session("buffer"),
     }
     config.update(filter_values)
     return config
@@ -3583,6 +3674,17 @@ def _render_solar_filter_control(group_id: str) -> list[str]:
                 )
                 if active and checked and bool(option["ready"]):
                     selected_layer_ids.append(layer_id)
+            st.caption("Kartvisning: valda lager används i analysen även när källa och buffert är dolda på kartan.")
+            st.checkbox(
+                "Visa källa i kartan",
+                key=_solar_visual_control_key("source", group_id),
+                disabled=not bool(options),
+            )
+            st.checkbox(
+                "Visa buffert i kartan",
+                key=_solar_visual_control_key("buffer", group_id),
+                disabled=not bool(options),
+            )
         if not options:
             st.caption(f"Inga lager hittades för {label.lower()} i acceptansregistret.")
         elif not active:
@@ -4123,6 +4225,14 @@ def _append_unique_layer(layers: list[dict[str, Any]], layer: dict[str, Any] | N
     if name and not source_layer_id and not buffer_layer_id and any(str(existing.get("name", "")) == name for existing in layers):
         return
     layers.append(layer)
+
+
+def _layer_visible_by_default(layer: dict[str, Any] | None) -> dict[str, Any] | None:
+    if layer is None:
+        return None
+    visible_layer = dict(layer)
+    visible_layer["default_visible"] = True
+    return visible_layer
 
 
 def _dedupe_layers(layers: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -5393,10 +5503,20 @@ def _solar_establishment_frame(
             int(h3_resolution),
             float(social_acceptance_allocation_priority_pct or 0.0),
         )
+    if "allocation_priority_score" not in candidates.columns:
+        candidates["allocation_priority_score"] = (
+            pd.to_numeric(candidates.get("potential_score", pd.Series(0.0, index=candidates.index)), errors="coerce")
+            .fillna(0.0)
+            .clip(lower=0.0, upper=100.0)
+            .div(100.0)
+        )
+        candidates["landscape_priority_score"] = 0.0
+        candidates["technical_priority_score"] = candidates["allocation_priority_score"]
+        candidates["allocation_priority_reason"] = "Prioriteras efter solpotential."
     if "allocation_priority_score" in candidates.columns:
         candidates = candidates.sort_values(
-            ["sort_group", "allocation_priority_score", "potential_score", "potential_area_km2", "hex_id"],
-            ascending=[True, False, False, False, True],
+            ["allocation_priority_score", "potential_score", "potential_area_km2", "sort_group", "hex_id"],
+            ascending=[False, False, False, True, True],
         )
     else:
         candidates = candidates.sort_values(["sort_group", "potential_score", "potential_area_km2", "hex_id"], ascending=[True, False, False, True])
@@ -6904,12 +7024,39 @@ def _wind_control_key(prefix: str, item_id: str) -> str:
     return f"wind_control__{prefix}__{item_id}"
 
 
+def _wind_visual_options_from_state(layer_selection: dict[str, list[str]] | None = None) -> dict[str, list[str]]:
+    selected = normalize_group_layer_map(layer_selection or _selected_wind_layers())
+    active_group_ids = [group_id for group_id, layer_ids in selected.items() if layer_ids]
+    return {
+        "source_group_ids": [
+            group_id
+            for group_id in active_group_ids
+            if bool(st.session_state.get(_wind_control_key("visual_source", group_id), False))
+        ],
+        "buffer_group_ids": [
+            group_id
+            for group_id in active_group_ids
+            if bool(st.session_state.get(_wind_control_key("visual_buffer", group_id), False))
+        ],
+    }
+
+
+def _normalize_wind_visual_options(visual_options: dict[str, Any] | None) -> dict[str, set[str]]:
+    source_raw = (visual_options or {}).get("source_group_ids", [])
+    buffer_raw = (visual_options or {}).get("buffer_group_ids", [])
+    source_group_ids = {str(group_id) for group_id in source_raw} if isinstance(source_raw, (list, tuple, set)) else set()
+    buffer_group_ids = {str(group_id) for group_id in buffer_raw} if isinstance(buffer_raw, (list, tuple, set)) else set()
+    return {"source_group_ids": source_group_ids, "buffer_group_ids": buffer_group_ids}
+
+
 def _init_wind_control_state() -> None:
     groups, layers, _ = load_acceptance_registry()
     st.session_state[WIND_RUNTIME_OVERLAY_KEY] = True
     for group in groups.values():
         st.session_state.setdefault(_wind_control_key("analysis", group.id), int(group.analysis_default_m))
         st.session_state.setdefault(_wind_control_key("blend", group.id), int(group.blend_default))
+        st.session_state.setdefault(_wind_control_key("visual_source", group.id), False)
+        st.session_state.setdefault(_wind_control_key("visual_buffer", group.id), False)
     for layer in layers.values():
         st.session_state.setdefault(_wind_control_key("layer", layer.id), False)
 
@@ -7107,6 +7254,17 @@ def _wind_group_controls(
                         render_layer_checkbox(layer)
                     if not advanced_layers:
                         st.caption("Inga del-lager är kopplade ännu.")
+                    st.caption("Kartvisning: valda lager används i analysen även när källa och buffert är dolda på kartan.")
+                    st.checkbox(
+                        "Visa källa i kartan",
+                        key=_wind_control_key("visual_source", group.id),
+                        disabled=not group_available,
+                    )
+                    st.checkbox(
+                        "Visa buffert i kartan",
+                        key=_wind_control_key("visual_buffer", group.id),
+                        disabled=not group_available,
+                    )
 
                 if not selected[group.id]:
                     if not group_available:
@@ -7260,11 +7418,15 @@ def _wind_core_label(core_score: float, zone_size: int) -> str:
 def _wind_polygon_source_layers(
     ui_params: dict[str, float],
     layer_selection: dict[str, list[str]] | None = None,
+    include_group_ids: set[str] | list[str] | tuple[str, ...] | None = None,
 ) -> list[dict[str, Any]]:
     groups, layers, registry_meta = load_acceptance_registry()
     selected = normalize_group_layer_map(layer_selection or _selected_wind_layers())
+    included_groups = None if include_group_ids is None else {str(group_id) for group_id in include_group_ids}
     map_layers: list[dict[str, Any]] = []
     for group_id in _wind_active_group_ids(ui_params, layer_selection=selected):
+        if included_groups is not None and group_id not in included_groups:
+            continue
         opacity = _wind_source_opacity(group_id)
         group_meta = groups.get(group_id)
         translated_group_label = GROUP_LABELS.get(group_id, group_meta.label if group_meta is not None else group_id)
@@ -7350,10 +7512,16 @@ def _wind_polygon_source_layers(
     return map_layers
 
 
-def _wind_polygon_group_layers(runtime_result: dict[str, Any]) -> list[dict[str, Any]]:
+def _wind_polygon_group_layers(
+    runtime_result: dict[str, Any],
+    include_group_ids: set[str] | list[str] | tuple[str, ...] | None = None,
+) -> list[dict[str, Any]]:
     groups, _, _ = load_acceptance_registry()
+    included_groups = None if include_group_ids is None else {str(group_id) for group_id in include_group_ids}
     map_layers: list[dict[str, Any]] = []
     for group in ordered_groups():
+        if included_groups is not None and group.id not in included_groups:
+            continue
         runtime_group = (runtime_result.get("groups") or {}).get(group.id)
         if runtime_group is None or runtime_group.get("geojson") is None:
             continue
@@ -9231,7 +9399,7 @@ SCENARIO_ALLOCATION_SPECS: dict[str, dict[str, str]] = {
         "legend_color": "#f59e0b",
     },
     "both": {
-        "label": "Scenarioyta: vind och sol (sista utväg)",
+        "label": "Scenarioyta: vind och sol",
         "fill": "#166534",
         "stroke": "#052e16",
         "legend_color": "#166534",
@@ -9322,7 +9490,7 @@ def _scenario_allocation_marker_feature_collection(
         if class_id == "both":
             note = (
                 "Markören visar scenarioyta i en större hex där båda teknikerna används. "
-                "Grön används först när separat vind- eller solyta inte räcker och cellen därför används som sista utväg."
+                "Grön används när både vind och sol faktiskt hamnar i samma scenariohex."
             )
         elif wind_suitable and solar_suitable:
             note = (
@@ -9787,9 +9955,13 @@ def _wind_polygon_preview_state(
     zoom_family_enabled: bool,
     family_key: str = "wind_runtime_share",
     control_name: str = WIND_POTENTIAL_HEX_LABEL,
+    visual_options: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     runtime_error: str | None = None
     selected = normalize_group_layer_map(layer_selection)
+    normalized_visual_options = _normalize_wind_visual_options(visual_options)
+    source_group_ids = normalized_visual_options["source_group_ids"]
+    buffer_group_ids = normalized_visual_options["buffer_group_ids"]
     if _wind_empty_selection_is_active(selected):
         runtime_result: dict[str, Any] = {
             "groups": {},
@@ -9830,10 +10002,18 @@ def _wind_polygon_preview_state(
         combined_layer = None if runtime_error else _wind_polygon_combined_layer(runtime_result)
         if combined_layer is not None:
             layers.append(combined_layer)
-    layers.extend(_wind_polygon_source_layers(ui_params, layer_selection=selected))
+    if source_group_ids:
+        for source_layer in _wind_polygon_source_layers(
+            ui_params,
+            layer_selection=selected,
+            include_group_ids=source_group_ids,
+        ):
+            _append_unique_layer(layers, _layer_visible_by_default(source_layer))
     if str(region.get("region_id", "")).lower() == "trondelag" and bool(runtime_result.get("fast_distance")):
         groups, _, _ = load_acceptance_registry()
         for group_id in _wind_active_group_ids(ui_params, layer_selection=selected):
+            if group_id not in buffer_group_ids:
+                continue
             if group_id == WIND_SETTLEMENT_GROUP_ID:
                 continue
             group = groups.get(group_id)
@@ -9843,15 +10023,18 @@ def _wind_polygon_preview_state(
             threshold_m = float(ui_params.get(threshold_key, group.analysis_default_m)) if threshold_key else float(group.analysis_default_m)
             _append_unique_layer(
                 layers,
-                _wind_filter_buffer_layer(
-                    group_id,
-                    threshold_m,
-                    selected.get(group_id, []),
+                _layer_visible_by_default(
+                    _wind_filter_buffer_layer(
+                        group_id,
+                        threshold_m,
+                        selected.get(group_id, []),
+                    )
                 ),
             )
     if (
         str(region.get("region_id", "")).lower() == "trondelag"
         and WIND_POPULATION_SOURCE_LAYER_ID in selected.get(WIND_SETTLEMENT_GROUP_ID, [])
+        and WIND_SETTLEMENT_GROUP_ID in buffer_group_ids
     ):
         settlement_group = load_acceptance_registry()[0].get(WIND_SETTLEMENT_GROUP_ID)
         threshold_key = GROUP_PARAM_MAP.get(WIND_SETTLEMENT_GROUP_ID)
@@ -9869,9 +10052,10 @@ def _wind_polygon_preview_state(
             context_key="wind",
         )
         if population_buffer_layer is not None:
-            layers.append(population_buffer_layer)
-    if not runtime_error:
-        layers.extend(_wind_polygon_group_layers(runtime_result))
+            _append_unique_layer(layers, _layer_visible_by_default(population_buffer_layer))
+    if not runtime_error and buffer_group_ids:
+        for buffer_layer in _wind_polygon_group_layers(runtime_result, include_group_ids=buffer_group_ids):
+            _append_unique_layer(layers, _layer_visible_by_default(buffer_layer))
 
     return {
         "layers": layers,
@@ -11462,7 +11646,17 @@ def _unified_workspace_tab(
                             key="solar_draft_area_m2_per_person",
                             help="Schablon för småskalig anläggning: befolkning per hex multipliceras med m2 panelyta per person.",
                         )
-                        st.caption("Kartlager: källa, aggregerad 100 m buffert, solpolygon och gemensam potentiell etableringsyta.")
+                        with st.expander("Avancerade inställningar", expanded=False):
+                            st.caption("Kartvisning: befolkningsunderlaget används i analysen även när källa och buffert är dolda på kartan.")
+                            st.checkbox(
+                                "Visa källa i kartan",
+                                key=_solar_visual_control_key("source", SOLAR_SMALL_POPULATION_VISUAL_GROUP_ID),
+                            )
+                            st.checkbox(
+                                "Visa buffert i kartan",
+                                key=_solar_visual_control_key("buffer", SOLAR_SMALL_POPULATION_VISUAL_GROUP_ID),
+                            )
+                        st.caption("Kartlager: schablonhexar och gemensam potentiell etableringsyta. Källa och buffert kan visas via avancerade inställningar.")
                     with st.expander(_t(SOLAR_LARGE_SCALE_LABEL), expanded=False):
                         with st.expander(_t("Befolkning"), expanded=False):
                             draft_large_population_active = st.checkbox(
@@ -11478,6 +11672,16 @@ def _unified_workspace_tab(
                                 help="Totalt avstånd från valt befolkningsunderlag. För Trøndelag är källan 250 m befolkningsrutor från centroider.",
                             )
                             st.caption("Avståndet är totalt från befolkningsunderlaget. Trøndelag använder 250 m befolkningsrutor från centroider som proxy.")
+                            with st.expander("Avancerade inställningar", expanded=False):
+                                st.caption("Kartvisning: befolkningsunderlaget används i analysen även när källa och buffert är dolda på kartan.")
+                                st.checkbox(
+                                    "Visa källa i kartan",
+                                    key=_solar_visual_control_key("source", SOLAR_LARGE_POPULATION_VISUAL_GROUP_ID),
+                                )
+                                st.checkbox(
+                                    "Visa buffert i kartan",
+                                    key=_solar_visual_control_key("buffer", SOLAR_LARGE_POPULATION_VISUAL_GROUP_ID),
+                                )
                         for solar_filter_group_id in (
                             SOLAR_PROTECTED_GROUP_ID,
                             SOLAR_LAND_USE_GROUP_ID,
@@ -11595,6 +11799,7 @@ def _unified_workspace_tab(
     resolution_info = _hex_display_rule(region, h3_resolution, zoom_family_enabled)
     st.session_state["solar_builder_params"] = solar_params
     st.session_state["wind_builder_params"] = wind_ui_params
+    wind_visual_options = _wind_visual_options_from_state(wind_selected_layers)
     if energy_model_state.get("available"):
         energy_model_state["region_id"] = str(region.get("region_id", "region") or "region")
         energy_model_state["analysis_h3_resolution"] = int(analysis_h3_resolution)
@@ -11603,6 +11808,7 @@ def _unified_workspace_tab(
         energy_model_state["display_hex_area_km2"] = float(h3_hex_area_km2(h3_resolution))
         energy_model_state["social_acceptance_allocation_priority_pct"] = float(social_acceptance_allocation_priority_pct or 0.0)
         energy_model_state["wind_ui_params"] = dict(wind_ui_params)
+        energy_model_state["wind_visual_options"] = dict(wind_visual_options)
         energy_model_state["wind_active_source_count"] = sum(
             len(layer_ids) for layer_ids in normalize_group_layer_map(wind_selected_layers).values()
         )
@@ -11636,6 +11842,7 @@ def _unified_workspace_tab(
         solar_large_filter_configs,
         wind_selected_layers,
         wind_ui_params,
+        wind_visual_options,
         energy_model_state,
     )
     if _ui_only_rerun_requested():
@@ -11751,15 +11958,22 @@ def _unified_workspace_tab(
             }
         solar_large_polygon_geojson = None
         if solar_large_population_active:
-            _append_unique_layer(layers, _solar_population_source_layer())
-            _append_unique_layer(layers, _solar_population_buffer_layer(region, h3_resolution, large_population_buffer_m))
+            if _solar_visual_enabled(applied_solar_config, "source", SOLAR_LARGE_POPULATION_VISUAL_GROUP_ID):
+                _append_unique_layer(layers, _layer_visible_by_default(_solar_population_source_layer()))
+            if _solar_visual_enabled(applied_solar_config, "buffer", SOLAR_LARGE_POPULATION_VISUAL_GROUP_ID):
+                _append_unique_layer(
+                    layers,
+                    _layer_visible_by_default(_solar_population_buffer_layer(region, h3_resolution, large_population_buffer_m)),
+                )
         for filter_config in solar_large_filter_configs:
             group_id = str(filter_config.get("group_id", ""))
             layer_ids = list(filter_config.get("layer_ids") or [])
             buffer_m = float(filter_config.get("buffer_m", 0.0) or 0.0)
-            for source_layer in _solar_filter_source_layers(group_id, layer_ids):
-                _append_unique_layer(layers, source_layer)
-            _append_unique_layer(layers, _solar_filter_buffer_layer(group_id, buffer_m, layer_ids))
+            if _solar_visual_enabled(applied_solar_config, "source", group_id):
+                for source_layer in _solar_filter_source_layers(group_id, layer_ids):
+                    _append_unique_layer(layers, _layer_visible_by_default(source_layer))
+            if _solar_visual_enabled(applied_solar_config, "buffer", group_id):
+                _append_unique_layer(layers, _layer_visible_by_default(_solar_filter_buffer_layer(group_id, buffer_m, layer_ids)))
         potential_frames.append(
             {
                 "label": f"{SOLAR_LANDSCAPE_POTENTIAL_LABEL}: {SOLAR_LARGE_SCALE_LABEL}",
@@ -11819,9 +12033,12 @@ def _unified_workspace_tab(
             else _solar_v1_frame(region, landscape_manifest, analysis_h3_resolution, solar_v1_area_m2_per_person)
         )
         if solar_small_population_active:
-            solar_small_buffer_geojson = _solar_population_buffer_geojson(100.0)
-            _append_unique_layer(layers, _solar_population_source_layer())
-            _append_unique_layer(layers, _solar_population_buffer_layer(region, h3_resolution, 100.0))
+            if _solar_visual_enabled(applied_solar_config, "buffer", SOLAR_SMALL_POPULATION_VISUAL_GROUP_ID):
+                solar_small_buffer_geojson = _solar_population_buffer_geojson(100.0)
+            if _solar_visual_enabled(applied_solar_config, "source", SOLAR_SMALL_POPULATION_VISUAL_GROUP_ID):
+                _append_unique_layer(layers, _layer_visible_by_default(_solar_population_source_layer()))
+            if _solar_visual_enabled(applied_solar_config, "buffer", SOLAR_SMALL_POPULATION_VISUAL_GROUP_ID):
+                _append_unique_layer(layers, _layer_visible_by_default(_solar_population_buffer_layer(region, h3_resolution, 100.0)))
         layers.extend(
             _hex_family_layers(
                 region,
@@ -11898,7 +12115,13 @@ def _unified_workspace_tab(
         _append_unique_layer(
             layers,
             _solar_potential_polygon_layer(
-                solar_small_buffer_geojson if show_solar_v1 and solar_small_population_active else None,
+                solar_small_buffer_geojson
+                if (
+                    show_solar_v1
+                    and solar_small_population_active
+                    and _solar_visual_enabled(applied_solar_config, "buffer", SOLAR_SMALL_POPULATION_VISUAL_GROUP_ID)
+                )
+                else None,
                 user_solar_frame if show_user_solar else pd.DataFrame(),
                 solar_large_polygon_geojson,
             ),
@@ -11973,6 +12196,7 @@ def _unified_workspace_tab(
             zoom_family_enabled,
             family_key="user_wind_landscape_potential",
             control_name=WIND_POTENTIAL_POLYGON_LABEL,
+            visual_options=wind_visual_options,
         )
         wind_preview_layers = list(custom_wind_preview_state["layers"])
         if str(region.get("region_id", "")).lower() == "trondelag" and energy_model_state.get("available"):
@@ -12088,7 +12312,7 @@ def _unified_workspace_tab(
                 energy_model_state["proposal_stats"] = proposal_stats
                 if not proposal_frame.empty:
                     unified_notes.append(
-                        "Vindens scenarioyta använder en intern landskaps-/teknikranking inom etableringshex. Den undviker redan placerad solyta så långt det finns vindyta kvar; grön kombination används som sista utväg."
+                        "Vindens scenarioyta använder en intern landskaps-/teknikranking inom etableringshex och väljer de starkaste vindlägena även när sol redan valt samma hex. Separata ytor vinner bara vid lika lämplighet."
                     )
                 elif wind_area_need > 0:
                     unified_notes.append("Energimodelleringen hittade inga vindceller som uppfyller minsta kärn-/potentialkrav.")
@@ -12205,7 +12429,7 @@ def _unified_workspace_tab(
                 )
             else:
                 unified_notes.append(
-                    f"{SCENARIO_ALLOCATION_LAYER_LABEL} visar scenariots placering som teknikfärgade child-hex: blå/gul först, grön bara när separat yta inte räcker."
+                    f"{SCENARIO_ALLOCATION_LAYER_LABEL} visar scenariots placering som teknikfärgade child-hex. Blå markerar vind, gul markerar sol och grön markerar verkligt överlapp i samma scenariohex."
                 )
         outside_lp_need_layers = _outside_lp_need_family_layers(
             region,
