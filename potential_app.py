@@ -1202,8 +1202,30 @@ def _planning_scenario_option_label(option: dict[str, Any] | None) -> str:
         energy_scale = float(option.get("energy_scale", 1.0) or 1.0)
     except Exception:
         energy_scale = 1.0
-    area_scenario_id = str(option.get("area_demand_scenario", "mid") or "mid")
-    return f"{label} · {energy_scale:g}x energi · markintensitet {_area_scenario_label(area_scenario_id)}"
+    return f"{label} · {energy_scale:g}x energi"
+
+
+def _area_intensity_assumption_table(area_payload: dict[str, Any]) -> pd.DataFrame:
+    scenario_table = pd.DataFrame(area_payload.get("scenario_table", pd.DataFrame()))
+    required = {"energy_key", "low_km2_per_twh", "mid_km2_per_twh", "high_km2_per_twh"}
+    if scenario_table.empty or not required.issubset(set(scenario_table.columns)):
+        return pd.DataFrame(columns=["Teknik", "Låg", "Mellan", "Hög"])
+    labels = {"wind": "Vind", "solar": "Sol"}
+    rows: list[dict[str, Any]] = []
+    for energy_key in ["wind", "solar"]:
+        match = scenario_table[scenario_table["energy_key"].astype(str) == energy_key]
+        if match.empty:
+            continue
+        row = match.iloc[0]
+        rows.append(
+            {
+                "Teknik": labels.get(energy_key, str(energy_key)),
+                "Låg": float(row["low_km2_per_twh"]),
+                "Mellan": float(row["mid_km2_per_twh"]),
+                "Hög": float(row["high_km2_per_twh"]),
+            }
+        )
+    return pd.DataFrame(rows)
 
 
 def _energy_key_label(energy_key: str) -> str:
@@ -1345,7 +1367,7 @@ def _render_energy_modeling_panel(
     if st.session_state.get(scenario_key) not in planning_ids:
         st.session_state[scenario_key] = default_planning_id
     planning_id = panel.selectbox(
-        {"en": "Energy scenario and land intensity", "da_no": "Energiscenario og arealintensitet"}.get(_language(), "Energiscenario och markintensitet"),
+        {"en": "Energy scenario", "da_no": "Energiscenario"}.get(_language(), "Energiscenario"),
         options=planning_ids,
         key=scenario_key,
         format_func=lambda value: _planning_scenario_option_label(planning_by_id.get(str(value), {"id": value})),
@@ -1358,19 +1380,32 @@ def _render_energy_modeling_panel(
     source_scenario = str(selected_planning.get("source_scenario", "")).strip()
     planning_year = int(selected_planning.get("planning_year", planning_cfg.get("planning_year", 2050)) or 2050)
     energy_scale = float(selected_planning.get("energy_scale", 1.0) or 1.0)
-    area_scenario_id = str(selected_planning.get("area_demand_scenario", "mid") or "mid")
-    if area_scenario_id not in AREA_SCENARIO_ORDER:
-        area_scenario_id = "mid"
+    default_area_scenario_id = str(selected_planning.get("area_demand_scenario", "mid") or "mid")
+    if default_area_scenario_id not in AREA_SCENARIO_ORDER:
+        default_area_scenario_id = "mid"
+    area_scenario_key = f"energy_model_area_intensity_{region_id}"
+    if st.session_state.get(area_scenario_key) not in AREA_SCENARIO_ORDER:
+        st.session_state[area_scenario_key] = default_area_scenario_id
+    area_scenario_id = panel.selectbox(
+        {"en": "Land intensity", "da_no": "Arealintensitet"}.get(_language(), "Markintensitet"),
+        options=list(AREA_SCENARIO_ORDER),
+        key=area_scenario_key,
+        format_func=_area_scenario_label,
+    )
     source_label = scenario_display_label(source_scenario, scenario_descriptions) if source_scenario else "-"
 
     panel.caption(
-        "Dummy/prototypdata: valet är ett paket med energiskala och markintensitet. "
+        "Dummy/prototypdata: energiscenario styr TWh-nivån. "
         "Markintensitet styr ytbehov i km²/TWh och är separat från landskapets potential i kartan."
     )
     panel.caption(
-        f"Valt paket: {_planning_scenario_option_label(selected_planning)} · "
-        f"modellkälla: {source_label}, {planning_year}"
+        f"Valt scenario: {_planning_scenario_option_label(selected_planning)} · "
+        f"markintensitet {_area_scenario_label(str(area_scenario_id))} · modellkälla: {source_label}, {planning_year}"
     )
+    area_assumption_table = _area_intensity_assumption_table(area_payload)
+    if not area_assumption_table.empty:
+        panel.caption("Markintensitet (km²/TWh)")
+        panel.dataframe(area_assumption_table.round(2), width="stretch", hide_index=True, height=112)
 
     placement_key = f"energy_model_placement_{region.get('region_id', 'region')}"
     placement_mode = panel.radio(
@@ -1455,10 +1490,7 @@ def _render_energy_modeling_panel(
     for scenario_option in planning_options:
         option_id = str(scenario_option.get("id"))
         option_mix = _balance_wind_solar_mix(select_planning_mix(mix, scenario_option), solar_share_pct)
-        option_area_scenario = str(scenario_option.get("area_demand_scenario", "mid") or "mid")
-        if option_area_scenario not in AREA_SCENARIO_ORDER:
-            option_area_scenario = "mid"
-        scenario_frame = calculate_area_demand(option_mix, area_bundle_obj, option_area_scenario, technology_to_times)
+        scenario_frame = calculate_area_demand(option_mix, area_bundle_obj, str(area_scenario_id), technology_to_times)
         row = scenario_frame[scenario_frame["energy_key"].astype(str) == primary_technology]
         planning_area_by_scenario[option_id] = float(row["area_need_km2"].fillna(0.0).sum()) if not row.empty else 0.0
     with panel.container(border=True):
@@ -8058,10 +8090,17 @@ def _missing_solar_controls(status_rows: list[dict[str, Any]]) -> None:
 def _missing_energy_controls(status_rows: list[dict[str, Any]]) -> None:
     st.caption(_disabled_note("Scenarier/energimodell", status_rows))
     st.selectbox(
-        {"en": "Energy scenario and land intensity", "da_no": "Energiscenario og arealintensitet"}.get(_language(), "Energiscenario och markintensitet"),
+        {"en": "Energy scenario", "da_no": "Energiscenario"}.get(_language(), "Energiscenario"),
         options=["Låg", "Mellan", "Hög"],
         index=1,
         key="missing_energy_scenario",
+        disabled=True,
+    )
+    st.selectbox(
+        {"en": "Land intensity", "da_no": "Arealintensitet"}.get(_language(), "Markintensitet"),
+        options=["Låg", "Mellan", "Hög"],
+        index=1,
+        key="missing_area_intensity",
         disabled=True,
     )
     st.radio(

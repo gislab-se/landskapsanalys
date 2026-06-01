@@ -92,6 +92,7 @@ DEFAULT_AREA_DEMAND_CONFIG: dict[str, Any] = {
             "solar": {"min": 0.01, "max": 200.0},
         },
     },
+    "scenario_factor_caps": {},
     "local_reference": {
         "section_label": "Bornholm",
         "technology_map": {
@@ -446,6 +447,25 @@ def _quality_warning(
     return ""
 
 
+def _apply_scenario_factor_cap(
+    config: dict[str, Any],
+    energy_key: str,
+    factor_key: str,
+    value: float,
+) -> tuple[float, str]:
+    caps = ((config.get("scenario_factor_caps") or {}).get(factor_key) or {})
+    raw_cap = caps.get(energy_key)
+    if raw_cap is None:
+        return value, ""
+    try:
+        cap = float(raw_cap)
+    except Exception:
+        return value, ""
+    if not math.isfinite(cap) or cap <= 0 or value <= cap:
+        return value, ""
+    return cap, f"{factor_key} capped from {value:g} to {cap:g} km2/TWh."
+
+
 def _parse_excel_value(raw_value: object, metric_kind: str) -> dict[str, object] | None:
     text = _clean_text(raw_value)
     if not text:
@@ -726,6 +746,10 @@ def load_area_demand_bundle(manifest: dict[str, Any] | None, root: Path) -> Area
         low_value = min(float(row["low_km2_per_twh"]) for row in used_observations if row["low_km2_per_twh"] is not None)
         mid_value = float(median(float(row["mid_km2_per_twh"]) for row in used_observations if row["mid_km2_per_twh"] is not None))
         high_value = max(float(row["high_km2_per_twh"]) for row in used_observations if row["high_km2_per_twh"] is not None)
+        low_value, low_cap_note = _apply_scenario_factor_cap(area_cfg, energy_key, "low_km2_per_twh", low_value)
+        mid_value, mid_cap_note = _apply_scenario_factor_cap(area_cfg, energy_key, "mid_km2_per_twh", mid_value)
+        high_value, high_cap_note = _apply_scenario_factor_cap(area_cfg, energy_key, "high_km2_per_twh", high_value)
+        cap_note = "; ".join(note for note in (low_cap_note, mid_cap_note, high_cap_note) if note)
         factors_by_scenario["low"][str(times_tech)] = low_value
         factors_by_scenario["mid"][str(times_tech)] = mid_value
         factors_by_scenario["high"][str(times_tech)] = high_value
@@ -738,6 +762,7 @@ def load_area_demand_bundle(manifest: dict[str, Any] | None, root: Path) -> Area
                 "mid_km2_per_twh": mid_value,
                 "high_km2_per_twh": high_value,
                 "status": "supported",
+                "note": cap_note,
             }
         )
 
@@ -750,7 +775,8 @@ def load_area_demand_bundle(manifest: dict[str, Any] | None, root: Path) -> Area
         references=references,
         rules_text=(
             "Lag = minsta observerade km2/TWh, Mellan = median av mittvarden, "
-            "Hog = storsta observerade km2/TWh. Outliers enligt manifestets quality_rules exkluderas."
+            "Hog = storsta observerade km2/TWh. Outliers enligt manifestets quality_rules exkluderas. "
+            "Eventuella scenario_factor_caps tillampas efter sammanvagningen."
         ),
         source_path=str(workbook_path),
     )
