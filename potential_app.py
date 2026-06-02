@@ -158,6 +158,10 @@ MAP_STATE_VERSION = "establishment-start-v6"
 LEFT_PANEL_OPEN_KEY = "potential_left_panel_open"
 RIGHT_PANEL_OPEN_KEY = "potential_right_panel_open"
 RIGHT_PANEL_WIDTH_KEY = "potential_right_panel_width_pct"
+RIGHT_PANEL_WIDTH_DEFAULT_VERSION_KEY = "potential_right_panel_width_default_version"
+RIGHT_PANEL_WIDTH_DEFAULT_VERSION = "table_fit_v1"
+RIGHT_PANEL_WIDTH_DEFAULT = 66.0
+RIGHT_PANEL_WIDTH_LEGACY_DEFAULT = 34.0
 PERFORMANCE_HISTORY_KEY = "potential_performance_history_v1"
 UI_ONLY_RERUN_KEY = "potential_ui_only_rerun"
 UI_ONLY_RERUN_REASON_KEY = "potential_ui_only_rerun_reason"
@@ -2028,22 +2032,52 @@ def _init_panel_state() -> None:
     st.session_state.setdefault(LEFT_PANEL_OPEN_KEY, True)
     st.session_state.setdefault(RIGHT_PANEL_OPEN_KEY, True)
     if RIGHT_PANEL_WIDTH_KEY not in st.session_state:
-        st.session_state[RIGHT_PANEL_WIDTH_KEY] = 34.0
+        st.session_state[RIGHT_PANEL_WIDTH_KEY] = RIGHT_PANEL_WIDTH_DEFAULT
+    elif RIGHT_PANEL_WIDTH_DEFAULT_VERSION_KEY not in st.session_state:
+        try:
+            current_width = float(st.session_state.get(RIGHT_PANEL_WIDTH_KEY, RIGHT_PANEL_WIDTH_DEFAULT) or RIGHT_PANEL_WIDTH_DEFAULT)
+        except Exception:
+            current_width = RIGHT_PANEL_WIDTH_DEFAULT
+        if abs(current_width - RIGHT_PANEL_WIDTH_LEGACY_DEFAULT) < 0.01:
+            st.session_state[RIGHT_PANEL_WIDTH_KEY] = RIGHT_PANEL_WIDTH_DEFAULT
+    st.session_state[RIGHT_PANEL_WIDTH_DEFAULT_VERSION_KEY] = RIGHT_PANEL_WIDTH_DEFAULT_VERSION
 
 
 def _right_panel_width_pct() -> float:
     try:
-        value = float(st.session_state.get(RIGHT_PANEL_WIDTH_KEY, 34.0) or 34.0)
+        value = float(st.session_state.get(RIGHT_PANEL_WIDTH_KEY, RIGHT_PANEL_WIDTH_DEFAULT) or RIGHT_PANEL_WIDTH_DEFAULT)
     except Exception:
-        value = 34.0
+        value = RIGHT_PANEL_WIDTH_DEFAULT
     return max(0.0, min(100.0, value))
+
+
+def _render_right_panel_width_control(panel: Any | None = None) -> None:
+    target = panel or st
+    target.caption(_t("Panelbredd"))
+    target.slider(
+        _t("Panelbredd"),
+        min_value=0.0,
+        max_value=100.0,
+        step=1.0,
+        key=RIGHT_PANEL_WIDTH_KEY,
+        format="%.0f%%",
+        label_visibility="collapsed",
+        on_change=_request_ui_only_rerun,
+        args=("panelbredd",),
+    )
+    target.caption(
+        {
+            "en": "0% makes the panel minimal. 100% gives almost the full workspace to the panel.",
+            "da_no": "0% gør panelet minimalt. 100% giver næsten hele arbejdsfladen til panelet.",
+        }.get(_language(), "0% gör panelen minimal. 100% ger nästan hela arbetsytan till panelen.")
+    )
 
 
 def _toggle_panel(key: str) -> None:
     was_open = bool(st.session_state.get(key, True))
     st.session_state[key] = not was_open
     if key == RIGHT_PANEL_OPEN_KEY and was_open is False and _right_panel_width_pct() <= 0.0:
-        st.session_state[RIGHT_PANEL_WIDTH_KEY] = 34.0
+        st.session_state[RIGHT_PANEL_WIDTH_KEY] = RIGHT_PANEL_WIDTH_DEFAULT
     _request_ui_only_rerun("panel")
 
 
@@ -2407,24 +2441,6 @@ def _workspace_shell() -> tuple[Any | None, Any, Any | None]:
             right_panel = st.container(border=True)
             with right_panel:
                 st.markdown('<span id="right-panel-content-anchor"></span>', unsafe_allow_html=True)
-                st.caption(_t("Panelbredd"))
-                st.slider(
-                    _t("Panelbredd"),
-                    min_value=0.0,
-                    max_value=100.0,
-                    step=1.0,
-                    key=RIGHT_PANEL_WIDTH_KEY,
-                    format="%.0f%%",
-                    label_visibility="collapsed",
-                    on_change=_request_ui_only_rerun,
-                    args=("panelbredd",),
-                )
-                st.caption(
-                    {
-                        "en": "0% makes the panel minimal. 100% gives almost the full workspace to the panel.",
-                        "da_no": "0% gør panelet minimalt. 100% giver næsten hele arbejdsfladen til panelet.",
-                    }.get(_language(), "0% gör panelen minimal. 100% ger nästan hela arbetsytan till panelen.")
-                )
 
     return left_panel, main_col, right_panel
 
@@ -10470,22 +10486,29 @@ def _landscape_type_layer(
 
 
 def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
-    st.subheader(_t("Etableringsyta"))
+    def _render_establishment_heading() -> None:
+        st.subheader(_t("Etableringsyta"))
+
     if not energy_model_state.get("available"):
+        _render_establishment_heading()
         st.caption("Etableringsytan visas när energimodelleringen är aktiv.")
         return
     if not bool(energy_model_state.get("show_proposal", False)):
+        _render_establishment_heading()
         st.info("Föreslagen etableringsyta är avstängd i energimodelleringen. Kartan visar därför inget etableringslager.")
         return
     if str(energy_model_state.get("placement_mode", "auto")) != "auto":
+        _render_establishment_heading()
         st.info("Självplacering är valt. Etableringsytan summeras när automatisk placering är aktiv eller när ett manuellt urval finns.")
         return
     if not bool(energy_model_state.get("establishment_layer_visible", False)):
+        _render_establishment_heading()
         st.caption("Etableringsytan visas när vind- och/eller solpotential finns aktiv i kartan.")
         return
 
     combined = energy_model_state.get("combined_establishment_stats")
     if not isinstance(combined, dict):
+        _render_establishment_heading()
         st.caption("Etableringsytan beräknas när vind- och/eller solpotential finns aktiv i kartan.")
         return
 
@@ -10580,25 +10603,6 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
     if unit not in AREA_DISPLAY_UNITS:
         unit = "km²"
         st.session_state["establishment_area_display_unit"] = unit
-    st.caption(
-        "Panelen visar om vald mix av vind och sol ryms i de landskap som modellen bedömer som möjliga efter aktiva filter. "
-        "Kartan färgsätter platser som möjliga för vind, sol, båda teknikerna eller ingen av dem."
-    )
-    st.caption(
-        f"Dummy/prototypdata · {scenario_label}: {energy_scale:g}x energi · "
-        f"markintensitet {energy_model_state.get('area_scenario_label', '-')} · "
-        f"mix {wind_share_pct:.0f}% vind / {solar_share_pct:.0f}% sol · källa {source_label} {source_year}"
-    )
-    st.caption(_format_hex_size_caption(h3_resolution, hex_area))
-    st.caption(
-        "Ytorna summeras som hela H3-celler. Vid kusten kan därför redovisad yta vara större än faktisk landyta, "
-        "eftersom kustceller räknas med även när delar av cellen ligger i havet."
-    )
-    if display_h3_resolution is not None and h3_resolution is not None and display_h3_resolution != h3_resolution:
-        st.caption(
-            f"Kartan visas som R{display_h3_resolution}. Ytbalans, täckning och scenarioallokering beräknas i R{h3_resolution}."
-        )
-
     active_filter_notes: list[str] = []
     wind_params = energy_model_state.get("wind_ui_params") if isinstance(energy_model_state, dict) else None
     wind_active_source_count = int(energy_model_state.get("wind_active_source_count", 0) or 0)
@@ -10652,67 +10656,7 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
         map_summary_parts.append(f"{SOLAR_SMALL_SCALE_LABEL} visas som gula schablonhexar")
     if outside_total > 1e-6:
         map_summary_parts.append(f"{OUTSIDE_LP_NEED_LAYER_LABEL} visar bristen ute till havs")
-    st.markdown(f"**{_t('Sammanfattning')}**")
-    st.caption(result_sentence)
-    st.caption("Karta: " + "; ".join(map_summary_parts) + ".")
-    if active_filter_notes:
-        st.caption("Aktiva filter: " + "; ".join(active_filter_notes) + ".")
-    elif unfiltered_start:
-        st.caption("Aktiva filter: inga vind- eller solfilter i öppningsläget.")
-    solar_filter_impact = energy_model_state.get("solar_filter_impact")
-    if isinstance(solar_filter_impact, dict) and int(solar_filter_impact.get("active_filter_count", 0) or 0) > 0:
-        unfiltered_solar_area = float(solar_filter_impact.get("unfiltered_area_km2", 0.0) or 0.0)
-        filtered_solar_area = float(solar_filter_impact.get("filtered_area_km2", 0.0) or 0.0)
-        removed_solar_area = float(solar_filter_impact.get("removed_area_km2", 0.0) or 0.0)
-        removed_share_pct = float(solar_filter_impact.get("removed_share_pct", 0.0) or 0.0)
-        st.caption(
-            "Solfiltereffekt: "
-            f"{_format_area_primary(unfiltered_solar_area, unit, hex_area)} utan solfilter -> "
-            f"{_format_area_primary(filtered_solar_area, unit, hex_area)} efter solfilter "
-            f"(-{_format_area_primary(removed_solar_area, unit, hex_area)}, -{removed_share_pct:.1f}%)."
-        )
-        if removed_solar_area <= 1e-6:
-            st.caption("Solfiltren är aktiva men ger ingen mätbar yteffekt med nuvarande avstånd och valda källager.")
-
     social_summary = energy_model_state.get("social_acceptance_summary")
-    if isinstance(social_summary, dict) and social_summary:
-        st.markdown(f"**{_t('Social acceptans')}**")
-        scenario_label = str(social_summary.get("scenario_label", social_summary.get("scenario_id", "-")) or "-")
-        impact_pct = float(social_summary.get("impact_pct", 0.0) or 0.0)
-        measured_hex_count = int(social_summary.get("measured_hex_count", 0) or 0)
-        potential_hex_count = int(social_summary.get("potential_hex_count", 0) or 0)
-        st.caption(
-            f"Scenario: {scenario_label}. Beräknas på {measured_hex_count:,} av {potential_hex_count:,} potentiella etableringshex."
-            .replace(",", " ")
-        )
-        metric_cols = st.columns(3)
-        metric_cols[0].metric("Medelacceptans", f"{float(social_summary.get('mean_acceptance', 0.0) or 0.0):.2f}")
-        metric_cols[1].metric("Medianacceptans", f"{float(social_summary.get('median_acceptance', 0.0) or 0.0):.2f}")
-        metric_cols[2].metric("Acceptanspåverkan", f"{impact_pct:.0f}%")
-        allocation_priority_pct = float(energy_model_state.get("social_acceptance_allocation_priority_pct", 0.0) or 0.0)
-        if allocation_priority_pct > 0.0:
-            st.caption(f"Scenariohexar prioriteras med {allocation_priority_pct:.0f}% social acceptansstyrning.")
-        low_threshold = float(social_summary.get("low_threshold", SOCIAL_ACCEPTANCE_LOW_THRESHOLD) or SOCIAL_ACCEPTANCE_LOW_THRESHOLD)
-        high_threshold = float(social_summary.get("high_threshold", SOCIAL_ACCEPTANCE_HIGH_THRESHOLD) or SOCIAL_ACCEPTANCE_HIGH_THRESHOLD)
-        acceptance_rows = [
-            {
-                "klass": f"Låg < {low_threshold:.1f}",
-                "yta": _format_area_primary(float(social_summary.get("low_acceptance_area_km2", 0.0) or 0.0), unit, hex_area),
-                "andel": f"{float(social_summary.get('low_acceptance_share_pct', 0.0) or 0.0):.1f}%",
-                "hex": _count_text(int(social_summary.get("low_acceptance_hex_count", 0) or 0)),
-            },
-            {
-                "klass": f"Hög ≥ {high_threshold:.1f}",
-                "yta": _format_area_primary(float(social_summary.get("high_acceptance_area_km2", 0.0) or 0.0), unit, hex_area),
-                "andel": f"{float(social_summary.get('high_acceptance_share_pct', 0.0) or 0.0):.1f}%",
-                "hex": _count_text(int(social_summary.get("high_acceptance_hex_count", 0) or 0)),
-            },
-        ]
-        st.dataframe(pd.DataFrame(acceptance_rows), width="stretch", hide_index=True, height=124)
-        missing_hex_count = int(social_summary.get("missing_hex_count", 0) or 0)
-        if missing_hex_count > 0:
-            st.caption(f"Acceptansdata saknas för {missing_hex_count:,} potentiella hex och räknas inte i statistiken.".replace(",", " "))
-
     social_effect = social_summary if isinstance(social_summary, dict) else {}
 
     def _potential_after_acceptance_area(technology: str, base_area_km2: float) -> float:
@@ -10858,7 +10802,8 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
         )
         st.caption("Pilarna visar procentuell förändring sedan föregående beräknade läge: grön upp = ökat, röd ner = minskat, gul/grå = oförändrat.")
 
-    with st.expander(_t("Visning och enheter"), expanded=False):
+    with st.expander("Avancerade inställningar", expanded=False):
+        _render_right_panel_width_control(st)
         st.radio(
             "Enhet",
             options=AREA_DISPLAY_UNITS,
@@ -10867,6 +10812,85 @@ def _render_establishment_focus(energy_model_state: dict[str, Any]) -> None:
             key="establishment_area_display_unit",
         )
         st.caption("Byte av enhet ändrar bara hur ytor visas i panelen, inte modellresultatet.")
+        st.caption(
+            "Panelen visar om vald mix av vind och sol ryms i de landskap som modellen bedömer som möjliga efter aktiva filter. "
+            "Kartan färgsätter platser som möjliga för vind, sol, båda teknikerna eller ingen av dem."
+        )
+        st.caption(
+            f"Dummy/prototypdata · {scenario_label}: {energy_scale:g}x energi · "
+            f"markintensitet {energy_model_state.get('area_scenario_label', '-')} · "
+            f"mix {wind_share_pct:.0f}% vind / {solar_share_pct:.0f}% sol · källa {source_label} {source_year}"
+        )
+        st.caption(_format_hex_size_caption(h3_resolution, hex_area))
+        st.caption(
+            "Ytorna summeras som hela H3-celler. Vid kusten kan därför redovisad yta vara större än faktisk landyta, "
+            "eftersom kustceller räknas med även när delar av cellen ligger i havet."
+        )
+        if display_h3_resolution is not None and h3_resolution is not None and display_h3_resolution != h3_resolution:
+            st.caption(
+                f"Kartan visas som R{display_h3_resolution}. Ytbalans, täckning och scenarioallokering beräknas i R{h3_resolution}."
+            )
+
+    _render_establishment_heading()
+    st.markdown(f"**{_t('Sammanfattning')}**")
+    st.caption(result_sentence)
+    st.caption("Karta: " + "; ".join(map_summary_parts) + ".")
+    if active_filter_notes:
+        st.caption("Aktiva filter: " + "; ".join(active_filter_notes) + ".")
+    elif unfiltered_start:
+        st.caption("Aktiva filter: inga vind- eller solfilter i öppningsläget.")
+    solar_filter_impact = energy_model_state.get("solar_filter_impact")
+    if isinstance(solar_filter_impact, dict) and int(solar_filter_impact.get("active_filter_count", 0) or 0) > 0:
+        unfiltered_solar_area = float(solar_filter_impact.get("unfiltered_area_km2", 0.0) or 0.0)
+        filtered_solar_area = float(solar_filter_impact.get("filtered_area_km2", 0.0) or 0.0)
+        removed_solar_area = float(solar_filter_impact.get("removed_area_km2", 0.0) or 0.0)
+        removed_share_pct = float(solar_filter_impact.get("removed_share_pct", 0.0) or 0.0)
+        st.caption(
+            "Solfiltereffekt: "
+            f"{_format_area_primary(unfiltered_solar_area, unit, hex_area)} utan solfilter -> "
+            f"{_format_area_primary(filtered_solar_area, unit, hex_area)} efter solfilter "
+            f"(-{_format_area_primary(removed_solar_area, unit, hex_area)}, -{removed_share_pct:.1f}%)."
+        )
+        if removed_solar_area <= 1e-6:
+            st.caption("Solfiltren är aktiva men ger ingen mätbar yteffekt med nuvarande avstånd och valda källager.")
+
+    if isinstance(social_summary, dict) and social_summary:
+        st.markdown(f"**{_t('Social acceptans')}**")
+        scenario_label = str(social_summary.get("scenario_label", social_summary.get("scenario_id", "-")) or "-")
+        impact_pct = float(social_summary.get("impact_pct", 0.0) or 0.0)
+        measured_hex_count = int(social_summary.get("measured_hex_count", 0) or 0)
+        potential_hex_count = int(social_summary.get("potential_hex_count", 0) or 0)
+        st.caption(
+            f"Scenario: {scenario_label}. Beräknas på {measured_hex_count:,} av {potential_hex_count:,} potentiella etableringshex."
+            .replace(",", " ")
+        )
+        metric_cols = st.columns(3)
+        metric_cols[0].metric("Medelacceptans", f"{float(social_summary.get('mean_acceptance', 0.0) or 0.0):.2f}")
+        metric_cols[1].metric("Medianacceptans", f"{float(social_summary.get('median_acceptance', 0.0) or 0.0):.2f}")
+        metric_cols[2].metric("Acceptanspåverkan", f"{impact_pct:.0f}%")
+        allocation_priority_pct = float(energy_model_state.get("social_acceptance_allocation_priority_pct", 0.0) or 0.0)
+        if allocation_priority_pct > 0.0:
+            st.caption(f"Scenariohexar prioriteras med {allocation_priority_pct:.0f}% social acceptansstyrning.")
+        low_threshold = float(social_summary.get("low_threshold", SOCIAL_ACCEPTANCE_LOW_THRESHOLD) or SOCIAL_ACCEPTANCE_LOW_THRESHOLD)
+        high_threshold = float(social_summary.get("high_threshold", SOCIAL_ACCEPTANCE_HIGH_THRESHOLD) or SOCIAL_ACCEPTANCE_HIGH_THRESHOLD)
+        acceptance_rows = [
+            {
+                "klass": f"Låg < {low_threshold:.1f}",
+                "yta": _format_area_primary(float(social_summary.get("low_acceptance_area_km2", 0.0) or 0.0), unit, hex_area),
+                "andel": f"{float(social_summary.get('low_acceptance_share_pct', 0.0) or 0.0):.1f}%",
+                "hex": _count_text(int(social_summary.get("low_acceptance_hex_count", 0) or 0)),
+            },
+            {
+                "klass": f"Hög ≥ {high_threshold:.1f}",
+                "yta": _format_area_primary(float(social_summary.get("high_acceptance_area_km2", 0.0) or 0.0), unit, hex_area),
+                "andel": f"{float(social_summary.get('high_acceptance_share_pct', 0.0) or 0.0):.1f}%",
+                "hex": _count_text(int(social_summary.get("high_acceptance_hex_count", 0) or 0)),
+            },
+        ]
+        st.dataframe(pd.DataFrame(acceptance_rows), width="stretch", hide_index=True, height=124)
+        missing_hex_count = int(social_summary.get("missing_hex_count", 0) or 0)
+        if missing_hex_count > 0:
+            st.caption(f"Acceptansdata saknas för {missing_hex_count:,} potentiella hex och räknas inte i statistiken.".replace(",", " "))
 
     with st.expander(_t("Hexdetaljer och kartmarkörer"), expanded=False):
         st.caption("Tekniska kartmått för granskning av hexmarkörer och färgklasser.")
