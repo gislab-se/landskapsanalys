@@ -419,6 +419,7 @@ APP_TRANSLATIONS: dict[str, dict[str, str]] = {
         "English": "Engelsk",
         "Språk": "Sprog/Språk",
         "Visa guide": "Vis guide",
+        "Öppna en kort genomgång av Trøndelag-vyn.": "Åbn en kort gennemgang af Trøndelag-visningen.",
         "Föregående": "Forrige",
         "Nästa": "Næste",
         "Hoppa över": "Spring over",
@@ -441,7 +442,6 @@ APP_TRANSLATIONS: dict[str, dict[str, str]] = {
         "Vald upplösning": "Valgt oppløsning",
         "Zoomanpassad upplösning": "Zoomtilpasset oppløsning",
         "Snabb visning: vald upplösning": "Hurtig visning: valgt oppløsning",
-        "Återställ kartvy": "Nulstil kartvisning",
         "Panelbredd": "Panelbredde",
         "Visa/dölj kontext": "Vis/skjul kontekst",
         "Karta": "Kort/Kart",
@@ -500,6 +500,7 @@ APP_TRANSLATIONS: dict[str, dict[str, str]] = {
         "English": "English",
         "Språk": "Language",
         "Visa guide": "Show guide",
+        "Öppna en kort genomgång av Trøndelag-vyn.": "Open a short walkthrough of the Trøndelag view.",
         "Föregående": "Previous",
         "Nästa": "Next",
         "Hoppa över": "Skip",
@@ -522,7 +523,6 @@ APP_TRANSLATIONS: dict[str, dict[str, str]] = {
         "Vald upplösning": "Selected resolution",
         "Zoomanpassad upplösning": "Zoom-adaptive resolution",
         "Snabb visning: vald upplösning": "Fast display: selected resolution",
-        "Återställ kartvy": "Reset map view",
         "Panelbredd": "Panel width",
         "Visa/dölj kontext": "Show/hide context",
         "Karta": "Map",
@@ -623,7 +623,7 @@ def _render_tutorial_launcher(region: dict[str, Any], panel: Any | None = None) 
     clicked = target.button(
         _t("Visa guide"),
         key="potential_tutorial_open_button",
-        help="Öppna en kort genomgång av Trøndelag-vyn.",
+        help=_t("Öppna en kort genomgång av Trøndelag-vyn."),
         width="stretch",
     )
     if clicked:
@@ -631,54 +631,249 @@ def _render_tutorial_launcher(region: dict[str, Any], panel: Any | None = None) 
     return bool(st.session_state.pop(TUTORIAL_FORCE_OPEN_KEY, False))
 
 
-def _trondelag_tutorial_steps(region: dict[str, Any]) -> list[dict[str, Any]]:
-    region_label = str(region.get("display_name", "Trondelag") or "Trondelag")
-    return [
-        {
-            "selector": ".workspace-header",
-            "title": "Potentialappen är en prototyp",
-            "body": (
-                f"{region_label}-appen hjälper dig utforska var landskapet kan ha potential för vind och sol. "
+def _tutorial_text(key: str, **kwargs: Any) -> str:
+    texts = {
+        "sv": {
+            "prototype_title": "Potentialappen är en prototyp",
+            "prototype_body": (
+                "{region_label}-appen hjälper dig utforska var landskapet kan ha potential för vind och sol. "
                 "Den kombinerar geografi, energimodellering och social acceptans. Målet är inte ett färdigt svar, "
                 "utan att visa var potential kan finnas och vilka antaganden som påverkar resultatet."
             ),
-        },
-        {
-            "selector": "section[data-testid=\"stSidebar\"]",
-            "title": "Börja med geografin",
-            "body": (
+            "geography_title": "Börja med geografin",
+            "geography_body": (
                 "Geografiska förutsättningar visar vilka delar av landskapet som över huvud taget kan vara relevanta. "
-                "Här finns landskapstyper, H3-visning och lager som kan beskriva infrastruktur, skyddade områden och rumsliga begränsningar."
+                "Här finns landskapstyper och lager som kan beskriva infrastruktur, skyddade områden och rumsliga begränsningar."
             ),
-            "openTexts": ["Geografier", "Landskap", "H3-upplösning"],
-        },
-        {
-            "selector": "section[data-testid=\"stSidebar\"]",
-            "title": "Koppla yta till energi",
-            "body": (
+            "energy_title": "Koppla yta till energi",
+            "energy_body": (
                 "Energimodelleringen kopplar landskapets möjliga ytor till scenarier för vind, sol eller en mix av båda. "
                 "Scenarierna visar inte bara var det finns plats, utan vad platsen kan betyda i energisystemet."
             ),
-            "openTexts": ["Energimodellering"],
-        },
-        {
-            "selector": "section[data-testid=\"stSidebar\"]",
-            "title": "Energiscenario och markintensitet",
-            "body": (
+            "scenario_title": "Energiscenario och markintensitet",
+            "scenario_body": (
                 "Energiscenario styr hur mycket energi som ska testas i modellen. Markintensitet styr hur mycket mark som behövs per TWh "
                 "och kan väljas låg, mellan eller hög oberoende av energiscenariot. Därför kan du till exempel testa hög energinivå "
                 "med mellan markintensitet."
             ),
-            "openTexts": ["Energimodellering"],
-        },
-        {
-            "selector": "section[data-testid=\"stSidebar\"]",
-            "title": "Lägg till social acceptans",
-            "body": (
+            "acceptance_title": "Lägg till social acceptans",
+            "acceptance_body": (
                 "Social acceptans hjälper dig förstå var potentialen kan vara mer eller mindre realistisk utifrån landskapets användning, "
                 "värden och möjliga konflikter. I Trøndelag är detta syntetiskt testdata, inte färdiga IVL-resultat."
             ),
-            "openTexts": ["Social acceptans"],
+            "establishment_body": (
+                "Resultatkartan visar den sammanvägda potentialen: grön betyder både vind och sol, gul bara sol, blå bara vind och röd ej lämpligt. "
+                "Detta är grundpotentialen utifrån de antaganden och avgränsningar som är aktiva."
+            ),
+            "allocation_body": (
+                "Scenariofördelningen fyller de mest lämpade etableringshexen först, ungefär som vatten i landskapets djupaste hålor. "
+                "Vind söker de djupaste vindlägena oavsett om grundpotentialen är blå eller grön. Sol söker de djupaste sollägena "
+                "oavsett om grundpotentialen är gul eller grön. Grön markör visar där båda teknikerna faktiskt delar samma scenariohex."
+            ),
+            "outside_body": (
+                "Ytbehov utanför landskapets potential visar schematisk vind- eller solyta som behövs när scenariot inte ryms i den beräknade potentialen. "
+                "Det gör skillnaden mellan landskapets möjliga yta och scenariots efterfrågan synlig."
+            ),
+            "green_title": "Grönt är ett öppet startläge",
+            "green_body": (
+                "I startläget är kartan grön eftersom inga avgränsande lager eller restriktioner är aktiva. "
+                "Grönt betyder därför möjligt enligt nuvarande antaganden, inte ett färdigt rekommenderat område."
+            ),
+            "wind_solar_title": "Vind och sol styrs under Geografier",
+            "wind_solar_body": (
+                "Under Geografier finns Landskapspotential Vind och Landskapspotential Sol. Där justerar du de antaganden, lager, avstånd "
+                "och restriktioner som påverkar vind- respektive solpotentialen."
+            ),
+            "wind_apply_title": "Ändra vindantaganden och använd dem",
+            "wind_apply_body": (
+                "Öppna vindpotentialen och gör dina filterval, till exempel Befolkning och bebyggelse. "
+                "Klicka sedan Använd ändringar för att räkna om kartan och resultatet med de valda antagandena."
+            ),
+            "right_panel_title": "Högerpanelen förklarar varför",
+            "right_panel_body": (
+                "Kartan visar mönstret. Högerpanelen och tabellerna visar samma analys i text och siffror: vilken yta som prioriteras, "
+                "vilka avgränsningar som påverkar resultatet och om scenariot ryms inom potentialen."
+            ),
+            "reopen_title": "Du kan alltid öppna guiden igen",
+            "reopen_body": (
+                "Starta om den korta guiden med Visa guide. Kryssa i Öppna inte automatiskt igen om du vill att appen ska hoppa över introduktionen nästa gång."
+            ),
+        },
+        "en": {
+            "prototype_title": "The potential app is a prototype",
+            "prototype_body": (
+                "The {region_label} app helps you explore where the landscape may have potential for wind and solar. "
+                "It combines geography, energy modelling and social acceptance. The goal is not a final answer, "
+                "but to show where potential may exist and which assumptions affect the result."
+            ),
+            "geography_title": "Start with geography",
+            "geography_body": (
+                "Geographic conditions show which parts of the landscape may be relevant at all. "
+                "Here you will find landscape types and layers that describe infrastructure, protected areas and spatial constraints."
+            ),
+            "energy_title": "Connect area to energy",
+            "energy_body": (
+                "Energy modelling connects the landscape's possible areas to scenarios for wind, solar or a mix of both. "
+                "The scenarios show not only where there is room, but what the place may mean in the energy system."
+            ),
+            "scenario_title": "Energy scenario and land intensity",
+            "scenario_body": (
+                "The energy scenario controls how much energy is tested in the model. Land intensity controls how much land is needed per TWh "
+                "and can be low, medium or high independently of the energy scenario. For example, you can test a high energy level "
+                "with medium land intensity."
+            ),
+            "acceptance_title": "Add social acceptance",
+            "acceptance_body": (
+                "Social acceptance helps you understand where the potential may be more or less realistic given landscape use, "
+                "values and possible conflicts. In Trøndelag this is synthetic test data, not finished IVL results."
+            ),
+            "establishment_body": (
+                "The result map shows the combined potential: green means both wind and solar, yellow solar only, blue wind only and red not suitable. "
+                "This is the base potential from the active assumptions and constraints."
+            ),
+            "allocation_body": (
+                "The scenario allocation fills the most suitable establishment hexes first. "
+                "Wind searches for the deepest wind positions whether the base potential is blue or green. Solar searches for the deepest solar positions "
+                "whether the base potential is yellow or green. A green marker shows where both technologies actually share the same scenario hex."
+            ),
+            "outside_body": (
+                "Area demand outside landscape potential shows schematic wind or solar area needed when the scenario does not fit inside the calculated potential. "
+                "It makes the gap between possible landscape area and scenario demand visible."
+            ),
+            "green_title": "Green is an open starting point",
+            "green_body": (
+                "At startup the map is green because no limiting layers or restrictions are active. "
+                "Green therefore means possible under current assumptions, not a finished recommended area."
+            ),
+            "wind_solar_title": "Wind and solar are controlled under Geographies",
+            "wind_solar_body": (
+                "Under Geographies you will find Landscape Potential Wind and Landscape Potential Solar. There you adjust the assumptions, layers, distances "
+                "and restrictions that affect wind and solar potential."
+            ),
+            "wind_apply_title": "Change wind assumptions and apply them",
+            "wind_apply_body": (
+                "Open wind potential and make your filter choices, for example Population and settlement. "
+                "Then click Apply changes to recalculate the map and result using the selected assumptions."
+            ),
+            "right_panel_title": "The right panel explains why",
+            "right_panel_body": (
+                "The map shows the pattern. The right panel and tables show the same analysis in text and numbers: which area is prioritised, "
+                "which constraints affect the result and whether the scenario fits inside the potential."
+            ),
+            "reopen_title": "You can always open the guide again",
+            "reopen_body": (
+                "Restart the short guide with Show guide. Tick Do not open automatically again if you want the app to skip the introduction next time."
+            ),
+        },
+        "da_no": {
+            "prototype_title": "Potentialappen er en prototype",
+            "prototype_body": (
+                "{region_label}-appen hjælper dig med at udforske, hvor landskabet kan have potentiale for vind og sol. "
+                "Den kombinerer geografi, energimodellering og social accept. Målet er ikke et færdigt svar, "
+                "men at vise hvor potentiale kan findes, og hvilke antagelser der påvirker resultatet."
+            ),
+            "geography_title": "Begynd med geografien",
+            "geography_body": (
+                "Geografiske forudsætninger viser hvilke dele af landskabet der overhovedet kan være relevante. "
+                "Her findes landskabstyper og lag som kan beskrive infrastruktur, beskyttede områder og rumlige begrænsninger."
+            ),
+            "energy_title": "Kobl areal til energi",
+            "energy_body": (
+                "Energimodelleringen kobler landskabets mulige arealer til scenarier for vind, sol eller en mix af begge. "
+                "Scenarierne viser ikke kun hvor der er plads, men hvad stedet kan betyde i energisystemet."
+            ),
+            "scenario_title": "Energiscenarie og markintensitet",
+            "scenario_body": (
+                "Energiscenariet styrer hvor meget energi der testes i modellen. Markintensitet styrer hvor meget areal der behøves per TWh "
+                "og kan vælges lav, mellem eller høj uafhængigt af energiscenariet. Derfor kan du for eksempel teste et højt energiniveau "
+                "med mellem markintensitet."
+            ),
+            "acceptance_title": "Tilføj social accept",
+            "acceptance_body": (
+                "Social accept hjælper dig med at forstå hvor potentialet kan være mere eller mindre realistisk ud fra landskabets anvendelse, "
+                "værdier og mulige konflikter. I Trøndelag er dette syntetiske testdata, ikke færdige IVL-resultater."
+            ),
+            "establishment_body": (
+                "Resultatkortet viser det samlede potentiale: grøn betyder både vind og sol, gul kun sol, blå kun vind og rød ikke egnet. "
+                "Dette er grundpotentialet ud fra de antagelser og afgrænsninger der er aktive."
+            ),
+            "allocation_body": (
+                "Scenariefordelingen fylder de bedst egnede etableringshex først. "
+                "Vind søger de dybeste vindpositioner uanset om grundpotentialet er blåt eller grønt. Sol søger de dybeste solpositioner "
+                "uanset om grundpotentialet er gult eller grønt. Grøn markør viser hvor begge teknologier faktisk deler samme scenariohex."
+            ),
+            "outside_body": (
+                "Arealbehov udenfor landskabets potentiale viser skematisk vind- eller solareal som behøves, når scenariet ikke kan rummes i det beregnede potentiale. "
+                "Det gør forskellen mellem landskabets mulige areal og scenariets efterspørgsel synlig."
+            ),
+            "green_title": "Grøn er et åbent startläge",
+            "green_body": (
+                "I startläget er kortet grønt, fordi ingen afgrænsende lag eller restriktioner er aktive. "
+                "Grøn betyder derfor muligt med nuværende antagelser, ikke et færdigt anbefalet område."
+            ),
+            "wind_solar_title": "Vind og sol styres under Geografier",
+            "wind_solar_body": (
+                "Under Geografier findes Landskabspotentiale Vind og Landskabspotentiale Sol. Her justerer du de antagelser, lag, afstande "
+                "og restriktioner som påvirker vind- og solpotentialet."
+            ),
+            "wind_apply_title": "Ændr vindantagelser og anvend dem",
+            "wind_apply_body": (
+                "Åbn vindpotentialet og lav dine filtervalg, for eksempel Befolkning og bebyggelse. "
+                "Klik derefter Använd ändringar for at beregne kortet og resultatet igen med de valgte antagelser."
+            ),
+            "right_panel_title": "Højrepanelet forklarer hvorfor",
+            "right_panel_body": (
+                "Kortet viser mønsteret. Højrepanelet og tabellerne viser samme analyse i tekst og tal: hvilket areal der prioriteres, "
+                "hvilke afgrænsninger der påvirker resultatet, og om scenariet kan rummes inden for potentialet."
+            ),
+            "reopen_title": "Du kan altid åbne guiden igen",
+            "reopen_body": (
+                "Start den korte guide igen med Vis guide. Marker Åbn ikke automatisk igen hvis du vil have appen til at springe introduktionen over næste gang."
+            ),
+        },
+    }
+    language_texts = texts.get(_language(), texts["sv"])
+    value = language_texts.get(str(key), texts["sv"].get(str(key), str(key)))
+    return value.format(**kwargs) if kwargs else value
+
+
+def _trondelag_tutorial_steps(region: dict[str, Any]) -> list[dict[str, Any]]:
+    region_label = str(region.get("display_name", "Trondelag") or "Trondelag")
+    geography_label = _t("Geografier")
+    landscape_label = _t("Landskap")
+    wind_label = _t(WIND_LANDSCAPE_POTENTIAL_LABEL)
+    solar_label = _t(SOLAR_LANDSCAPE_POTENTIAL_LABEL)
+    guide_label = _t("Visa guide")
+    wind_apply_label = ui_text("apply_changes", _wind_control_language())
+    return [
+        {
+            "selector": ".workspace-header",
+            "title": _tutorial_text("prototype_title"),
+            "body": _tutorial_text("prototype_body", region_label=region_label),
+        },
+        {
+            "selector": "section[data-testid=\"stSidebar\"]",
+            "title": _tutorial_text("geography_title"),
+            "body": _tutorial_text("geography_body"),
+            "openTexts": [geography_label, landscape_label],
+        },
+        {
+            "selector": "section[data-testid=\"stSidebar\"]",
+            "title": _tutorial_text("energy_title"),
+            "body": _tutorial_text("energy_body"),
+            "openTexts": [_t("Energimodellering")],
+        },
+        {
+            "selector": "section[data-testid=\"stSidebar\"]",
+            "title": _tutorial_text("scenario_title"),
+            "body": _tutorial_text("scenario_body"),
+            "openTexts": [_t("Energimodellering")],
+        },
+        {
+            "selector": "section[data-testid=\"stSidebar\"]",
+            "title": _tutorial_text("acceptance_title"),
+            "body": _tutorial_text("acceptance_body"),
+            "openTexts": [_t("Social acceptans")],
         },
         {
             "anchor": "map",
@@ -686,11 +881,8 @@ def _trondelag_tutorial_steps(region: dict[str, Any]) -> list[dict[str, Any]]:
             "legendSectionTitle": COMBINED_ESTABLISHMENT_LAYER_LABEL,
             "fallbackTarget": "iframeSelector",
             "iframeSelectors": [".map-legend"],
-            "title": "Potentiell etableringsyta",
-            "body": (
-                "Resultatkartan visar den sammanvägda potentialen: grön betyder både vind och sol, gul bara sol, blå bara vind och röd ej lämpligt. "
-                "Detta är grundpotentialen utifrån de antaganden och avgränsningar som är aktiva."
-            ),
+            "title": _t(COMBINED_ESTABLISHMENT_LAYER_LABEL),
+            "body": _tutorial_text("establishment_body"),
         },
         {
             "anchor": "map",
@@ -698,13 +890,9 @@ def _trondelag_tutorial_steps(region: dict[str, Any]) -> list[dict[str, Any]]:
             "legendSectionTitle": SCENARIO_ALLOCATION_LAYER_LABEL,
             "fallbackTarget": "iframeSelector",
             "iframeSelectors": [".map-legend"],
-            "title": "Scenariofördelning i etableringshex",
+            "title": _t(SCENARIO_ALLOCATION_LAYER_LABEL),
             "mapLayers": [SCENARIO_ALLOCATION_LAYER_LABEL],
-            "body": (
-                "Scenariofördelningen fyller de mest lämpade etableringshexen först, ungefär som vatten i landskapets djupaste hålor. "
-                "Vind söker de djupaste vindlägena oavsett om grundpotentialen är blå eller grön. Sol söker de djupaste sollägena "
-                "oavsett om grundpotentialen är gul eller grön. Grön markör visar där båda teknikerna faktiskt delar samma scenariohex."
-            ),
+            "body": _tutorial_text("allocation_body"),
         },
         {
             "anchor": "map",
@@ -714,11 +902,8 @@ def _trondelag_tutorial_steps(region: dict[str, Any]) -> list[dict[str, Any]]:
             "iframeSelectors": [".map-legend"],
             "scrollWindowToTarget": True,
             "mapLayers": [OUTSIDE_LP_NEED_LAYER_LABEL],
-            "title": "Ytbehov utanför landskapets potential",
-            "body": (
-                "Ytbehov utanför landskapets potential visar schematisk vind- eller solyta som behövs när scenariot inte ryms i den beräknade potentialen. "
-                "Det gör skillnaden mellan landskapets möjliga yta och scenariots efterfrågan synlig."
-            ),
+            "title": _t(OUTSIDE_LP_NEED_LAYER_LABEL),
+            "body": _tutorial_text("outside_body"),
         },
         {
             "anchor": "map",
@@ -727,55 +912,41 @@ def _trondelag_tutorial_steps(region: dict[str, Any]) -> list[dict[str, Any]]:
             "closeAllExpanders": True,
             "sidebarScrollTop": True,
             "stableHighlight": True,
-            "title": "Grönt är ett öppet startläge",
-            "body": (
-                "I startläget är kartan grön eftersom inga avgränsande lager eller restriktioner är aktiva. "
-                "Grönt betyder därför möjligt enligt nuvarande antaganden, inte ett färdigt rekommenderat område."
-            ),
+            "title": _tutorial_text("green_title"),
+            "body": _tutorial_text("green_body"),
         },
         {
             "selector": "section[data-testid=\"stSidebar\"]",
-            "title": "Vind och sol styrs under Geografier",
-            "body": (
-                "Under Geografier finns Landskapspotential Vind och Landskapspotential Sol. Där justerar du de antaganden, lager, avstånd "
-                "och restriktioner som påverkar vind- respektive solpotentialen."
-            ),
+            "title": _tutorial_text("wind_solar_title"),
+            "body": _tutorial_text("wind_solar_body"),
             "closeAllExpanders": True,
             "sidebarScrollTop": True,
-            "openTexts": ["Geografier"],
-            "highlightTexts": [WIND_LANDSCAPE_POTENTIAL_LABEL, SOLAR_LANDSCAPE_POTENTIAL_LABEL],
+            "openTexts": [geography_label],
+            "highlightTexts": [wind_label, solar_label],
         },
         {
             "selector": "section[data-testid=\"stSidebar\"]",
-            "title": "Ändra vindantaganden och använd dem",
-            "body": (
-                "Öppna vindpotentialen och gör dina filterval, till exempel Befolkning och bebyggelse. "
-                "Klicka sedan Använd ändringar för att räkna om kartan och resultatet med de valda antagandena."
-            ),
+            "title": _tutorial_text("wind_apply_title"),
+            "body": _tutorial_text("wind_apply_body"),
             "closeAllExpanders": True,
             "sidebarScrollTop": True,
-            "openTexts": ["Geografier", WIND_LANDSCAPE_POTENTIAL_LABEL, "Befolkning och bebyggelse"],
-            "scrollToText": "Använd ändringar",
+            "openTexts": [geography_label, wind_label, WIND_SETTLEMENT_GROUP_LABEL],
+            "scrollToText": wind_apply_label,
             "scrollAlign": 0.58,
-            "highlightTexts": ["Använd ändringar"],
+            "highlightTexts": [wind_apply_label],
         },
         {
             "selector": "div[data-testid=\"column\"]:has(#right-panel-content-anchor)",
             "anchor": "right-panel",
-            "title": "Högerpanelen förklarar varför",
-            "body": (
-                "Kartan visar mönstret. Högerpanelen och tabellerna visar samma analys i text och siffror: vilken yta som prioriteras, "
-                "vilka avgränsningar som påverkar resultatet och om scenariot ryms inom potentialen."
-            ),
+            "title": _tutorial_text("right_panel_title"),
+            "body": _tutorial_text("right_panel_body"),
         },
         {
             "target": "buttonText",
-            "buttonText": "Visa guide",
+            "buttonText": guide_label,
             "closeAllExpanders": True,
-            "title": "Du kan alltid öppna guiden igen",
-            "body": (
-                "Starta om den korta guiden med Visa guide. Kryssa i Öppna inte automatiskt igen om du vill att appen ska hoppa över introduktionen nästa gång."
-            ),
+            "title": _tutorial_text("reopen_title"),
+            "body": _tutorial_text("reopen_body"),
         },
     ]
 
@@ -1851,14 +2022,6 @@ def _map_view_reset_token() -> int:
         return int(st.session_state.get(MAP_VIEW_RESET_TOKEN_KEY, 0))
     except Exception:
         return 0
-
-
-def _request_browser_map_view_reset() -> None:
-    st.session_state[MAP_VIEW_RESET_TOKEN_KEY] = _map_view_reset_token() + 1
-
-
-def _reset_map_view() -> None:
-    _request_browser_map_view_reset()
 
 
 def _init_panel_state() -> None:
@@ -3728,69 +3891,66 @@ def _map_panel_controls(region: dict[str, Any], key_prefix: str, panel: Any | No
     current_value = _session_h3_resolution(region, state_key, preferred_hint)
 
     display_modes = ["selected", "zoom_family"]
-    current_display_mode = str(st.session_state.get(display_mode_key, "selected"))
+    current_display_mode = str(st.session_state.get(display_mode_key, "zoom_family"))
     if current_display_mode not in display_modes:
-        current_display_mode = "selected"
+        current_display_mode = "zoom_family"
         if display_mode_key in st.session_state:
             del st.session_state[display_mode_key]
 
+    zoom_family_base = _zoom_family_base_resolution(region)
+    family_resolutions = _zoom_family_resolutions(region)
+    zoom_family_available = len({int(value) for value in family_resolutions}) > 1
+    if not zoom_family_available and current_display_mode == "zoom_family":
+        current_display_mode = "selected"
+        st.session_state[display_mode_key] = "selected"
+    display_modes_for_resolution = ["selected", "zoom_family"] if zoom_family_available else ["selected"]
+
     if panel is not None:
-        with panel.expander(_t("H3-upplösning"), expanded=False):
-            zoom_family_base = _zoom_family_base_resolution(region)
-            family_resolutions = _zoom_family_resolutions(region)
-            zoom_family_available = len({int(value) for value in family_resolutions}) > 1
-            if not zoom_family_available and current_display_mode == "zoom_family":
-                current_display_mode = "selected"
-                st.session_state[display_mode_key] = "selected"
-            display_modes_for_resolution = ["selected", "zoom_family"] if zoom_family_available else ["selected"]
-            display_mode_index = (
-                None
-                if display_mode_key in st.session_state
-                else display_modes_for_resolution.index(current_display_mode)
-            )
-            display_mode = st.radio(
-                _t("Hexvisning"),
-                options=display_modes_for_resolution,
-                index=display_mode_index,
-                format_func=lambda value: {
-                    "selected": _t("Vald upplösning"),
-                    "zoom_family": _t("Zoomanpassad upplösning"),
-                }.get(str(value), str(value)),
+        panel.markdown(f"**{_t('H3-upplösning')}**")
+        display_mode_index = (
+            None
+            if display_mode_key in st.session_state
+            else display_modes_for_resolution.index(current_display_mode)
+        )
+        display_mode = panel.radio(
+            _t("Hexvisning"),
+            options=display_modes_for_resolution,
+            index=display_mode_index,
+            format_func=lambda value: {
+                "selected": _t("Vald upplösning"),
+                "zoom_family": _t("Zoomanpassad upplösning"),
+            }.get(str(value), str(value)),
+            horizontal=False,
+            key=display_mode_key,
+        )
+        if display_mode is None:
+            display_mode = current_display_mode
+        zoom_family_enabled = display_mode == "zoom_family"
+        if zoom_family_enabled:
+            h3_resolution = zoom_family_base
+            if st.session_state.get(state_key) != int(h3_resolution):
+                st.session_state[state_key] = int(h3_resolution)
+        else:
+            h3_index = None if state_key in st.session_state else available.index(current_value)
+            h3_resolution = panel.radio(
+                _t("H3-rollup"),
+                options=available,
+                index=h3_index,
+                format_func=lambda value: _h3_option_label(region, value),
                 horizontal=False,
-                key=display_mode_key,
+                key=state_key,
             )
-            if display_mode is None:
-                display_mode = current_display_mode
-            zoom_family_enabled = display_mode == "zoom_family"
-            if zoom_family_enabled:
-                h3_resolution = zoom_family_base
-                if st.session_state.get(state_key) != int(h3_resolution):
-                    st.session_state[state_key] = int(h3_resolution)
-            else:
-                h3_index = None if state_key in st.session_state else available.index(current_value)
-                h3_resolution = st.radio(
-                    _t("H3-rollup"),
-                    options=available,
-                    index=h3_index,
-                    format_func=lambda value: _h3_option_label(region, value),
-                    horizontal=False,
-                    key=state_key,
-                )
-                if h3_resolution is None:
-                    h3_resolution = current_value
-            st.markdown("[Läs mer om H3-upplösningar](https://h3geo.org/).")
-            if st.button(_t("Återställ kartvy"), key=f"{key_prefix}_reset_map_view"):
-                _request_browser_map_view_reset()
-                _request_ui_only_rerun("kartvy")
-                st.rerun()
+            if h3_resolution is None:
+                h3_resolution = current_value
+        panel.markdown("[Läs mer om H3-upplösningar](https://h3geo.org/).")
     else:
         h3_resolution = current_value
         zoom_family_enabled = (
             current_display_mode == "zoom_family"
-            and len({int(value) for value in _zoom_family_resolutions(region)}) > 1
+            and zoom_family_available
         )
         if zoom_family_enabled:
-            h3_resolution = _zoom_family_base_resolution(region)
+            h3_resolution = zoom_family_base
 
     return int(h3_resolution), bool(zoom_family_enabled), _current_opacity(key_prefix), True, _map_view_reset_token()
 
@@ -11382,7 +11542,8 @@ def _render_missing_data_workspace(
                     key="missing_landscape_factor",
                     disabled=True,
                 )
-            with st.expander(_t("H3-upplösning"), expanded=False):
+            with st.expander("Avancerade inställningar", expanded=False):
+                st.markdown(f"**{_t('H3-upplösning')}**")
                 resolutions = _available_h3_resolutions(region)
                 st.selectbox(
                     _t("H3-upplösning"),
@@ -11392,13 +11553,19 @@ def _render_missing_data_workspace(
                     format_func=lambda value: f"R{value}",
                     disabled=True,
                 )
+                display_modes = ["selected", "zoom_family"] if len({int(value) for value in resolutions}) > 1 else ["selected"]
                 st.radio(
                     _t("Hexvisning"),
-                    options=[_t("Vald upplösning"), _t("Zoomanpassad upplösning")],
+                    options=display_modes,
+                    index=display_modes.index("zoom_family") if "zoom_family" in display_modes else 0,
+                    format_func=lambda value: {
+                        "selected": _t("Vald upplösning"),
+                        "zoom_family": _t("Zoomanpassad upplösning"),
+                    }.get(str(value), str(value)),
                     key="missing_combined_h3_display_mode",
                     disabled=True,
                 )
-                st.caption("H3-visningsgeometrier kopplas in via regionmanifestet.")
+                st.caption("Hexgeometrier kopplas in via regionmanifestet.")
                 st.dataframe(
                     pd.DataFrame([row for row in status_rows if str(row.get("del", "")).startswith("H3")]),
                     width="stretch",
@@ -11488,12 +11655,7 @@ def _unified_workspace_tab(
     solar_defaults = _default_solar_params(solar_rules)
     _prime_solar_builder_state(solar_defaults, saved_solar_params)
     _prime_wind_builder_state(_default_wind_params(), _selected_wind_layers())
-    default_display_resolution = int(region.get("default_display_h3_resolution") or region.get("default_h3_resolution") or 8)
-    h3_resolution = _session_h3_resolution(region, "combined_h3_resolution", default_display_resolution)
-    zoom_family_enabled = str(st.session_state.get("combined_h3_display_mode", "selected")) == "zoom_family"
-    opacity = _current_opacity("combined")
-    preserve_map_view = True
-    map_reset_token = _map_view_reset_token()
+    h3_resolution, zoom_family_enabled, opacity, preserve_map_view, map_reset_token = _map_panel_controls(region, "combined")
 
     st.session_state["show_default_solar"] = False
     st.session_state.setdefault("show_user_solar", False)
@@ -11588,7 +11750,8 @@ def _unified_workspace_tab(
                     key="combined_landscape_factor",
                 )
 
-            h3_resolution, zoom_family_enabled, opacity, preserve_map_view, map_reset_token = _map_panel_controls(region, "combined", st)
+            with st.expander("Avancerade inställningar", expanded=False):
+                h3_resolution, zoom_family_enabled, opacity, preserve_map_view, map_reset_token = _map_panel_controls(region, "combined", st)
             analysis_h3_resolution = _analysis_h3_resolution(region)
             analysis_hex_area_km2 = float(h3_hex_area_km2(analysis_h3_resolution))
 
