@@ -652,13 +652,13 @@ def _tutorial_text(key: str, **kwargs: Any) -> str:
             ),
             "geography_title": "Börja med geografin",
             "geography_body": (
-                "Geografiska förutsättningar visar vilka delar av landskapet som över huvud taget kan vara relevanta. "
-                "Här finns landskapstyper och lager som kan beskriva infrastruktur, skyddade områden och rumsliga begränsningar."
+                "Under Geografier finns det förenklade landskapsvalet Landskapstyper, som visar LABLAB:s landskapsanalys. "
+                "Vind- och solpotentialen har egna kontroller längre ned, där lager, avstånd och restriktioner påverkar den möjliga etableringsytan."
             ),
             "energy_title": "Koppla yta till energi",
             "energy_body": (
-                "Energimodelleringen kopplar landskapets möjliga ytor till scenarier för vind, sol eller en mix av båda. "
-                "Scenarierna visar inte bara var det finns plats, utan vad platsen kan betyda i energisystemet."
+                "Energimodelleringen översätter valt scenario till ett ytanspråk för vind, sol eller en mix av båda. "
+                "Totalraden i resultatet är en tekniksumma: samma fysiska hex kan räknas för både vind och sol när ytan kan samnyttjas."
             ),
             "scenario_title": "Energiscenario och markintensitet",
             "scenario_body": (
@@ -672,13 +672,12 @@ def _tutorial_text(key: str, **kwargs: Any) -> str:
                 "värden och möjliga konflikter. I Trøndelag är detta syntetiskt testdata, inte färdiga IVL-resultat."
             ),
             "establishment_body": (
-                "Resultatkartan visar den sammanvägda potentialen: grön betyder både vind och sol, gul bara sol, blå bara vind och röd ej lämpligt. "
-                "Detta är grundpotentialen utifrån de antaganden och avgränsningar som är aktiva."
+                "Kartan visar den sammanvägda etableringspotentialen: grön betyder både vind och sol, gul bara sol, blå bara vind och röd ej lämpligt. "
+                "Det är potential utifrån de geografiska antaganden och filter som är aktiva just nu."
             ),
             "allocation_body": (
-                "Scenariofördelningen fyller de mest lämpade etableringshexen först, ungefär som vatten i landskapets djupaste hålor. "
-                "Vind söker de djupaste vindlägena oavsett om grundpotentialen är blå eller grön. Sol söker de djupaste sollägena "
-                "oavsett om grundpotentialen är gul eller grön. Grön markör visar där båda teknikerna faktiskt delar samma scenariohex."
+                "Scenariofördelningen visar var modellens vind- och solyta placeras inom den möjliga etableringsytan. "
+                "Mörkare teknikfärger visar scenariots placering. Där både vind och sol kan använda samma hex syns samnyttjande i modellen."
             ),
             "outside_body": (
                 "Ytbehov utanför landskapets potential visar schematisk vind- eller solyta som behövs när scenariot inte ryms i den beräknade potentialen. "
@@ -691,8 +690,8 @@ def _tutorial_text(key: str, **kwargs: Any) -> str:
             ),
             "wind_solar_title": "Vind och sol styrs under Geografier",
             "wind_solar_body": (
-                "Under Geografier finns Landskapspotential Vind och Landskapspotential Sol. Där justerar du de antaganden, lager, avstånd "
-                "och restriktioner som påverkar vind- respektive solpotentialen."
+                "Under Geografier finns Landskapspotential Vind och Landskapspotential Sol. Där ändrar du de antaganden som formar potentialen, "
+                "medan Landskapstyper ovanför bara visar LABLAB:s landskapsanalys."
             ),
             "wind_apply_title": "Ändra vindantaganden och använd dem",
             "wind_apply_body": (
@@ -701,8 +700,8 @@ def _tutorial_text(key: str, **kwargs: Any) -> str:
             ),
             "right_panel_title": "Högerpanelen förklarar varför",
             "right_panel_body": (
-                "Kartan visar mönstret. Högerpanelen och tabellerna visar samma analys i text och siffror: vilken yta som prioriteras, "
-                "vilka avgränsningar som påverkar resultatet och om scenariot ryms inom potentialen."
+                "Högerpanelen börjar med tabellen som visar om scenariot ryms. Därefter följer Geografier, Energimodellering och Social acceptans. "
+                "Läs totalraden som en tekniksumma, inte som unik fysisk markyta."
             ),
             "reopen_title": "Du kan alltid öppna guiden igen",
             "reopen_body": (
@@ -718,13 +717,13 @@ def _tutorial_text(key: str, **kwargs: Any) -> str:
             ),
             "geography_title": "Start with geography",
             "geography_body": (
-                "Geographic conditions show which parts of the landscape may be relevant at all. "
-                "Here you will find landscape types and layers that describe infrastructure, protected areas and spatial constraints."
+                "Under Geographies, the simplified Landscape Types control shows LABLAB's landscape analysis. "
+                "Wind and solar potential have their own controls further down, where layers, distances and restrictions shape the possible establishment area."
             ),
             "energy_title": "Connect area to energy",
             "energy_body": (
-                "Energy modelling connects the landscape's possible areas to scenarios for wind, solar or a mix of both. "
-                "The scenarios show not only where there is room, but what the place may mean in the energy system."
+                "Energy modelling translates the selected scenario into an area claim for wind, solar or a mix of both. "
+                "The total row in the result is a technology sum: the same physical hex can count for both wind and solar when the area can be shared."
             ),
             "scenario_title": "Energy scenario and land intensity",
             "scenario_body": (
@@ -738,13 +737,12 @@ def _tutorial_text(key: str, **kwargs: Any) -> str:
                 "values and possible conflicts. In Trøndelag this is synthetic test data, not finished IVL results."
             ),
             "establishment_body": (
-                "The result map shows the combined potential: green means both wind and solar, yellow solar only, blue wind only and red not suitable. "
-                "This is the base potential from the active assumptions and constraints."
+                "The map shows the combined establishment potential: green means both wind and solar, yellow solar only, blue wind only and red not suitable. "
+                "It is the potential under the geographic assumptions and filters that are active right now."
             ),
             "allocation_body": (
-                "The scenario allocation fills the most suitable establishment hexes first. "
-                "Wind searches for the deepest wind positions whether the base potential is blue or green. Solar searches for the deepest solar positions "
-                "whether the base potential is yellow or green. A green marker shows where both technologies actually share the same scenario hex."
+                "The scenario allocation shows where the model places wind and solar area within the possible establishment area. "
+                "Darker technology colours show the scenario placement. Where wind and solar can use the same hex, the model shows shared use."
             ),
             "outside_body": (
                 "Area demand outside landscape potential shows schematic wind or solar area needed when the scenario does not fit inside the calculated potential. "
@@ -757,8 +755,8 @@ def _tutorial_text(key: str, **kwargs: Any) -> str:
             ),
             "wind_solar_title": "Wind and solar are controlled under Geographies",
             "wind_solar_body": (
-                "Under Geographies you will find Landscape Potential Wind and Landscape Potential Solar. There you adjust the assumptions, layers, distances "
-                "and restrictions that affect wind and solar potential."
+                "Under Geographies you will find Landscape Potential Wind and Landscape Potential Solar. This is where you change the assumptions that shape potential, "
+                "while Landscape Types above only shows LABLAB's landscape analysis."
             ),
             "wind_apply_title": "Change wind assumptions and apply them",
             "wind_apply_body": (
@@ -767,8 +765,8 @@ def _tutorial_text(key: str, **kwargs: Any) -> str:
             ),
             "right_panel_title": "The right panel explains why",
             "right_panel_body": (
-                "The map shows the pattern. The right panel and tables show the same analysis in text and numbers: which area is prioritised, "
-                "which constraints affect the result and whether the scenario fits inside the potential."
+                "The right panel starts with the table showing whether the scenario fits. It then follows with Geographies, Energy Modelling and Social Acceptance. "
+                "Read the total row as a technology sum, not as unique physical land area."
             ),
             "reopen_title": "You can always open the guide again",
             "reopen_body": (
@@ -784,13 +782,13 @@ def _tutorial_text(key: str, **kwargs: Any) -> str:
             ),
             "geography_title": "Begynd med geografien",
             "geography_body": (
-                "Geografiske forudsætninger viser hvilke dele af landskabet der overhovedet kan være relevante. "
-                "Her findes landskabstyper og lag som kan beskrive infrastruktur, beskyttede områder og rumlige begrænsninger."
+                "Under Geografier findes det forenklede landskabsvalg Landskabstyper, som viser LABLAB:s landskapsanalys. "
+                "Vind- og solpotentialet har egne kontroller længere nede, hvor lag, afstande og restriktioner påvirker den mulige etableringsflade."
             ),
             "energy_title": "Kobl areal til energi",
             "energy_body": (
-                "Energimodelleringen kobler landskabets mulige arealer til scenarier for vind, sol eller en mix af begge. "
-                "Scenarierne viser ikke kun hvor der er plads, men hvad stedet kan betyde i energisystemet."
+                "Energimodelleringen oversætter valgt scenarie til et arealkrav for vind, sol eller en mix af begge. "
+                "Totalrækken i resultatet er en teknologisum: samme fysiske hex kan tælle for både vind og sol, når arealet kan deles."
             ),
             "scenario_title": "Energiscenarie og markintensitet",
             "scenario_body": (
@@ -804,13 +802,12 @@ def _tutorial_text(key: str, **kwargs: Any) -> str:
                 "værdier og mulige konflikter. I Trøndelag er dette syntetiske testdata, ikke færdige IVL-resultater."
             ),
             "establishment_body": (
-                "Resultatkortet viser det samlede potentiale: grøn betyder både vind og sol, gul kun sol, blå kun vind og rød ikke egnet. "
-                "Dette er grundpotentialet ud fra de antagelser og afgrænsninger der er aktive."
+                "Kortet viser det samlede etableringspotentiale: grøn betyder både vind og sol, gul kun sol, blå kun vind og rød ikke egnet. "
+                "Det er potentialet ud fra de geografiske antagelser og filtre som er aktive lige nu."
             ),
             "allocation_body": (
-                "Scenariefordelingen fylder de bedst egnede etableringshex først. "
-                "Vind søger de dybeste vindpositioner uanset om grundpotentialet er blåt eller grønt. Sol søger de dybeste solpositioner "
-                "uanset om grundpotentialet er gult eller grønt. Grøn markør viser hvor begge teknologier faktisk deler samme scenariohex."
+                "Scenariefordelingen viser hvor modellen placerer vind- og solareal inden for den mulige etableringsflade. "
+                "Mørkere teknikfarver viser scenariets placering. Hvor vind og sol kan bruge samme hex, viser modellen samnyttelse."
             ),
             "outside_body": (
                 "Arealbehov udenfor landskabets potentiale viser skematisk vind- eller solareal som behøves, når scenariet ikke kan rummes i det beregnede potentiale. "
@@ -823,8 +820,8 @@ def _tutorial_text(key: str, **kwargs: Any) -> str:
             ),
             "wind_solar_title": "Vind og sol styres under Geografier",
             "wind_solar_body": (
-                "Under Geografier findes Landskabspotentiale Vind og Landskabspotentiale Sol. Her justerer du de antagelser, lag, afstande "
-                "og restriktioner som påvirker vind- og solpotentialet."
+                "Under Geografier findes Landskabspotentiale Vind og Landskabspotentiale Sol. Her ændrer du de antagelser som former potentialet, "
+                "mens Landskabstyper ovenfor kun viser LABLAB:s landskapsanalys."
             ),
             "wind_apply_title": "Ændr vindantagelser og anvend dem",
             "wind_apply_body": (
@@ -833,8 +830,8 @@ def _tutorial_text(key: str, **kwargs: Any) -> str:
             ),
             "right_panel_title": "Højrepanelet forklarer hvorfor",
             "right_panel_body": (
-                "Kortet viser mønsteret. Højrepanelet og tabellerne viser samme analyse i tekst og tal: hvilket areal der prioriteres, "
-                "hvilke afgrænsninger der påvirker resultatet, og om scenariet kan rummes inden for potentialet."
+                "Højrepanelet starter med tabellen som viser om scenariet kan rummes. Derefter følger Geografier, Energimodellering og Social accept. "
+                "Læs totalrækken som en teknologisum, ikke som unik fysisk landflade."
             ),
             "reopen_title": "Du kan altid åbne guiden igen",
             "reopen_body": (

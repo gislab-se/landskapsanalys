@@ -540,6 +540,22 @@ def _click_button(driver: webdriver.Remote, labels: list[str]) -> bool:
     return True
 
 
+def _tutorial_title(driver: webdriver.Remote) -> str:
+    return str(
+        driver.execute_script(
+            "const title = document.querySelector('#potential-tutorial-root h2'); return title ? title.textContent.trim() : '';"
+        )
+        or ""
+    )
+
+
+def _close_tutorial(driver: webdriver.Remote) -> None:
+    driver.execute_script(
+        "const button = document.querySelector('#potential-tutorial-root .pt-close'); if (button) button.click();"
+    )
+    time.sleep(0.4)
+
+
 def _audit_language_switch(driver: webdriver.Remote, timeout: int, skip_language: bool) -> list[Finding]:
     if skip_language:
         return []
@@ -581,6 +597,23 @@ def _audit_language_switch(driver: webdriver.Remote, timeout: int, skip_language
                 "language",
             )
         )
+    if not _tutorial_title(driver):
+        _click_button(driver, ["Show guide"])
+    try:
+        WebDriverWait(driver, timeout).until(
+            lambda current: "potential app is a prototype" in _tutorial_title(current).casefold()
+        )
+    except Exception:
+        findings.append(
+            _finding(
+                "high",
+                "Tutorialen följer inte engelsk språkväxling",
+                f"Tutorialrubrik efter EN: {_tutorial_title(driver)!r}.",
+                "Koppla tutorialens texter till samma språkstate som resten av appen och verifiera första steget efter språkbyte.",
+                "language",
+            )
+        )
+    _close_tutorial(driver)
     _click_button(driver, ["SV", "Svenska"])
     return findings
 
