@@ -338,7 +338,7 @@ def build_potential_feature_collection_with_geometries(
         popup = (
             f"<strong>{hex_id}</strong><br>"
             f"{technology_label}: {class_label} ({score:.1f})<br>"
-            f"Landskapstyp: {int(row.class_km)} - {row.landscape_type}"
+            f"Landskapstyp: {row.landscape_type}"
         )
         features.append(
             {
@@ -399,7 +399,7 @@ def build_solar_capacity_feature_collection_with_geometries(
         popup = (
             f"<strong>{hex_id}</strong><br>"
             f"Landskapspotential Sol: {row.solar_class_label} ({float(row.solar_score):.1f})<br>"
-            f"Landskapstyp: {int(row.class_km)} - {row.landscape_type}"
+            f"Landskapstyp: {row.landscape_type}"
         )
         features.append(
             {

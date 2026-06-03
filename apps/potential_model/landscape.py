@@ -157,6 +157,11 @@ def landscape_frame_for_resolution(manifest: dict[str, Any], resolution: int) ->
         "v10_rule",
         "v10_rule_en",
         "landscape_type",
+        "landscape_type_id",
+        "landscape_type_name",
+        "qgis_fill",
+        "review_flag",
+        "dominant_area_share_pct",
     ]:
         if column in work.columns:
             aggregations[column] = (column, _mode_or_first)
@@ -185,7 +190,7 @@ def landscape_type_display_colors(manifest: dict[str, Any] | None = None) -> dic
     manifest_colors = manifest.get("landscape_type_colors") or {}
     manifest_labels = manifest.get("landscape_type_labels") or {}
     for key, value in manifest_colors.items():
-        colors.setdefault(str(key), str(value))
+        colors[str(key)] = str(value)
     for key in manifest_labels:
         colors.setdefault(str(key), "#999999")
     return colors
@@ -401,20 +406,22 @@ def build_landscape_type_feature_collection_from_frame(
         if not geometry.get("coordinates"):
             continue
 
-        type_id = str(getattr(row, "v10_type_id", "") or "LT?")
-        type_name = str(getattr(row, "v10_type_name", "") or type_labels.get(type_id, type_id))
-        class_raw = getattr(row, "class_km", None)
-        cluster_key = str(int(class_raw)) if pd.notna(class_raw) else "?"
-        confidence = str(getattr(row, "v10_confidence", "") or "")
-        rule = str(getattr(row, "v10_rule", "") or "")
+        type_id = str(getattr(row, "v10_type_id", "") or getattr(row, "landscape_type_id", "") or "LT?")
+        type_name = str(
+            getattr(row, "v10_type_name", "")
+            or getattr(row, "landscape_type_name", "")
+            or type_labels.get(type_id, type_id)
+        )
+        dominant_share = getattr(row, "dominant_area_share_pct", None)
+        review_flag = str(getattr(row, "review_flag", "") or "")
         popup = (
             f"<strong>{hex_id}</strong><br>"
-            f"Landskapstyp: {type_name}<br>"
-            f"Landskapsstruktur: {cluster_key}<br>"
-            f"Säkerhet: {confidence}"
+            f"Landskapstyp: {type_name}"
         )
-        if rule:
-            popup = f"{popup}<br>{rule}"
+        if pd.notna(dominant_share):
+            popup = f"{popup}<br>Dominant andel: {float(dominant_share):.1f}%"
+        if review_flag:
+            popup = f"{popup}<br>Granskning: {review_flag}"
 
         features.append(
             {
@@ -424,8 +431,8 @@ def build_landscape_type_feature_collection_from_frame(
                     "hex_id": hex_id,
                     "v10_type_id": type_id,
                     "v10_type_name": type_name,
-                    "v9_cluster": cluster_key,
-                    "confidence": confidence,
+                    "landscape_type_id": type_id,
+                    "landscape_type_name": type_name,
                     "landscape_type_fill": type_colors.get(type_id, "#999999"),
                     "popup": popup,
                 },

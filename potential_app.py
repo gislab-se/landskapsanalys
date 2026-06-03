@@ -129,7 +129,7 @@ def landscape_type_display_colors(manifest: dict[str, Any] | None = None) -> dic
     manifest_colors = manifest.get("landscape_type_colors") or {}
     manifest_labels = manifest.get("landscape_type_labels") or {}
     for key, value in manifest_colors.items():
-        colors.setdefault(str(key), str(value))
+        colors[str(key)] = str(value)
     for key in manifest_labels:
         colors.setdefault(str(key), "#999999")
     return colors
@@ -7662,9 +7662,6 @@ def _render_reused_workspace_outputs(
 
 
 def _combined_summary(map_state: dict[str, Any], scenario_state: dict[str, Any]) -> None:
-    landscape_manifest = map_state.get("landscape_manifest") if isinstance(map_state.get("landscape_manifest"), dict) else {}
-    landscape_factors = [str(value) for value in (map_state.get("landscape_factors") or [])]
-
     def _wind_share_summary(frame: pd.DataFrame) -> pd.DataFrame:
         if frame.empty:
             return pd.DataFrame(columns=["klass", "klass_label", "hexagoner", "medelandel", "djupa_karnor"])
@@ -7781,106 +7778,6 @@ def _combined_summary(map_state: dict[str, Any], scenario_state: dict[str, Any])
         )
         return grouped[columns], text
 
-    def _structure_id_text(value: Any) -> str:
-        if pd.isna(value):
-            return "Okänd"
-        try:
-            number = float(str(value).strip())
-            if math.isfinite(number):
-                return str(int(number)) if number.is_integer() else f"{number:g}"
-        except Exception:
-            pass
-        text = str(value).strip()
-        return text or "Okänd"
-
-    def _structure_label(value: Any) -> str:
-        if pd.isna(value):
-            return "Okänd"
-        try:
-            return cluster_label(landscape_manifest, float(str(value).strip()))
-        except Exception:
-            structure_id = _structure_id_text(value)
-            labels = (landscape_manifest or {}).get("cluster_labels") or {}
-            return str(labels.get(structure_id, f"Cluster {structure_id}"))
-
-    def _landscape_structure_summary(frame: pd.DataFrame, technology: str) -> tuple[pd.DataFrame, str]:
-        columns = ["struktur", "struktur_label", "hexagoner", "potential_km2", "andel_potential_pct", "medelpoäng"]
-        if frame.empty or "class_km" not in frame.columns:
-            return pd.DataFrame(columns=columns), "Strukturhärledning saknas för detta lager."
-        work = frame.copy()
-        work["struktur"] = work["class_km"].map(_structure_id_text)
-        work["struktur_label"] = work["class_km"].map(_structure_label)
-        work["potential_area_km2__derived"] = _potential_area_series(work, technology)
-        score_col = f"{technology}_score"
-        if score_col not in work.columns and technology == "solar_v1" and "solar_v1_score" in work.columns:
-            score_col = "solar_v1_score"
-        work["score__derived"] = pd.to_numeric(work[score_col], errors="coerce").fillna(0.0) if score_col in work.columns else 0.0
-        work = work[work["potential_area_km2__derived"].gt(0.0)].copy()
-        if work.empty:
-            return pd.DataFrame(columns=columns), "Ingen positiv potential finns att härleda till landskapsstrukturer."
-        total_area = float(work["potential_area_km2__derived"].sum())
-        grouped = (
-            work.groupby(["struktur", "struktur_label"], as_index=False)
-            .agg(
-                hexagoner=("hex_id", "count"),
-                potential_km2=("potential_area_km2__derived", "sum"),
-                medelpoäng=("score__derived", "mean"),
-            )
-            .sort_values("potential_km2", ascending=False)
-        )
-        grouped["andel_potential_pct"] = (grouped["potential_km2"] / max(total_area, 1e-9) * 100.0).round(1)
-        grouped["potential_km2"] = grouped["potential_km2"].round(2)
-        grouped["medelpoäng"] = grouped["medelpoäng"].round(1)
-        top = grouped.iloc[0]
-        text = (
-            f"Störst del av potentialen ligger i struktur {top['struktur']}: {top['struktur_label']} "
-            f"({float(top['andel_potential_pct']):.1f}% av potentialytan)."
-        )
-        return grouped[columns], text
-
-    def _landscape_factor_summary(frame: pd.DataFrame, technology: str) -> tuple[pd.DataFrame, str]:
-        columns = ["faktor", "faktor_label", "viktat_medel", "oviktat_medel", "potential_km2", "täckning_pct"]
-        factor_cols = [factor for factor in landscape_factors if factor in frame.columns]
-        if frame.empty or not factor_cols:
-            return pd.DataFrame(columns=columns), "Faktorhärledning saknas för detta lager."
-        work = frame.copy()
-        work["potential_area_km2__derived"] = _potential_area_series(work, technology)
-        work = work[work["potential_area_km2__derived"].gt(0.0)].copy()
-        if work.empty:
-            return pd.DataFrame(columns=columns), "Ingen positiv potential finns att väga mot landskapsfaktorer."
-        weights = pd.to_numeric(work["potential_area_km2__derived"], errors="coerce").fillna(0.0).clip(lower=0.0)
-        total_weight = float(weights.sum())
-        rows: list[dict[str, Any]] = []
-        for factor in factor_cols:
-            values = pd.to_numeric(work[factor], errors="coerce")
-            valid = values.notna()
-            if not bool(valid.any()):
-                continue
-            valid_weights = weights.where(valid, 0.0)
-            weight_sum = float(valid_weights.sum())
-            weighted_mean = float((values.fillna(0.0) * valid_weights).sum() / max(weight_sum, 1e-9))
-            rows.append(
-                {
-                    "faktor": factor,
-                    "faktor_label": factor_label(landscape_manifest, factor),
-                    "viktat_medel": round(weighted_mean, 3),
-                    "oviktat_medel": round(float(values[valid].mean()), 3),
-                    "potential_km2": round(weight_sum, 2),
-                    "täckning_pct": round(weight_sum / max(total_weight, 1e-9) * 100.0, 1),
-                    "_sort_abs": abs(weighted_mean),
-                }
-            )
-        if not rows:
-            return pd.DataFrame(columns=columns), "Faktorhärledning saknar numeriska faktorvärden."
-        grouped = pd.DataFrame(rows).sort_values(["_sort_abs", "potential_km2"], ascending=[False, False])
-        top = grouped.iloc[0]
-        direction = "positivt" if float(top["viktat_medel"]) >= 0 else "negativt"
-        text = (
-            f"Starkast viktad faktor i potentialytan är {top['faktor']} - {top['faktor_label']} "
-            f"({direction} medel {float(top['viktat_medel']):.3f})."
-        )
-        return grouped[columns], text
-
     def _metric_value_text(frame: pd.DataFrame, score_col: str, template: str) -> str:
         if frame.empty:
             return "-"
@@ -7948,16 +7845,6 @@ def _combined_summary(map_state: dict[str, Any], scenario_state: dict[str, Any])
                 st.caption(derivation_text)
                 if not derivation_frame.empty:
                     st.dataframe(derivation_frame.head(10), width="stretch", hide_index=True)
-            with st.expander(_t("Landskapstrukturer"), expanded=False):
-                structure_frame, structure_text = _landscape_structure_summary(frame, technology)
-                st.caption(structure_text)
-                if not structure_frame.empty:
-                    st.dataframe(structure_frame.head(10), width="stretch", hide_index=True)
-            with st.expander(_t("Landskapsfaktorer"), expanded=False):
-                factor_frame, factor_text = _landscape_factor_summary(frame, technology)
-                st.caption(factor_text)
-                if not factor_frame.empty:
-                    st.dataframe(factor_frame.head(10), width="stretch", hide_index=True)
             if item.get("summary_mode") == "wind_share":
                 with st.expander(_t("Kärnområden"), expanded=False):
                     st.caption("Mörkare nyans inom samma potentialklass markerar hexagoner som ligger djupare i en sammanhängande zon.")
@@ -7965,7 +7852,7 @@ def _combined_summary(map_state: dict[str, Any], scenario_state: dict[str, Any])
 
     if map_state.get("landscape_active"):
         with st.expander(_t("Landskapsanalys"), expanded=False):
-            st.write("v9-kluster, v10-landskapstyper och faktorlager visas med samma H3-rollup som potentiallagren.")
+            st.write("LABLAB landskapstyper visas med samma H3-rollup som potentiallagren.")
 
 
 def _data_method(region: dict[str, Any]) -> None:
@@ -8123,10 +8010,6 @@ def _missing_potential_summary(label: str, missing_text: str) -> None:
         st.info(missing_text)
         with st.expander(_t("Landskapstyper"), expanded=False):
             st.caption("Härledning visas när landskapsanalys finns för regionen.")
-        with st.expander(_t("Landskapstrukturer"), expanded=False):
-            st.caption("Strukturhärledning visas när kluster/strukturdata finns.")
-        with st.expander(_t("Landskapsfaktorer"), expanded=False):
-            st.caption("Faktorhärledning visas när faktoranalysen finns.")
 
 
 def _render_missing_data_workspace(
@@ -8148,15 +8031,6 @@ def _render_missing_data_workspace(
             with st.expander(_t("Landskap"), expanded=True):
                 st.caption("Landskapsdata saknas ännu för denna region." if context.get("landscape_manifest") is None else "Landskapsmanifest finns.")
                 st.checkbox(_t("Landskapstyper"), value=False, disabled=True, key="missing_show_landscape_v10")
-                st.checkbox(_t("Landskapstrukturer"), value=False, disabled=True, key="missing_show_landscape_cluster")
-                st.checkbox(_t("Landskapsfaktorer"), value=False, disabled=True, key="missing_show_landscape_factor")
-                st.selectbox(
-                    _t("Faktor"),
-                    options=["F1 - faktoranalys saknas"],
-                    index=0,
-                    key="missing_landscape_factor",
-                    disabled=True,
-                )
             with st.expander(_t("H3-upplösning"), expanded=False):
                 resolutions = _available_h3_resolutions(region)
                 st.selectbox(
@@ -8234,7 +8108,7 @@ def _render_missing_data_workspace(
             st.caption("Minsta praktiska paket för att börja visa potential är H3-geometrier, potentialmanifest och teknikregler.")
             st.markdown(
                 "- `h3_display_geometries` i regionmanifestet\n"
-                "- `landscape_manifest` om härledning/faktorer ska fungera\n"
+                "- `landscape_manifest` om härledning ska fungera\n"
                 "- `potential_manifest` med sol- och vindregler\n"
                 "- `scenario_manifest` om energimodellering ska fungera"
             )
@@ -8279,9 +8153,9 @@ def _unified_workspace_tab(
     st.session_state["show_default_wind"] = False
     st.session_state["show_user_wind"] = False
     st.session_state.setdefault("show_landscape_v10", True)
-    st.session_state.setdefault("show_landscape_pdf_types", False)
-    st.session_state.setdefault("show_landscape_cluster", False)
-    st.session_state.setdefault("show_landscape_factor", False)
+    st.session_state["show_landscape_pdf_types"] = False
+    st.session_state["show_landscape_cluster"] = False
+    st.session_state["show_landscape_factor"] = False
 
     applied_solar_config = _solar_config_from_session()
     _prime_solar_draft_state(applied_solar_config)
@@ -8294,11 +8168,9 @@ def _unified_workspace_tab(
     solar_large_filter_configs = _solar_active_filter_configs(applied_solar_config)
     show_user_wind = _wind_potential_is_active(_selected_wind_layers())
     show_v10 = bool(st.session_state.get("show_landscape_v10"))
-    pdf_landscape_available = bool((landscape_manifest or {}).get("pdf_landscape_geojson"))
-    show_pdf_types = bool(st.session_state.get("show_landscape_pdf_types", False)) and pdf_landscape_available
-    pdf_landscape_label = str((landscape_manifest or {}).get("pdf_landscape_display_name") or "Landskapstyper från PDF")
-    show_cluster = bool(st.session_state.get("show_landscape_cluster", False))
-    show_factor = bool(st.session_state.get("show_landscape_factor", False))
+    show_pdf_types = False
+    show_cluster = False
+    show_factor = False
     selected_factor = str(st.session_state.get("combined_landscape_factor", factors[0] if factors else ""))
     if selected_factor not in factors and factors:
         selected_factor = factors[0]
@@ -8309,7 +8181,7 @@ def _unified_workspace_tab(
         if social_manifest is not None
         else SOCIAL_ACCEPTANCE_DEFAULT_SCENARIO_ID
     )
-    active_landscape_count = _count_enabled(show_v10, show_pdf_types, show_cluster, show_factor)
+    active_landscape_count = _count_enabled(show_v10)
     active_wind_count = _count_enabled(show_user_wind)
     active_solar_count = _count_enabled(show_user_solar, show_solar_v1)
 
@@ -8335,22 +8207,6 @@ def _unified_workspace_tab(
             with st.expander(_t("Landskap"), expanded=True):
                 st.caption(f"Aktiva kartlager: {active_landscape_count}")
                 show_v10 = st.checkbox(_t("Landskapstyper"), value=show_v10, key="show_landscape_v10")
-                show_pdf_types = st.checkbox(
-                    pdf_landscape_label,
-                    value=show_pdf_types,
-                    disabled=not pdf_landscape_available,
-                    key="show_landscape_pdf_types",
-                )
-                show_cluster = st.checkbox(_t("Landskapstrukturer"), value=show_cluster, key="show_landscape_cluster")
-                show_factor = st.checkbox(_t("Landskapsfaktorer"), value=show_factor, key="show_landscape_factor")
-                selected_factor = st.selectbox(
-                    _t("Faktor"),
-                    options=factors,
-                    index=factors.index(selected_factor) if selected_factor in factors else 0,
-                    format_func=lambda factor: f"{factor} - {factor_label(landscape_manifest, factor)}",
-                    disabled=not show_factor,
-                    key="combined_landscape_factor",
-                )
 
             h3_resolution, zoom_family_enabled, opacity, preserve_map_view, map_reset_token = _map_panel_controls(region, "combined", st)
             analysis_h3_resolution = _analysis_h3_resolution(region)
@@ -8562,7 +8418,7 @@ def _unified_workspace_tab(
         show_solar_v1,
         show_user_wind,
         energy_model_state,
-        bool(show_v10 or show_cluster or show_factor),
+        bool(show_v10),
         show_social_acceptance,
     )
     performance_bucket = _performance_history_bucket(region, h3_resolution, zoom_family_enabled)
@@ -9021,81 +8877,26 @@ def _unified_workspace_tab(
         _add_perf_timing(performance_log, "Etableringsstatistik", perf_started)
         _advance_calculation_progress(calc_progress, "Etableringsstatistik")
 
-    if show_v10 or show_pdf_types or show_cluster or show_factor:
+    if show_v10:
         perf_started = _perf_start()
         landscape_frame = _landscape_frame(region, landscape_manifest, h3_resolution)
-        if show_v10:
-            layers.extend(
-                _hex_family_layers(
-                    region,
-                    h3_resolution,
-                    zoom_family_enabled,
-                    "landscape_types_hex",
+        layers.extend(
+            _hex_family_layers(
+                region,
+                h3_resolution,
+                zoom_family_enabled,
+                "landscape_types_hex",
+                "Landskapstyper",
+                lambda resolution: _landscape_type_layer(
                     "Landskapstyper",
-                    lambda resolution: _landscape_type_layer(
-                        "Landskapstyper",
-                        _landscape_frame(region, landscape_manifest, int(resolution)),
-                        landscape_manifest,
-                        _h3_display_geometry_path(region, int(resolution)),
-                    ),
-                )
+                    _landscape_frame(region, landscape_manifest, int(resolution)),
+                    landscape_manifest,
+                    _h3_display_geometry_path(region, int(resolution)),
+                ),
             )
-        if show_pdf_types:
-            pdf_manifest = _pdf_landscape_manifest(landscape_manifest)
-            if pdf_manifest is not None:
-                layers.extend(
-                    _hex_family_layers(
-                        region,
-                        h3_resolution,
-                        zoom_family_enabled,
-                        "landscape_pdf_types_hex",
-                        pdf_landscape_label,
-                        lambda resolution: _landscape_type_layer(
-                            pdf_landscape_label,
-                            _landscape_frame(region, pdf_manifest, int(resolution)),
-                            pdf_manifest,
-                            _h3_display_geometry_path(region, int(resolution)),
-                        ),
-                    )
-                )
+        )
         _add_perf_timing(performance_log, "Landskapslager", perf_started, f"R{h3_resolution}; {len(landscape_frame)} hex")
         _advance_calculation_progress(calc_progress, "Landskapslager")
-        if show_cluster:
-            layers.extend(
-                _hex_family_layers(
-                    region,
-                    h3_resolution,
-                    zoom_family_enabled,
-                    "landscape_structures_hex",
-                    "Landskapstrukturer",
-                    lambda resolution: _landscape_layer(
-                        "Landskapstrukturer",
-                        _landscape_frame(region, landscape_manifest, int(resolution)),
-                        landscape_manifest,
-                        factors[0],
-                        _h3_display_geometry_path(region, int(resolution)),
-                        "cluster",
-                    ),
-                )
-            )
-        if show_factor:
-            layers.extend(
-                _hex_family_layers(
-                    region,
-                    h3_resolution,
-                    zoom_family_enabled,
-                    f"landscape_factor_{selected_factor}",
-                    "Landskapsfaktorer",
-                    lambda resolution: _landscape_layer(
-                        "Landskapsfaktorer",
-                        _landscape_frame(region, landscape_manifest, int(resolution)),
-                        landscape_manifest,
-                        selected_factor,
-                        _h3_display_geometry_path(region, int(resolution)),
-                        "factor",
-                    ),
-                )
-            )
 
     if show_social_acceptance and social_manifest is not None:
         perf_started = _perf_start()
@@ -9205,7 +9006,7 @@ def _unified_workspace_tab(
             "resolution": h3_resolution,
             "analysis_resolution": analysis_h3_resolution,
             "resolution_info": resolution_info,
-            "landscape_active": bool(show_v10 or show_cluster or show_factor),
+            "landscape_active": bool(show_v10),
             "opacity_key_prefix": "combined",
         },
     }
@@ -9222,7 +9023,7 @@ def _unified_workspace_tab(
                 "resolution": h3_resolution,
                 "analysis_resolution": analysis_h3_resolution,
                 "resolution_info": resolution_info,
-                "landscape_active": bool(show_v10 or show_cluster or show_factor),
+                "landscape_active": bool(show_v10),
                 "opacity_key_prefix": "combined",
             },
             scenario_state,
