@@ -159,9 +159,9 @@ LEFT_PANEL_OPEN_KEY = "potential_left_panel_open"
 RIGHT_PANEL_OPEN_KEY = "potential_right_panel_open"
 RIGHT_PANEL_WIDTH_KEY = "potential_right_panel_width_pct"
 RIGHT_PANEL_WIDTH_DEFAULT_VERSION_KEY = "potential_right_panel_width_default_version"
-RIGHT_PANEL_WIDTH_DEFAULT_VERSION = "map_balance_v1"
-RIGHT_PANEL_WIDTH_DEFAULT = 60.0
-RIGHT_PANEL_WIDTH_LEGACY_DEFAULTS = (34.0, 66.0)
+RIGHT_PANEL_WIDTH_DEFAULT_VERSION = "map_balance_v2"
+RIGHT_PANEL_WIDTH_DEFAULT = 42.0
+RIGHT_PANEL_WIDTH_LEGACY_DEFAULTS = (34.0, 60.0, 66.0)
 PERFORMANCE_HISTORY_KEY = "potential_performance_history_v1"
 UI_ONLY_RERUN_KEY = "potential_ui_only_rerun"
 UI_ONLY_RERUN_REASON_KEY = "potential_ui_only_rerun_reason"
@@ -176,7 +176,7 @@ WIND_LAYER_SELECTION_KEY = "wind_builder_selected_layers"
 WIND_RUNTIME_OVERLAY_KEY = "wind_builder_runtime_overlay_enabled"
 SOLAR_APPLIED_CONFIG_KEY = "solar_applied_config"
 START_DEFAULT_VERSION_KEY = "potential_start_default_version"
-START_DEFAULT_VERSION = "trondelag_zoom_family_v3"
+START_DEFAULT_VERSION = "trondelag_decision_default_v5"
 WIND_EMPTY_SELECTION_ACTIVE_KEY = "wind_empty_selection_active"
 WIND_CONTROL_LANGUAGE = "sv"
 WIND_RUNTIME_BASE_RESOLUTION = 10
@@ -354,7 +354,32 @@ SOLAR_FILTER_GROUP_SPECS: dict[str, dict[str, Any]] = {
     },
 }
 SOLAR_FILTER_GROUP_IDS = tuple(SOLAR_FILTER_GROUP_SPECS)
-DEFAULT_WIND_ESTABLISHMENT_LAYER_SELECTION = {group_id: [] for group_id in WIND_GROUP_LAYER_DEFAULTS}
+DEFAULT_WIND_ESTABLISHMENT_LAYER_SELECTION = {
+    group_id: (
+        [WIND_POPULATION_SOURCE_LAYER_ID]
+        if group_id == WIND_SETTLEMENT_GROUP_ID
+        else list(WIND_GROUP_LAYER_DEFAULTS.get(SOLAR_ROAD_GROUP_ID, []))
+        if group_id == SOLAR_ROAD_GROUP_ID
+        else []
+        if group_id == SOLAR_ELECTRICAL_GROUP_ID
+        else ["protected_areas"]
+        if group_id == SOLAR_PROTECTED_GROUP_ID
+        else [
+            layer_id
+            for layer_id in ("cultural_preservation", "valuable_cultural_environment")
+            if layer_id in WIND_GROUP_LAYER_DEFAULTS.get(WIND_CULTURE_GROUP_ID, [])
+        ]
+        if group_id == WIND_CULTURE_GROUP_ID
+        else [
+            layer_id
+            for layer_id in ("reindeer_grazing_merged",)
+            if layer_id in WIND_GROUP_LAYER_DEFAULTS.get(WIND_REINDEER_GROUP_ID, [])
+        ]
+        if group_id == WIND_REINDEER_GROUP_ID
+        else []
+    )
+    for group_id in WIND_GROUP_LAYER_DEFAULTS
+}
 DEFAULT_WIND_ADVANCED_LAYER_SELECTION = {
     WIND_SETTLEMENT_GROUP_ID: [WIND_POPULATION_SOURCE_LAYER_ID],
     SOLAR_PROTECTED_GROUP_ID: list(SOLAR_PROTECTED_LAYER_IDS),
@@ -367,31 +392,43 @@ SOLAR_SMALL_POPULATION_VISUAL_GROUP_ID = "small_population"
 SOLAR_LARGE_POPULATION_VISUAL_GROUP_ID = "large_population"
 DEFAULT_SOLAR_APPLIED_CONFIG = {
     "small_population_active": False,
-    "large_unfiltered_land_active": True,
+    "large_unfiltered_land_active": False,
     "large_scale_active": True,
-    "large_population_active": False,
-    "large_protected_layer_ids": [],
-    "large_protected_active": False,
-    "large_land_use_layer_ids": [],
+    "large_population_active": True,
+    "large_protected_layer_ids": ["protected_areas"],
+    "large_protected_active": True,
+    "large_land_use_layer_ids": [SOLAR_FOREST_LAYER_ID],
     "large_land_use_active": False,
-    "large_road_layer_ids": [],
-    "large_road_active": False,
-    "large_electrical_layer_ids": [],
+    "large_road_layer_ids": list(WIND_GROUP_LAYER_DEFAULTS.get(SOLAR_ROAD_GROUP_ID, [])),
+    "large_road_active": True,
+    "large_electrical_layer_ids": [
+        layer_id
+        for layer_id in ("high_voltage_lines", "underground_cables")
+        if layer_id in WIND_GROUP_LAYER_DEFAULTS.get(SOLAR_ELECTRICAL_GROUP_ID, [])
+    ],
     "large_electrical_active": False,
-    "large_culture_layer_ids": [],
-    "large_culture_active": False,
-    "large_reindeer_layer_ids": [],
-    "large_reindeer_active": False,
+    "large_culture_layer_ids": [
+        layer_id
+        for layer_id in ("cultural_preservation", "valuable_cultural_environment")
+        if layer_id in WIND_GROUP_LAYER_DEFAULTS.get(SOLAR_CULTURE_GROUP_ID, [])
+    ],
+    "large_culture_active": True,
+    "large_reindeer_layer_ids": [
+        layer_id
+        for layer_id in ("reindeer_grazing_merged",)
+        if layer_id in WIND_GROUP_LAYER_DEFAULTS.get(SOLAR_REINDEER_GROUP_ID, [])
+    ],
+    "large_reindeer_active": True,
     "large_coastal_layer_ids": [],
     "large_coastal_active": False,
     "panel_area_m2_per_person": 10.0,
-    "population_buffer_m": 250.0,
-    "protected_buffer_m": 0.0,
+    "population_buffer_m": 500.0,
+    "protected_buffer_m": 250.0,
     "forest_buffer_m": 0.0,
-    "road_buffer_m": 100.0,
+    "road_buffer_m": 300.0,
     "solar_grid_max_distance_m": 2000.0,
-    "culture_buffer_m": 0.0,
-    "reindeer_buffer_m": 0.0,
+    "culture_buffer_m": 100.0,
+    "reindeer_buffer_m": 100.0,
     "coastal_buffer_m": 0.0,
     SOLAR_VISUAL_SOURCE_GROUPS_KEY: [],
     SOLAR_VISUAL_BUFFER_GROUPS_KEY: [],
@@ -427,6 +464,10 @@ APP_TRANSLATIONS: dict[str, dict[str, str]] = {
         "Föregående": "Forrige",
         "Nästa": "Næste",
         "Hoppa över": "Spring over",
+        "Pausa": "Pause",
+        "Fortsätt guide": "Fortsæt guide",
+        "Testa detta": "Prøv dette",
+        "Klart": "Klart",
         "Stäng": "Luk",
         "Klar": "Færdig",
         "Öppna inte automatiskt igen": "Åbn ikke automatisk igen",
@@ -484,6 +525,10 @@ APP_TRANSLATIONS: dict[str, dict[str, str]] = {
         "Vind/sol och landskapspåverkan": "Vind/sol og landskabspåvirkning",
         "Så läses tabellen": "Sådan læses tabellen",
         "Avancerade inställningar": "Avancerede indstillinger",
+        "Avancerade kartinställningar": "Avancerede kortindstillinger",
+        "Vindandel": "Vindandel",
+        "Solandel": "Solandel",
+        "Total energi": "Samlet energi",
         "Debug och prestanda": "Debug og ydeevne",
         "Manifest och tekniska sökvägar": "Manifest og tekniske stier",
         "Visning och enheter": "Visning og enheder",
@@ -511,6 +556,10 @@ APP_TRANSLATIONS: dict[str, dict[str, str]] = {
         "Föregående": "Previous",
         "Nästa": "Next",
         "Hoppa över": "Skip",
+        "Pausa": "Pause",
+        "Fortsätt guide": "Resume guide",
+        "Testa detta": "Try this",
+        "Klart": "Done",
         "Stäng": "Close",
         "Klar": "Done",
         "Öppna inte automatiskt igen": "Do not open automatically again",
@@ -568,6 +617,10 @@ APP_TRANSLATIONS: dict[str, dict[str, str]] = {
         "Vind/sol och landskapspåverkan": "Wind/Solar and Landscape Impact",
         "Så läses tabellen": "How to read the table",
         "Avancerade inställningar": "Advanced Settings",
+        "Avancerade kartinställningar": "Advanced Map Settings",
+        "Vindandel": "Wind Share",
+        "Solandel": "Solar Share",
+        "Total energi": "Total Energy",
         "Debug och prestanda": "Debug and Performance",
         "Manifest och tekniska sökvägar": "Manifests and Technical Paths",
         "Visning och enheter": "Display and Units",
@@ -646,18 +699,18 @@ def _tutorial_text(key: str, **kwargs: Any) -> str:
         "sv": {
             "prototype_title": "Potentialappen är en prototyp",
             "prototype_body": (
-                "{region_label}-appen hjälper dig utforska var landskapet kan ha potential för vind och sol. "
-                "Den kombinerar geografi, energimodellering och social acceptans. Målet är inte ett färdigt svar, "
-                "utan att visa var potential kan finnas och vilka antaganden som påverkar resultatet."
+                "{region_label}-appen hjälper dig pröva ett försiktigt startläge för vind och sol. "
+                "Den kombinerar geografi, energimodellering och social acceptans så att beslutsfrågan syns först, "
+                "medan de tekniska GIS-antagandena går att öppna när du behöver granska dem."
             ),
             "geography_title": "Börja med geografin",
             "geography_body": (
-                "Under Geografier finns det förenklade landskapsvalet Landskapstyper, som visar LABLAB:s landskapsanalys. "
-                "Vind- och solpotentialen har egna kontroller längre ned, där lager, avstånd och restriktioner påverkar den möjliga etableringsytan."
+                "Startläget har redan valda filter för vind och sol, till exempel befolkning, större vägar, nät och skyddad natur. "
+                "Käll- och buffertlager visas inte i kartan från början, men kan slås på under avancerade inställningar när du vill se exakt vad som påverkar ytan."
             ),
             "energy_title": "Koppla yta till energi",
             "energy_body": (
-                "Energimodelleringen översätter valt scenario till ett ytanspråk för vind, sol eller en mix av båda. "
+                "Energimixen i huvudytan låter dig pröva balansen mellan vind och sol. Energimodelleringen översätter valt scenario till ett ytanspråk. "
                 "Totalraden i resultatet är en tekniksumma: samma fysiska hex kan räknas för både vind och sol när ytan kan samnyttjas."
             ),
             "scenario_title": "Energiscenario och markintensitet",
@@ -683,21 +736,27 @@ def _tutorial_text(key: str, **kwargs: Any) -> str:
                 "Ytbehov utanför landskapets potential visar schematisk vind- eller solyta som behövs när scenariot inte ryms i den beräknade potentialen. "
                 "Det gör skillnaden mellan landskapets möjliga yta och scenariots efterfrågan synlig."
             ),
-            "green_title": "Grönt är ett öppet startläge",
+            "green_title": "Startläget är försiktigt",
             "green_body": (
-                "I startläget är kartan grön eftersom inga avgränsande lager eller restriktioner är aktiva. "
-                "Grönt betyder därför möjligt enligt nuvarande antaganden, inte ett färdigt rekommenderat område."
+                "Kartan startar med ett restriktivt potentialläge så att antaganden och bortval syns direkt. "
+                "Grönt betyder möjligt enligt nuvarande filter, inte ett färdigt rekommenderat område."
             ),
             "wind_solar_title": "Vind och sol styrs under Geografier",
             "wind_solar_body": (
-                "Under Geografier finns Landskapspotential Vind och Landskapspotential Sol. Där ändrar du de antaganden som formar potentialen, "
-                "medan Landskapstyper ovanför bara visar LABLAB:s landskapsanalys."
+                "Under Geografier finns Landskapspotential Vind och Landskapspotential Sol. Där kan du ändra de förvalda filtren, buffertarna och nätantagandena. "
+                "Analysen använder valen även när käll- och buffertlager är dolda i kartan."
             ),
             "wind_apply_title": "Ändra vindantaganden och använd dem",
             "wind_apply_body": (
-                "Öppna vindpotentialen och gör dina filterval, till exempel Befolkning och bebyggelse. "
+                "Öppna vindpotentialen om du vill ändra startlägets filter, till exempel Befolkning och bebyggelse eller vägar. "
                 "Klicka sedan Använd ändringar för att räkna om kartan och resultatet med de valda antagandena."
             ),
+            "action_open_geography_todo": "Öppna Geografier och Landskap för att se vilka antaganden som formar kartan.",
+            "action_open_geography_done": "Bra, nu är landskapsvalen synliga. Fortsätt med energimodelleringen eller testa egna filter.",
+            "action_open_wind_todo": "Öppna vind- och solpotentialen för att se vilka antaganden du kan ändra.",
+            "action_open_wind_done": "Bra, nu är potentialkontrollerna synliga. Testa ett filter eller fortsätt till omräkningen.",
+            "action_apply_wind_todo": "Klicka på Använd ändringar när du vill räkna om kartan och resultatet med filtervalen.",
+            "action_apply_wind_done": "Bra, appen har fått en apply-signal. Kontrollera kartan och resultatpanelen innan du går vidare.",
             "right_panel_title": "Högerpanelen förklarar varför",
             "right_panel_body": (
                 "Högerpanelen börjar med tabellen som visar om scenariot ryms. Därefter följer Geografier, Energimodellering och Social acceptans. "
@@ -711,18 +770,18 @@ def _tutorial_text(key: str, **kwargs: Any) -> str:
         "en": {
             "prototype_title": "The potential app is a prototype",
             "prototype_body": (
-                "The {region_label} app helps you explore where the landscape may have potential for wind and solar. "
-                "It combines geography, energy modelling and social acceptance. The goal is not a final answer, "
-                "but to show where potential may exist and which assumptions affect the result."
+                "The {region_label} app helps you test a cautious starting point for wind and solar. "
+                "It combines geography, energy modelling and social acceptance so the planning question is visible first, "
+                "while the technical GIS assumptions can be opened when you need to inspect them."
             ),
             "geography_title": "Start with geography",
             "geography_body": (
-                "Under Geographies, the simplified Landscape Types control shows LABLAB's landscape analysis. "
-                "Wind and solar potential have their own controls further down, where layers, distances and restrictions shape the possible establishment area."
+                "The starting point already has selected filters for wind and solar, such as population, major roads, grid infrastructure and protected nature. "
+                "Source and buffer layers are hidden on the map by default, but can be enabled under advanced settings when you want to see exactly what shapes the area."
             ),
             "energy_title": "Connect area to energy",
             "energy_body": (
-                "Energy modelling translates the selected scenario into an area claim for wind, solar or a mix of both. "
+                "The energy mix control in the main view lets you test the balance between wind and solar. Energy modelling translates the selected scenario into an area claim. "
                 "The total row in the result is a technology sum: the same physical hex can count for both wind and solar when the area can be shared."
             ),
             "scenario_title": "Energy scenario and land intensity",
@@ -748,21 +807,27 @@ def _tutorial_text(key: str, **kwargs: Any) -> str:
                 "Area demand outside landscape potential shows schematic wind or solar area needed when the scenario does not fit inside the calculated potential. "
                 "It makes the gap between possible landscape area and scenario demand visible."
             ),
-            "green_title": "Green is an open starting point",
+            "green_title": "The starting point is cautious",
             "green_body": (
-                "At startup the map is green because no limiting layers or restrictions are active. "
-                "Green therefore means possible under current assumptions, not a finished recommended area."
+                "The map starts in a restrictive potential mode so assumptions and exclusions are visible immediately. "
+                "Green means possible under the current filters, not a final recommended area."
             ),
             "wind_solar_title": "Wind and solar are controlled under Geographies",
             "wind_solar_body": (
-                "Under Geographies you will find Landscape Potential Wind and Landscape Potential Solar. This is where you change the assumptions that shape potential, "
-                "while Landscape Types above only shows LABLAB's landscape analysis."
+                "Under Geographies you will find Landscape Potential Wind and Landscape Potential Solar. This is where you can change the preset filters, buffers and grid assumptions. "
+                "The analysis uses those choices even when source and buffer layers are hidden on the map."
             ),
             "wind_apply_title": "Change wind assumptions and apply them",
             "wind_apply_body": (
-                "Open wind potential and make your filter choices, for example Population and settlement. "
+                "Open wind potential if you want to change the starting filters, for example Population and settlement or roads. "
                 "Then click Apply changes to recalculate the map and result using the selected assumptions."
             ),
+            "action_open_geography_todo": "Open Geographies and Landscape to see which assumptions shape the map.",
+            "action_open_geography_done": "Good, the landscape choices are visible. Continue with energy modelling or try your own filters.",
+            "action_open_wind_todo": "Open wind and solar potential to see which assumptions you can change.",
+            "action_open_wind_done": "Good, the potential controls are visible. Try a filter or continue to recalculation.",
+            "action_apply_wind_todo": "Click Apply changes when you want to recalculate the map and result using the filter choices.",
+            "action_apply_wind_done": "Good, the app received an apply signal. Check the map and result panel before continuing.",
             "right_panel_title": "The right panel explains why",
             "right_panel_body": (
                 "The right panel starts with the table showing whether the scenario fits. It then follows with Geographies, Energy Modelling and Social Acceptance. "
@@ -776,18 +841,18 @@ def _tutorial_text(key: str, **kwargs: Any) -> str:
         "da_no": {
             "prototype_title": "Potentialappen er en prototype",
             "prototype_body": (
-                "{region_label}-appen hjælper dig med at udforske, hvor landskabet kan have potentiale for vind og sol. "
-                "Den kombinerer geografi, energimodellering og social accept. Målet er ikke et færdigt svar, "
-                "men at vise hvor potentiale kan findes, og hvilke antagelser der påvirker resultatet."
+                "{region_label}-appen hjælper dig med at teste et forsigtigt startpunkt for vind og sol. "
+                "Den kombinerer geografi, energimodellering og social accept, så planlægningsspørgsmålet vises først, "
+                "mens de tekniske GIS-antagelser kan åbnes, når du vil granske dem."
             ),
             "geography_title": "Begynd med geografien",
             "geography_body": (
-                "Under Geografier findes det forenklede landskabsvalg Landskabstyper, som viser LABLAB:s landskapsanalys. "
-                "Vind- og solpotentialet har egne kontroller længere nede, hvor lag, afstande og restriktioner påvirker den mulige etableringsflade."
+                "Startpunktet har allerede valgte filtre for vind og sol, for eksempel befolkning, større veje, netinfrastruktur og beskyttet natur. "
+                "Kilde- og bufferlag vises ikke på kortet fra start, men kan slås til under avancerede indstillinger, når du vil se præcis hvad der former arealet."
             ),
             "energy_title": "Kobl areal til energi",
             "energy_body": (
-                "Energimodelleringen oversætter valgt scenarie til et arealkrav for vind, sol eller en mix af begge. "
+                "Energimix-kontrollen i hovedvisningen lader dig teste balancen mellem vind og sol. Energimodelleringen oversætter valgt scenarie til et arealkrav. "
                 "Totalrækken i resultatet er en teknologisum: samme fysiske hex kan tælle for både vind og sol, når arealet kan deles."
             ),
             "scenario_title": "Energiscenarie og markintensitet",
@@ -813,21 +878,27 @@ def _tutorial_text(key: str, **kwargs: Any) -> str:
                 "Arealbehov udenfor landskabets potentiale viser skematisk vind- eller solareal som behøves, når scenariet ikke kan rummes i det beregnede potentiale. "
                 "Det gør forskellen mellem landskabets mulige areal og scenariets efterspørgsel synlig."
             ),
-            "green_title": "Grøn er et åbent startläge",
+            "green_title": "Startpunktet er forsigtigt",
             "green_body": (
-                "I startläget er kortet grønt, fordi ingen afgrænsende lag eller restriktioner er aktive. "
-                "Grøn betyder derfor muligt med nuværende antagelser, ikke et færdigt anbefalet område."
+                "Kortet starter i en restriktiv potentialtilstand, så antagelser og fravalg ses direkte. "
+                "Grøn betyder muligt med nuværende filtre, ikke et færdigt anbefalet område."
             ),
             "wind_solar_title": "Vind og sol styres under Geografier",
             "wind_solar_body": (
-                "Under Geografier findes Landskabspotentiale Vind og Landskabspotentiale Sol. Her ændrer du de antagelser som former potentialet, "
-                "mens Landskabstyper ovenfor kun viser LABLAB:s landskapsanalys."
+                "Under Geografier findes Landskabspotentiale Vind og Landskabspotentiale Sol. Her kan du ændre de forvalgte filtre, buffere og netantagelser. "
+                "Analysen bruger valgene, selv når kilde- og bufferlag er skjult på kortet."
             ),
             "wind_apply_title": "Ændr vindantagelser og anvend dem",
             "wind_apply_body": (
-                "Åbn vindpotentialet og lav dine filtervalg, for eksempel Befolkning og bebyggelse. "
+                "Åbn vindpotentialet, hvis du vil ændre startfiltrene, for eksempel Befolkning og bebyggelse eller veje. "
                 "Klik derefter Använd ändringar for at beregne kortet og resultatet igen med de valgte antagelser."
             ),
+            "action_open_geography_todo": "Åbn Geografier og Landskab for at se hvilke antagelser som former kortet.",
+            "action_open_geography_done": "Godt, nu er landskabsvalgene synlige. Fortsæt med energimodelleringen eller test egne filtre.",
+            "action_open_wind_todo": "Åbn vind- og solpotentialet for at se hvilke antagelser du kan ændre.",
+            "action_open_wind_done": "Godt, nu er potentialekontrollerne synlige. Test et filter eller fortsæt til genberegningen.",
+            "action_apply_wind_todo": "Klik på Använd ändringar når du vil beregne kortet og resultatet igen med filtervalgene.",
+            "action_apply_wind_done": "Godt, appen har fået et apply-signal. Kontrollér kortet og resultatpanelet før du går videre.",
             "right_panel_title": "Højrepanelet forklarer hvorfor",
             "right_panel_body": (
                 "Højrepanelet starter med tabellen som viser om scenariet kan rummes. Derefter følger Geografier, Energimodellering og Social accept. "
@@ -863,12 +934,18 @@ def _trondelag_tutorial_steps(region: dict[str, Any]) -> list[dict[str, Any]]:
             "title": _tutorial_text("geography_title"),
             "body": _tutorial_text("geography_body"),
             "openTexts": [geography_label, landscape_label],
+            "showActionStatus": False,
+            "action": {
+                "kind": "detailsOpen",
+                "texts": [geography_label, landscape_label],
+                "todo": _tutorial_text("action_open_geography_todo"),
+                "done": _tutorial_text("action_open_geography_done"),
+            },
         },
         {
-            "selector": "section[data-testid=\"stSidebar\"]",
+            "anchor": "energy-mix",
             "title": _tutorial_text("energy_title"),
             "body": _tutorial_text("energy_body"),
-            "openTexts": [_t("Energimodellering")],
         },
         {
             "selector": "section[data-testid=\"stSidebar\"]",
@@ -888,6 +965,7 @@ def _trondelag_tutorial_steps(region: dict[str, Any]) -> list[dict[str, Any]]:
             "legendSectionTitle": COMBINED_ESTABLISHMENT_LAYER_LABEL,
             "fallbackTarget": "iframeSelector",
             "iframeSelectors": [".map-legend"],
+            "scrollWindowToTarget": True,
             "title": _t(COMBINED_ESTABLISHMENT_LAYER_LABEL),
             "body": _tutorial_text("establishment_body"),
         },
@@ -897,6 +975,7 @@ def _trondelag_tutorial_steps(region: dict[str, Any]) -> list[dict[str, Any]]:
             "legendSectionTitle": SCENARIO_ALLOCATION_LAYER_LABEL,
             "fallbackTarget": "iframeSelector",
             "iframeSelectors": [".map-legend"],
+            "scrollWindowToTarget": True,
             "title": _t(SCENARIO_ALLOCATION_LAYER_LABEL),
             "mapLayers": [SCENARIO_ALLOCATION_LAYER_LABEL],
             "body": _tutorial_text("allocation_body"),
@@ -918,6 +997,7 @@ def _trondelag_tutorial_steps(region: dict[str, Any]) -> list[dict[str, Any]]:
             "fallbackTarget": "nextIframe",
             "closeAllExpanders": True,
             "sidebarScrollTop": True,
+            "scrollWindowToTarget": True,
             "stableHighlight": True,
             "title": _tutorial_text("green_title"),
             "body": _tutorial_text("green_body"),
@@ -930,6 +1010,12 @@ def _trondelag_tutorial_steps(region: dict[str, Any]) -> list[dict[str, Any]]:
             "sidebarScrollTop": True,
             "openTexts": [geography_label],
             "highlightTexts": [wind_label, solar_label],
+            "action": {
+                "kind": "detailsOpen",
+                "texts": [wind_label, solar_label],
+                "todo": _tutorial_text("action_open_wind_todo"),
+                "done": _tutorial_text("action_open_wind_done"),
+            },
         },
         {
             "selector": "section[data-testid=\"stSidebar\"]",
@@ -941,6 +1027,13 @@ def _trondelag_tutorial_steps(region: dict[str, Any]) -> list[dict[str, Any]]:
             "scrollToText": wind_apply_label,
             "scrollAlign": 0.58,
             "highlightTexts": [wind_apply_label],
+            "action": {
+                "kind": "buttonClick",
+                "id": "wind_apply",
+                "text": wind_apply_label,
+                "todo": _tutorial_text("action_apply_wind_todo"),
+                "done": _tutorial_text("action_apply_wind_done"),
+            },
         },
         {
             "selector": "div[data-testid=\"column\"]:has(#right-panel-content-anchor)",
@@ -975,8 +1068,12 @@ def _render_tutorial_component(region: dict[str, Any], force_open: bool = False)
                 "previous": _t("Föregående"),
                 "next": _t("Nästa"),
                 "skip": _t("Hoppa över"),
+                "pause": _t("Pausa"),
+                "resume": _t("Fortsätt guide"),
                 "close": _t("Stäng"),
                 "done": _t("Klar"),
+                "actionTodo": _t("Testa detta"),
+                "actionDone": _t("Klart"),
                 "doNotAutoOpen": _t("Öppna inte automatiskt igen"),
                 "step": "Steg" if _language() != "en" else "Step",
                 "of": "av" if _language() != "en" else "of",
@@ -1014,8 +1111,12 @@ def _render_tutorial_component(region: dict[str, Any], force_open: bool = False)
     }
   })();
 
+  const progressKey = `${payload.storageKey}:progress`;
+  const pausedKey = `${payload.storageKey}:paused`;
+  const actionKey = `${payload.storageKey}:actions`;
   const shouldAutoOpen = !storage || storage.getItem(payload.storageKey) !== "1";
-  if (!payload.forceOpen && !shouldAutoOpen) {
+  const hasPausedProgress = storage && storage.getItem(pausedKey) === "1";
+  if (!payload.forceOpen && !shouldAutoOpen && !hasPausedProgress) {
     return;
   }
 
@@ -1024,10 +1125,10 @@ def _render_tutorial_component(region: dict[str, Any], force_open: bool = False)
   }
 
   const styleId = "potential-tutorial-style";
-  if (!parentDocument.getElementById(styleId)) {
-    const style = parentDocument.createElement("style");
-    style.id = styleId;
-    style.textContent = `
+  const existingStyle = parentDocument.getElementById(styleId);
+  const style = existingStyle || parentDocument.createElement("style");
+  style.id = styleId;
+  style.textContent = `
       #potential-tutorial-root {
         position: fixed;
         inset: 0;
@@ -1036,10 +1137,7 @@ def _render_tutorial_component(region: dict[str, Any], force_open: bool = False)
         font-family: "Source Sans Pro", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
       #potential-tutorial-root .pt-dim {
-        position: fixed;
-        background: rgba(17, 24, 39, 0.58);
-        pointer-events: auto;
-        transition: top 140ms ease, left 140ms ease, width 140ms ease, height 140ms ease;
+        display: none;
       }
       #potential-tutorial-root .pt-highlight {
         position: fixed;
@@ -1048,6 +1146,7 @@ def _render_tutorial_component(region: dict[str, Any], force_open: bool = False)
         border-radius: 8px;
         pointer-events: none;
         transition: top 140ms ease, left 140ms ease, width 140ms ease, height 140ms ease;
+        z-index: 1;
       }
       #potential-tutorial-root .pt-popover {
         position: fixed;
@@ -1061,6 +1160,7 @@ def _render_tutorial_component(region: dict[str, Any], force_open: bool = False)
         box-shadow: 0 18px 50px rgba(15, 23, 42, 0.26);
         padding: 0.95rem;
         pointer-events: auto;
+        z-index: 2;
       }
       #potential-tutorial-root .pt-topline {
         display: flex;
@@ -1097,6 +1197,21 @@ def _render_tutorial_component(region: dict[str, Any], force_open: bool = False)
         color: #374151;
         font-size: 0.92rem;
         line-height: 1.42;
+      }
+      #potential-tutorial-root .pt-action-status {
+        margin-top: 0.72rem;
+        border: 1px solid rgba(22, 101, 52, 0.18);
+        border-radius: 6px;
+        background: #f0fdf4;
+        color: #166534;
+        padding: 0.55rem 0.65rem;
+        font-size: 0.84rem;
+        line-height: 1.32;
+      }
+      #potential-tutorial-root .pt-action-status[data-state="todo"] {
+        border-color: rgba(146, 64, 14, 0.18);
+        background: #fffbeb;
+        color: #92400e;
       }
       #potential-tutorial-root .pt-checkbox {
         display: flex;
@@ -1141,6 +1256,21 @@ def _render_tutorial_component(region: dict[str, Any], force_open: bool = False)
         background: #166534;
         color: #ffffff;
       }
+      #potential-tutorial-resume {
+        position: fixed;
+        right: 18px;
+        bottom: 74px;
+        z-index: 2147483001;
+        min-height: 2.35rem;
+        border: 1px solid rgba(22, 101, 52, 0.26);
+        border-radius: 6px;
+        background: #166534;
+        color: #ffffff;
+        box-shadow: 0 12px 32px rgba(15, 23, 42, 0.24);
+        cursor: pointer;
+        font: 650 0.9rem "Source Sans Pro", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        padding: 0.48rem 0.78rem;
+      }
       @media (max-width: 680px) {
         #potential-tutorial-root .pt-popover {
           left: 16px !important;
@@ -1149,6 +1279,7 @@ def _render_tutorial_component(region: dict[str, Any], force_open: bool = False)
         }
       }
     `;
+  if (!existingStyle) {
     parentDocument.head.appendChild(style);
   }
 
@@ -1169,12 +1300,16 @@ def _render_tutorial_component(region: dict[str, Any], force_open: bool = False)
       </div>
       <h2></h2>
       <p></p>
+      <div class="pt-action-status" hidden></div>
       <label class="pt-checkbox">
         <input type="checkbox" />
         <span></span>
       </label>
       <div class="pt-actions">
-        <button type="button" class="pt-button pt-skip"></button>
+        <span>
+          <button type="button" class="pt-button pt-skip"></button>
+          <button type="button" class="pt-button pt-pause"></button>
+        </span>
         <span>
           <button type="button" class="pt-button pt-prev"></button>
           <button type="button" class="pt-button pt-button-primary pt-next"></button>
@@ -1195,17 +1330,33 @@ def _render_tutorial_component(region: dict[str, Any], force_open: bool = False)
   const count = root.querySelector(".pt-count");
   const title = root.querySelector("h2");
   const body = root.querySelector("p");
+  const actionStatus = root.querySelector(".pt-action-status");
   const remember = root.querySelector(".pt-checkbox input");
   const rememberLabel = root.querySelector(".pt-checkbox span");
   const closeButton = root.querySelector(".pt-close");
   const skipButton = root.querySelector(".pt-skip");
+  const pauseButton = root.querySelector(".pt-pause");
   const prevButton = root.querySelector(".pt-prev");
   const nextButton = root.querySelector(".pt-next");
   let index = 0;
   let activeTarget = null;
+  let resumeButton = null;
+  let actionInterval = null;
+  if (payload.forceOpen && storage) {
+    storage.removeItem(pausedKey);
+    storage.removeItem(progressKey);
+    storage.removeItem(actionKey);
+  }
+  if (storage) {
+    const savedIndex = Number.parseInt(storage.getItem(progressKey) || "", 10);
+    if (Number.isFinite(savedIndex)) {
+      index = Math.min(Math.max(savedIndex, 0), payload.steps.length - 1);
+    }
+  }
 
   rememberLabel.textContent = payload.labels.doNotAutoOpen;
   skipButton.textContent = payload.labels.skip;
+  pauseButton.textContent = payload.labels.pause;
   prevButton.textContent = payload.labels.previous;
   if (storage && storage.getItem(payload.storageKey) === "1") {
     remember.checked = true;
@@ -1215,6 +1366,13 @@ def _render_tutorial_component(region: dict[str, Any], force_open: bool = False)
     parentWindow.removeEventListener("resize", updatePosition);
     parentWindow.removeEventListener("scroll", updatePosition, true);
     parentDocument.removeEventListener("keydown", onKeyDown, true);
+    parentDocument.removeEventListener("click", onDocumentClick, true);
+    if (actionInterval) {
+      parentWindow.clearInterval(actionInterval);
+    }
+    if (resumeButton && resumeButton.parentNode) {
+      resumeButton.parentNode.removeChild(resumeButton);
+    }
     if (root.parentNode) {
       root.parentNode.removeChild(root);
     }
@@ -1232,9 +1390,57 @@ def _render_tutorial_component(region: dict[str, Any], force_open: bool = False)
     }
   };
 
+  const saveProgress = () => {
+    if (storage) {
+      storage.setItem(progressKey, String(index));
+    }
+  };
+
   const close = () => {
     persistPreference();
+    if (storage) {
+      storage.removeItem(pausedKey);
+      storage.removeItem(progressKey);
+      storage.removeItem(actionKey);
+    }
     cleanup();
+  };
+
+  const showResumeButton = () => {
+    if (resumeButton && resumeButton.parentNode) {
+      return;
+    }
+    resumeButton = parentDocument.createElement("button");
+    resumeButton.id = "potential-tutorial-resume";
+    resumeButton.type = "button";
+    resumeButton.textContent = payload.labels.resume;
+    resumeButton.addEventListener("click", resume);
+    parentDocument.body.appendChild(resumeButton);
+  };
+
+  const hideResumeButton = () => {
+    if (resumeButton && resumeButton.parentNode) {
+      resumeButton.parentNode.removeChild(resumeButton);
+    }
+    resumeButton = null;
+  };
+
+  const pause = () => {
+    saveProgress();
+    if (storage) {
+      storage.setItem(pausedKey, "1");
+    }
+    root.style.display = "none";
+    showResumeButton();
+  };
+
+  const resume = () => {
+    if (storage) {
+      storage.removeItem(pausedKey);
+    }
+    hideResumeButton();
+    root.style.display = "";
+    render();
   };
 
   const markerFor = (anchor) => {
@@ -1494,6 +1700,86 @@ def _render_tutorial_component(region: dict[str, Any], force_open: bool = False)
 
   const findElementByText = (label) => findExpanderForLabel(label) || findButtonByText(label);
 
+  const actionIdentity = (action) => String((action && (action.id || action.text)) || "");
+
+  const readActionState = () => {
+    if (!storage) {
+      return {};
+    }
+    try {
+      const value = JSON.parse(storage.getItem(actionKey) || "{}");
+      return value && typeof value === "object" ? value : {};
+    } catch (error) {
+      return {};
+    }
+  };
+
+  const markActionDone = (action) => {
+    const id = actionIdentity(action);
+    if (!storage || !id) {
+      return;
+    }
+    const actions = readActionState();
+    actions[id] = true;
+    storage.setItem(actionKey, JSON.stringify(actions));
+  };
+
+  const actionIsComplete = (action) => {
+    if (!action || !action.kind) {
+      return false;
+    }
+    if (action.kind === "detailsOpen") {
+      const labels = Array.isArray(action.texts) ? action.texts : [];
+      return labels.length > 0 && labels.every((label) => {
+        const match = findExpanderForLabel(label);
+        return Boolean(match && match.open);
+      });
+    }
+    if (action.kind === "buttonClick") {
+      const actions = readActionState();
+      return Boolean(actions[actionIdentity(action)]);
+    }
+    return false;
+  };
+
+  const updateActionStatus = () => {
+    const step = payload.steps[index] || {};
+    const action = step.action || null;
+    if (!action || step.showActionStatus === false) {
+      actionStatus.hidden = true;
+      actionStatus.textContent = "";
+      return;
+    }
+    const complete = actionIsComplete(action);
+    actionStatus.hidden = false;
+    actionStatus.dataset.state = complete ? "done" : "todo";
+    const prefix = complete ? payload.labels.actionDone : payload.labels.actionTodo;
+    const message = complete ? action.done : action.todo;
+    actionStatus.textContent = `${prefix}: ${message || ""}`;
+  };
+
+  const onDocumentClick = (event) => {
+    const target = event.target && event.target.closest
+      ? event.target.closest("button,[role='button'],summary,label,input")
+      : null;
+    const clickedText = normalizedText(
+      target ? (target.textContent || target.getAttribute("aria-label") || target.value || "") : ""
+    );
+    if (clickedText) {
+      payload.steps.forEach((step) => {
+        const action = step.action || null;
+        if (!action || action.kind !== "buttonClick") {
+          return;
+        }
+        const wanted = normalizedText(action.text);
+        if (wanted && (clickedText === wanted || clickedText.includes(wanted))) {
+          markActionDone(action);
+        }
+      });
+    }
+    parentWindow.setTimeout(updateActionStatus, 120);
+  };
+
   const combinedTextTarget = (labels) => {
     const nodes = (Array.isArray(labels) ? labels : [])
       .map((label) => findElementByText(label))
@@ -1690,11 +1976,30 @@ def _render_tutorial_component(region: dict[str, Any], force_open: bool = False)
       height = clamp(rect.height + pad * 2, 24, viewportHeight - top - 8);
     }
 
-    setBox(dims.top, 0, 0, viewportWidth, top);
-    setBox(dims.left, top, 0, left, height);
-    setBox(dims.right, top, left + width, viewportWidth - left - width, height);
-    setBox(dims.bottom, top + height, 0, viewportWidth, viewportHeight - top - height);
-    setBox(highlight, top, left, width, height);
+    const seamOverlap = 2;
+    const holeTop = Math.floor(top);
+    const holeLeft = Math.floor(left);
+    const holeRight = Math.ceil(left + width);
+    const holeBottom = Math.ceil(top + height);
+    const holeWidth = Math.max(0, holeRight - holeLeft);
+    const holeHeight = Math.max(0, holeBottom - holeTop);
+    setBox(dims.top, 0, 0, viewportWidth, holeTop + seamOverlap);
+    setBox(dims.left, Math.max(0, holeTop - seamOverlap), 0, holeLeft + seamOverlap, holeHeight + seamOverlap * 2);
+    setBox(
+      dims.right,
+      Math.max(0, holeTop - seamOverlap),
+      Math.max(0, holeRight - seamOverlap),
+      viewportWidth - holeRight + seamOverlap,
+      holeHeight + seamOverlap * 2
+    );
+    setBox(
+      dims.bottom,
+      Math.max(0, holeBottom - seamOverlap),
+      0,
+      viewportWidth,
+      viewportHeight - holeBottom + seamOverlap
+    );
+    setBox(highlight, holeTop, holeLeft, holeWidth, holeHeight);
 
     const popoverWidth = Math.min(360, viewportWidth - 32);
     const popoverHeight = popover.offsetHeight || 240;
@@ -1755,6 +2060,8 @@ def _render_tutorial_component(region: dict[str, Any], force_open: bool = False)
     }
     title.textContent = step.title || "";
     body.textContent = step.body || "";
+    saveProgress();
+    updateActionStatus();
     count.textContent = `${payload.labels.step} ${index + 1} ${payload.labels.of} ${payload.steps.length}`;
     prevButton.disabled = index === 0;
     nextButton.textContent = index === payload.steps.length - 1 ? payload.labels.done : payload.labels.next;
@@ -1794,6 +2101,7 @@ def _render_tutorial_component(region: dict[str, Any], force_open: bool = False)
 
   closeButton.addEventListener("click", close);
   skipButton.addEventListener("click", close);
+  pauseButton.addEventListener("click", pause);
   prevButton.addEventListener("click", () => go(-1));
   nextButton.addEventListener("click", () => {
     if (index === payload.steps.length - 1) {
@@ -1805,9 +2113,19 @@ def _render_tutorial_component(region: dict[str, Any], force_open: bool = False)
   parentWindow.addEventListener("resize", updatePosition);
   parentWindow.addEventListener("scroll", updatePosition, true);
   parentDocument.addEventListener("keydown", onKeyDown, true);
+  parentDocument.addEventListener("click", onDocumentClick, true);
+  actionInterval = parentWindow.setInterval(updateActionStatus, 800);
   parentWindow.__potentialTutorialCleanup = cleanup;
 
-  parentWindow.setTimeout(render, 350);
+  if (payload.forceOpen && storage) {
+    storage.removeItem(pausedKey);
+  }
+  if (!payload.forceOpen && storage && storage.getItem(pausedKey) === "1") {
+    root.style.display = "none";
+    showResumeButton();
+  } else {
+    parentWindow.setTimeout(render, 350);
+  }
 })();
 </script>
 """.replace("__PAYLOAD__", payload)
@@ -2469,10 +2787,11 @@ def _scenario_sidebar(region: dict[str, Any]) -> dict[str, Any]:
     levels = scenario_manifest.get("scenario_levels") or []
     selected = None
     if levels:
+        default_level = _highest_option_id(tuple(str(level) for level in levels))
         selected = st.sidebar.radio(
             _t("Scenario"),
             options=levels,
-            index=levels.index("medium") if "medium" in levels else 0,
+            index=levels.index(default_level) if default_level in levels else 0,
             format_func=lambda value: {"low": "Låg", "medium": "Mellan", "high": "Hög"}.get(value, str(value)),
         )
     st.sidebar.caption(f"Scenario-set: {scenario_manifest.get('scenario_set_id', '-')}")
@@ -2495,7 +2814,7 @@ def _scenario_state(region: dict[str, Any], panel: Any | None = None) -> dict[st
         region_id = region.get("region_id", "region")
         scenario_key = f"potential_scenario_{region_id}"
         energy_scenario_key = f"energy_model_planning_scenario_{region_id}"
-        default_level = "medium" if "medium" in levels else levels[0]
+        default_level = _highest_option_id(tuple(str(level) for level in levels)) or levels[0]
         energy_scenario = st.session_state.get(energy_scenario_key)
         if panel is None and energy_scenario in levels:
             st.session_state[scenario_key] = energy_scenario
@@ -2559,6 +2878,14 @@ def _technology_to_times_map(scenario_manifest: dict[str, Any] | None) -> dict[s
 def _area_scenario_label(scenario_id: str) -> str:
     labels = {"low": "Låg", "mid": "Mellan", "high": "Hög"}
     return labels.get(str(scenario_id), AREA_SCENARIO_LABELS.get(str(scenario_id), str(scenario_id)))
+
+
+def _highest_option_id(option_ids: list[str] | tuple[str, ...]) -> str:
+    clean_ids = [str(value) for value in option_ids if str(value)]
+    for preferred in ("high", "hog", "hög", "hoj", "høj"):
+        if preferred in clean_ids:
+            return preferred
+    return clean_ids[-1] if clean_ids else ""
 
 
 def _planning_scenario_option_label(option: dict[str, Any] | None) -> str:
@@ -2649,6 +2976,68 @@ def _balance_wind_solar_mix(mix: pd.DataFrame, solar_share_pct: float) -> pd.Dat
     return adjusted.reset_index(drop=True)
 
 
+def _energy_mix_state_key(region: dict[str, Any]) -> str:
+    return f"energy_model_mix_solar_share_{region.get('region_id', 'region')}"
+
+
+def _energy_mix_solar_share_from_session(region: dict[str, Any]) -> tuple[str, float]:
+    mix_key = _energy_mix_state_key(region)
+    mix_default_key = f"{mix_key}_default_50_applied"
+    if not bool(st.session_state.get(mix_default_key, False)):
+        st.session_state[mix_key] = 50
+        st.session_state[mix_default_key] = True
+    st.session_state.setdefault(mix_key, 50)
+    try:
+        solar_share_pct = float(st.session_state.get(mix_key, 50) or 0.0)
+    except Exception:
+        solar_share_pct = 50.0
+    return mix_key, max(0.0, min(100.0, solar_share_pct))
+
+
+def _render_energy_mix_card(panel: Any, region: dict[str, Any], energy_model_state: dict[str, Any]) -> None:
+    if not isinstance(energy_model_state, dict) or not energy_model_state.get("available"):
+        return
+    mix_key = str(energy_model_state.get("mix_key") or _energy_mix_state_key(region))
+    try:
+        current_solar_share_pct = float(st.session_state.get(mix_key, energy_model_state.get("solar_share_pct", 50)) or 0.0)
+    except Exception:
+        current_solar_share_pct = 50.0
+    current_solar_share_pct = max(0.0, min(100.0, current_solar_share_pct))
+    wind_share_pct = 100.0 - current_solar_share_pct
+    native_total_twh = float(energy_model_state.get("native_total_twh", 0.0) or 0.0)
+    native_solar_share_pct = float(energy_model_state.get("native_solar_share_pct", 50.0) or 0.0)
+
+    panel.markdown('<span data-potential-tutorial-anchor="energy-mix"></span>', unsafe_allow_html=True)
+    with panel.container(border=True):
+        st.markdown("**Energimix**")
+        st.caption(
+            "Pröva hur samma energimängd fördelas mellan vind och sol. Kartan och resultatpanelen räknas om när reglaget ändras."
+        )
+        slider_value = float(
+            st.slider(
+                _t("Energimix"),
+                min_value=0,
+                max_value=100,
+                step=5,
+                key=mix_key,
+                format="%d%% sol",
+                help=(
+                    "Balans mellan sol och vind i valt framtidsscenario. "
+                    "När solandelen ökar minskar vindandelen med samma totalenergi, och tvärtom."
+                ),
+            )
+        )
+        wind_share_pct = 100.0 - slider_value
+        mix_cols = st.columns(3)
+        mix_cols[0].metric(_t("Vindandel"), f"{wind_share_pct:.0f}%")
+        mix_cols[1].metric(_t("Solandel"), f"{slider_value:.0f}%")
+        mix_cols[2].metric(_t("Total energi"), f"{native_total_twh:.2f} TWh")
+        st.caption(
+            f"Energimix: {wind_share_pct:.0f}% vind / {slider_value:.0f}% sol. "
+            f"Ursprunglig TIMES-mix: {100.0 - native_solar_share_pct:.0f}% vind / {native_solar_share_pct:.0f}% sol."
+        )
+
+
 def _render_hex_area_card(
     area_by_scenario: dict[str, float],
     hex_area: float,
@@ -2733,11 +3122,12 @@ def _render_energy_modeling_panel(
         st.session_state.get(scenario_key)
         or st.session_state.get(potential_scenario_key)
         or scenario_state.get("scenario")
+        or _highest_option_id(tuple(planning_ids))
         or planning_cfg.get("default_scenario")
         or "medium"
     )
     if default_planning_id not in planning_by_id:
-        default_planning_id = planning_ids[0]
+        default_planning_id = _highest_option_id(tuple(planning_ids)) or planning_ids[0]
     if st.session_state.get(scenario_key) not in planning_ids:
         st.session_state[scenario_key] = default_planning_id
     planning_id = panel.selectbox(
@@ -2755,7 +3145,7 @@ def _render_energy_modeling_panel(
     planning_year = int(selected_planning.get("planning_year", planning_cfg.get("planning_year", 2050)) or 2050)
     energy_scale = float(selected_planning.get("energy_scale", 1.0) or 1.0)
     area_scenario_key = f"energy_model_area_scenario_{region_id}"
-    default_area_scenario_id = str(selected_planning.get("area_demand_scenario", "mid") or "mid")
+    default_area_scenario_id = _highest_option_id(tuple(AREA_SCENARIO_ORDER)) or str(selected_planning.get("area_demand_scenario", "mid") or "mid")
     if default_area_scenario_id not in AREA_SCENARIO_ORDER:
         default_area_scenario_id = "mid"
     if st.session_state.get(area_scenario_key) not in AREA_SCENARIO_ORDER:
@@ -2805,32 +3195,9 @@ def _render_energy_modeling_panel(
     native_solar_twh = _energy_mix_share(selected_mix, "solar")
     native_total_twh = native_wind_twh + native_solar_twh
     native_solar_share_pct = (native_solar_twh / native_total_twh * 100.0) if native_total_twh > 0 else 50.0
-    mix_key = f"energy_model_mix_solar_share_{region.get('region_id', 'region')}"
-    mix_default_key = f"{mix_key}_default_50_applied"
-    if not bool(st.session_state.get(mix_default_key, False)):
-        st.session_state[mix_key] = 50
-        st.session_state[mix_default_key] = True
-    st.session_state.setdefault(mix_key, 50)
-    solar_share_pct = float(
-        panel.slider(
-            _t("Energimix"),
-            min_value=0,
-            max_value=100,
-            step=5,
-            key=mix_key,
-            format="%d%% sol",
-            help=(
-                "Balans mellan sol och vind i valt framtidsscenario. "
-                "När solandelen ökar minskar vindandelen med samma totalenergi, och tvärtom."
-            ),
-        )
-    )
+    mix_key, solar_share_pct = _energy_mix_solar_share_from_session(region)
     wind_share_pct = 100.0 - solar_share_pct
     selected_mix = _balance_wind_solar_mix(selected_mix, solar_share_pct)
-    panel.caption(
-        f"Energimix: {wind_share_pct:.0f}% vind / {solar_share_pct:.0f}% sol. "
-        f"Ursprunglig TIMES-mix: {100.0 - native_solar_share_pct:.0f}% vind / {native_solar_share_pct:.0f}% sol."
-    )
 
     technology_to_times = _technology_to_times_map(scenario_manifest)
     area_bundle_obj = type(
@@ -2924,6 +3291,8 @@ def _render_energy_modeling_panel(
             "primary_km2_per_twh": primary_factor,
             "wind_share_pct": wind_share_pct,
             "solar_share_pct": solar_share_pct,
+            "mix_key": mix_key,
+            "native_total_twh": native_total_twh,
             "native_wind_share_pct": 100.0 - native_solar_share_pct,
             "native_solar_share_pct": native_solar_share_pct,
             "wind_area_need_km2": wind_area_need,
@@ -3660,12 +4029,17 @@ def _ensure_default_start_state(region: dict[str, Any], force: bool = False) -> 
     start_default_key = _region_start_default_key(region)
     if not force and st.session_state.get(start_default_key) == START_DEFAULT_VERSION:
         return
-    _apply_wind_layer_selection_state(_default_wind_layer_selection())
+    _apply_reference_default_wind_to_controls()
     for group_id in WIND_GROUP_LAYER_DEFAULTS:
         st.session_state[_wind_control_key("visual_source", str(group_id))] = False
         st.session_state[_wind_control_key("visual_buffer", str(group_id))] = False
-    st.session_state[WIND_EMPTY_SELECTION_ACTIVE_KEY] = True
-    st.session_state[SOLAR_APPLIED_CONFIG_KEY] = dict(DEFAULT_SOLAR_APPLIED_CONFIG)
+    st.session_state[WIND_EMPTY_SELECTION_ACTIVE_KEY] = False
+    default_solar_config = dict(DEFAULT_SOLAR_APPLIED_CONFIG)
+    st.session_state[SOLAR_APPLIED_CONFIG_KEY] = default_solar_config
+    region_id = str(region.get("region_id", "region") or "region")
+    st.session_state[f"potential_scenario_{region_id}"] = "high"
+    st.session_state[f"energy_model_planning_scenario_{region_id}"] = "high"
+    st.session_state[f"energy_model_area_scenario_{region_id}"] = "high"
     default_display_resolution = int(region.get("default_display_h3_resolution") or region.get("default_h3_resolution") or 8)
     st.session_state["combined_h3_resolution"] = _preferred_h3_resolution(region, default_display_resolution)
     st.session_state["combined_h3_display_mode"] = "zoom_family"
@@ -3677,18 +4051,26 @@ def _ensure_default_start_state(region: dict[str, Any], force: bool = False) -> 
     st.session_state[_social_acceptance_state_key(region)] = SOCIAL_ACCEPTANCE_DEFAULT_SCENARIO_ID
     st.session_state[_social_acceptance_impact_state_key(region)] = 0
     st.session_state[_social_acceptance_allocation_priority_state_key(region)] = 0
-    st.session_state["show_solar_v1"] = False
-    st.session_state["show_user_solar"] = True
-    st.session_state["solar_draft_small_population_active"] = False
-    st.session_state["solar_draft_large_population_active"] = False
+    st.session_state["show_solar_v1"] = bool(default_solar_config.get("small_population_active", False))
+    st.session_state["show_user_solar"] = bool(default_solar_config.get("large_scale_active", True))
+    st.session_state["solar_draft_small_population_active"] = bool(default_solar_config.get("small_population_active", False))
+    st.session_state["solar_draft_large_population_active"] = bool(default_solar_config.get("large_population_active", False))
+    st.session_state["solar_draft_area_m2_per_person"] = float(default_solar_config.get("panel_area_m2_per_person", 10.0) or 10.0)
+    st.session_state["solar_draft_population_buffer_m"] = float(default_solar_config.get("population_buffer_m", 250.0) or 250.0)
     for group_id in _solar_visual_group_order():
         st.session_state[_solar_visual_control_key("source", group_id)] = False
         st.session_state[_solar_visual_control_key("buffer", group_id)] = False
     for group_id, spec in SOLAR_FILTER_GROUP_SPECS.items():
-        st.session_state[str(spec["draft_active_key"])] = False
-        default_layer_ids = set(_solar_default_filter_layer_ids(group_id))
+        configured_layer_ids = {
+            str(layer_id)
+            for layer_id in default_solar_config.get(str(spec["layer_ids_key"]), [])
+        }
+        st.session_state[str(spec["draft_active_key"])] = bool(default_solar_config.get(str(spec["active_key"]), False))
+        st.session_state[str(spec["draft_buffer_key"])] = float(
+            default_solar_config.get(str(spec["buffer_key"]), spec.get("buffer_default_m", 0.0)) or 0.0
+        )
         for layer_id in spec.get("layer_ids") or []:
-            st.session_state[_solar_filter_layer_control_key(group_id, str(layer_id))] = str(layer_id) in default_layer_ids
+            st.session_state[_solar_filter_layer_control_key(group_id, str(layer_id))] = str(layer_id) in configured_layer_ids
     st.session_state[start_default_key] = START_DEFAULT_VERSION
 
 
@@ -3756,6 +4138,9 @@ def _solar_visible_group_ids_from_session(kind: str) -> list[str]:
 
 def _solar_control_selected_filter_layer_ids(config: dict[str, Any], group_id: str) -> list[str]:
     spec = _solar_filter_spec(group_id)
+    active_key = str(spec["active_key"])
+    if active_key in config and not bool(config.get(active_key, False)):
+        return []
     raw_ids = config.get(str(spec["layer_ids_key"]))
     if isinstance(raw_ids, (list, tuple, set)):
         requested = [str(layer_id) for layer_id in raw_ids]
@@ -6321,7 +6706,7 @@ def _render_impact_change_table(rows: list[dict[str, str]]) -> None:
     def _header_html(header: str) -> str:
         wrapped_headers = {
             "potential efter filter": "potential<br>efter filter",
-            "potential efter acceptanspåverkan": "potential efter<br>acceptanspåverkan",
+            "potential efter acceptanspåverkan": "potential<br>efter acceptans-<br>påverkan",
             "inom potential": "inom<br>potential",
             "outnyttjad potential": "outnyttjad<br>potential",
             "ytbehov utanför potential": "ytbehov utanför<br>potential",
@@ -6331,13 +6716,40 @@ def _render_impact_change_table(rows: list[dict[str, str]]) -> None:
             return html.escape(header)
         return wrapped_headers[header]
 
-    header_html = "".join(f"<th>{_header_html(header)}</th>" for header in headers)
+    header_classes = {
+        "teknik": "change-col-tech",
+        "energi": "change-col-energy",
+        "ytbehov": "change-col-area",
+        "potential efter filter": "change-col-filter",
+        "potential efter acceptanspåverkan": "change-col-acceptance",
+        "inom potential": "change-col-area",
+        "outnyttjad potential": "change-col-unused",
+        "ytbehov utanför potential": "change-col-outside",
+        "andel inom potential": "change-col-share",
+    }
+    colgroup_html = (
+        "<colgroup>"
+        + "".join(f"<col class='{header_classes.get(header, 'change-col-value')}'>" for header in headers)
+        + "</colgroup>"
+    )
+    header_html = "".join(
+        f"<th class='{header_classes.get(header, 'change-col-value')}'>{_header_html(header)}</th>"
+        for header in headers
+    )
     row_html = ""
     for row in rows:
-        row_html += "<tr>" + "".join(f"<td>{row.get(header, '')}</td>" for header in headers) + "</tr>"
+        row_html += (
+            "<tr>"
+            + "".join(
+                f"<td class='{header_classes.get(header, 'change-col-value')}'>{row.get(header, '')}</td>"
+                for header in headers
+            )
+            + "</tr>"
+        )
     st.markdown(
         "<div class='change-table-wrap'>"
         "<table class='change-table'>"
+        f"{colgroup_html}"
         "<thead><tr>"
         f"{header_html}"
         "</tr></thead><tbody>"
@@ -6345,10 +6757,20 @@ def _render_impact_change_table(rows: list[dict[str, str]]) -> None:
         "</tbody></table></div>"
         "<style>"
         ".change-table-wrap{display:block;width:100%;max-width:100%;overflow-x:auto;border:1px solid rgba(49,51,63,0.14);border-radius:6px;margin-top:0.35rem;}"
-        ".change-table{width:100%;min-width:760px;border-collapse:collapse;font-size:0.72rem;line-height:1.15;table-layout:auto;}"
-        ".change-table th{background:#f8fafc;color:#475569;text-align:left;font-weight:600;padding:0.28rem 0.38rem;border-bottom:1px solid rgba(49,51,63,0.12);white-space:normal;line-height:1.15;}"
-        ".change-table td{padding:0.28rem 0.38rem;border-top:1px solid rgba(49,51,63,0.08);vertical-align:top;white-space:nowrap;}"
-        ".change-table td div{gap:0!important;}"
+        ".change-table{width:100%;min-width:645px;border-collapse:collapse;font-size:0.68rem;line-height:1.12;table-layout:fixed;}"
+        ".change-table .change-col-tech{width:6%;}"
+        ".change-table .change-col-energy{width:10%;}"
+        ".change-table .change-col-area{width:10%;}"
+        ".change-table .change-col-filter{width:13%;}"
+        ".change-table .change-col-acceptance{width:15%;}"
+        ".change-table .change-col-unused{width:13%;}"
+        ".change-table .change-col-outside{width:13%;}"
+        ".change-table .change-col-share{width:10%;}"
+        ".change-table th{background:#f8fafc;color:#475569;text-align:left;font-weight:600;padding:0.22rem 0.3rem;border-bottom:1px solid rgba(49,51,63,0.12);white-space:normal;overflow-wrap:anywhere;line-height:1.12;}"
+        ".change-table td{padding:0.22rem 0.3rem;border-top:1px solid rgba(49,51,63,0.08);vertical-align:top;white-space:normal;overflow-wrap:anywhere;}"
+        ".change-table td div{gap:0!important;min-width:0;}"
+        ".change-table td span:first-child{white-space:nowrap;}"
+        "@media (max-width:900px){.change-table{font-size:0.66rem;}.change-table-wrap{width:100%;}}"
         "</style>",
         unsafe_allow_html=True,
     )
@@ -6692,10 +7114,12 @@ def _reference_default_wind_params() -> dict[str, float]:
     params = _default_wind_params()
     params.update(
         {
-            "settlement_distance_m": 200.0,
-            "road_distance_m": 200.0,
+            "settlement_distance_m": 500.0,
+            "road_distance_m": 300.0,
             "grid_max_distance_m": 1000.0,
-            "protected_buffer_m": 0.0,
+            "protected_buffer_m": 250.0,
+            "culture_buffer_m": 100.0,
+            "reindeer_buffer_m": 100.0,
         }
     )
     return params
@@ -6704,13 +7128,21 @@ def _reference_default_wind_params() -> dict[str, float]:
 def _reference_default_wind_layer_selection() -> dict[str, list[str]]:
     return normalize_group_layer_map(
         {
-            "settlement": ["population_points"],
-            "transport": ["roads_large"],
-            "electrical": ["power_substations"],
-            "protected": list(WIND_GROUP_LAYER_DEFAULTS.get("protected", [])),
+            "settlement": [WIND_POPULATION_SOURCE_LAYER_ID],
+            "transport": list(WIND_GROUP_LAYER_DEFAULTS.get(SOLAR_ROAD_GROUP_ID, [])),
+            "electrical": [],
+            "protected": ["protected_areas"],
             "coastal": [],
-            "culture": [],
-            "reindeer": [],
+            "culture": [
+                layer_id
+                for layer_id in ("cultural_preservation", "valuable_cultural_environment")
+                if layer_id in WIND_GROUP_LAYER_DEFAULTS.get(WIND_CULTURE_GROUP_ID, [])
+            ],
+            "reindeer": [
+                layer_id
+                for layer_id in ("reindeer_grazing_merged",)
+                if layer_id in WIND_GROUP_LAYER_DEFAULTS.get(WIND_REINDEER_GROUP_ID, [])
+            ],
             "aviation_approach": [],
             "aviation_bird": [],
             "military": [],
@@ -6897,6 +7329,7 @@ def _render_layers(
     opacity_key_prefix: str | None = None,
     note_title: str = "Samlad potential",
     note_body: str = "Aktiva lager styrs i appen och kan även slås av/på i kartkontrollen.",
+    after_map_renderer: Any | None = None,
 ) -> None:
     if not layers:
         st.info("Välj minst ett kartlager.")
@@ -6917,9 +7350,13 @@ def _render_layers(
     with map_center:
         st.markdown('<span data-potential-tutorial-anchor="map"></span>', unsafe_allow_html=True)
         _render_html_map(map_html, height=820)
+        if callable(after_map_renderer):
+            after_map_renderer()
         if opacity_key_prefix:
-            _hex_opacity_controls(adjusted_layers, opacity_key_prefix)
-            _render_opacity_control(opacity_key_prefix)
+            with st.expander(_t("Avancerade kartinställningar"), expanded=False):
+                st.caption("Justera kartopacitet när lager behöver jämföras mer tekniskt.")
+                _hex_opacity_controls(adjusted_layers, opacity_key_prefix)
+                _render_opacity_control(opacity_key_prefix)
 
 
 def _potential_layer(
@@ -11131,6 +11568,7 @@ def _render_reused_workspace_outputs(
         opacity_key_prefix="combined",
         note_title="Gemensam potentialvy",
         note_body=note_body,
+        after_map_renderer=lambda: _render_energy_mix_card(st, region, energy_model_state),
     )
 
     summary_target = right_panel or st.container()
@@ -11845,7 +12283,6 @@ def _unified_workspace_tab(
     solar_controls_applied = False
     energy_model_state: dict[str, Any] = {"available": False}
     performance_log: list[dict[str, Any]] = []
-
     if left_panel is not None:
         with left_panel.expander(_t("Geografier"), expanded=False):
             with st.expander(_t("Landskap"), expanded=True):
@@ -11995,7 +12432,12 @@ def _unified_workspace_tab(
             st.caption(_t("Levereras av EML"))
             st.markdown(f"[Energy Modelling Lab]({EML_PROVIDER_URL})")
             perf_started = _perf_start()
-            energy_model_state = _render_energy_modeling_panel(region, scenario_state, analysis_h3_resolution, st)
+            energy_model_state = _render_energy_modeling_panel(
+                region,
+                scenario_state,
+                analysis_h3_resolution,
+                st,
+            )
             _add_perf_timing(performance_log, "Energimodellering", perf_started, f"analys R{analysis_h3_resolution}")
             if energy_model_state.get("available"):
                 scenario_state = {
@@ -12855,6 +13297,7 @@ def _unified_workspace_tab(
         opacity_key_prefix="combined",
         note_title="Gemensam potentialvy",
         note_body=note_body,
+        after_map_renderer=lambda: _render_energy_mix_card(st, region, energy_model_state),
     )
     _add_perf_timing(performance_log, "Karta HTML och rendering", perf_started, f"{len(layers)} lager")
     _advance_calculation_progress(calc_progress, "Karta HTML och rendering")

@@ -209,7 +209,18 @@ def _make_driver(headed: bool) -> webdriver.Remote:
 
 def _wait_for_tutorial(driver: webdriver.Remote, timeout: int) -> None:
     WebDriverWait(driver, timeout).until(
-        lambda current: current.execute_script("return !!document.querySelector('#potential-tutorial-root .pt-highlight')")
+        lambda current: current.execute_script(
+            r"""
+const root = document.querySelector('#potential-tutorial-root');
+const highlight = document.querySelector('#potential-tutorial-root .pt-highlight');
+const title = document.querySelector('#potential-tutorial-root h2');
+if (!root || !highlight || !title || getComputedStyle(root).display === 'none') {
+  return false;
+}
+const rect = highlight.getBoundingClientRect();
+return rect.width > 2 && rect.height > 2 && title.textContent.trim().length > 0;
+"""
+        )
     )
 
 
@@ -317,6 +328,42 @@ def _navigate_to_title(driver: webdriver.Remote, title: str, timeout: int, max_c
         _click(driver, "#potential-tutorial-root .pt-next")
         time.sleep(0.35)
     return _wait_for_title(driver, title, timeout)
+
+
+def _assert_pause_resume(driver: webdriver.Remote, timeout: int) -> None:
+    before = _snapshot(driver)
+    _click(driver, "#potential-tutorial-root .pt-pause")
+    WebDriverWait(driver, timeout).until(
+        lambda current: current.execute_script(
+            r"""
+const root = document.querySelector('#potential-tutorial-root');
+const resume = document.querySelector('#potential-tutorial-resume');
+return !!root && !!resume && getComputedStyle(root).display === 'none';
+"""
+        )
+    )
+    _click(driver, "#potential-tutorial-resume")
+    _wait_for_tutorial(driver, timeout)
+    after = _snapshot(driver)
+    if after.get("title") != before.get("title"):
+        raise AssertionError(f"Tutorial resumed on {after.get('title')!r}, expected {before.get('title')!r}.")
+
+
+def _wait_for_action_state(driver: webdriver.Remote, state: str, timeout: int) -> str:
+    def ready(current: webdriver.Remote) -> str | bool:
+        value = current.execute_script(
+            r"""
+const node = document.querySelector('#potential-tutorial-root .pt-action-status');
+if (!node || node.hidden || node.dataset.state !== arguments[0]) {
+  return false;
+}
+return node.textContent.trim();
+""",
+            state,
+        )
+        return value or False
+
+    return WebDriverWait(driver, timeout).until(ready)
 
 
 def _close_sidebar_expanders(driver: webdriver.Remote) -> None:
@@ -508,9 +555,14 @@ def run(url: str, headed: bool, timeout: int, screenshot_dir: Path | None) -> in
     driver = _make_driver(headed=headed)
     try:
         driver.get(url)
-        driver.execute_script(f"window.localStorage.removeItem({TUTORIAL_STORAGE_KEY!r});")
+        driver.execute_script(
+            "for (const suffix of ['', ':progress', ':paused', ':actions']) "
+            "window.localStorage.removeItem(arguments[0] + suffix);",
+            TUTORIAL_STORAGE_KEY,
+        )
         driver.refresh()
         _wait_for_tutorial(driver, timeout)
+        _assert_pause_resume(driver, timeout)
 
         _navigate_to_title(driver, "Potentiell etableringsyta", timeout)
         establishment = _wait_for_checked_state(
@@ -554,7 +606,7 @@ def run(url: str, headed: bool, timeout: int, screenshot_dir: Path | None) -> in
         _click(driver, "#potential-tutorial-root .pt-next")
         green_start = _wait_for_checked_state(
             driver,
-            "Grönt är ett öppet startläge",
+            "Startläget är försiktigt",
             timeout,
             _is_map_highlight,
         )
@@ -569,6 +621,7 @@ def run(url: str, headed: bool, timeout: int, screenshot_dir: Path | None) -> in
             _assert_step7,
         )
         _print_snapshot(controllers)
+        _wait_for_action_state(driver, "todo", timeout)
 
         _click(driver, "#potential-tutorial-root .pt-next")
         apply_step = _wait_for_checked_state(
@@ -591,7 +644,7 @@ def run(url: str, headed: bool, timeout: int, screenshot_dir: Path | None) -> in
         _click(driver, "#potential-tutorial-root .pt-prev")
         back_green = _wait_for_checked_state(
             driver,
-            "Grönt är ett öppet startläge",
+            "Startläget är försiktigt",
             timeout,
             _similar_map_checker(green_start["highlight"], "Green-start previous-navigation", tolerance=96.0),
         )
@@ -615,7 +668,7 @@ def run(url: str, headed: bool, timeout: int, screenshot_dir: Path | None) -> in
         _click(driver, "#potential-tutorial-root .pt-next")
         _wait_for_checked_state(
             driver,
-            "Grönt är ett öppet startläge",
+            "Startläget är försiktigt",
             timeout,
             _is_map_highlight,
         )
