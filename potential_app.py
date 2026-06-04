@@ -168,7 +168,8 @@ UI_ONLY_RERUN_REASON_KEY = "potential_ui_only_rerun_reason"
 WORKSPACE_RENDER_CACHE_KEY = "potential_workspace_render_cache_v2"
 WORKSPACE_CALCULATION_VERSION = "lablab_landscape_ui_v1"
 TUTORIAL_FORCE_OPEN_KEY = "potential_tutorial_force_open"
-TUTORIAL_STORAGE_KEY = "potential_tutorial_trondelag_v1_dismissed"
+TUTORIAL_FORCE_OPEN_TOKEN_KEY = "potential_tutorial_force_open_token"
+TUTORIAL_STORAGE_KEY = "potential_tutorial_trondelag_v2_dismissed"
 # Kept only so shared registry helpers can resolve the Trondelag layer registry.
 REGION_SELECT_KEY = "potential_selected_region_id"
 DEFAULT_REGION_ID = "trondelag"
@@ -687,6 +688,7 @@ def _render_tutorial_launcher(region: dict[str, Any], panel: Any | None = None) 
     )
     if clicked:
         st.session_state[TUTORIAL_FORCE_OPEN_KEY] = True
+        st.session_state[TUTORIAL_FORCE_OPEN_TOKEN_KEY] = int(st.session_state.get(TUTORIAL_FORCE_OPEN_TOKEN_KEY, 0) or 0) + 1
     return bool(st.session_state.pop(TUTORIAL_FORCE_OPEN_KEY, False))
 
 
@@ -1102,6 +1104,7 @@ def _render_tutorial_component(region: dict[str, Any], force_open: bool = False)
     payload = json.dumps(
         {
             "forceOpen": bool(force_open),
+            "openToken": int(st.session_state.get(TUTORIAL_FORCE_OPEN_TOKEN_KEY, 0) or 0),
             "storageKey": TUTORIAL_STORAGE_KEY,
             "steps": _trondelag_tutorial_steps(region),
             "labels": {

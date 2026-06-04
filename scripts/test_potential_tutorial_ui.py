@@ -16,7 +16,11 @@ from selenium.webdriver.support.ui import WebDriverWait
 
 
 DEFAULT_URL = "http://localhost:8505"
-TUTORIAL_STORAGE_KEY = "potential_tutorial_trondelag_v1_dismissed"
+TUTORIAL_STORAGE_KEY = "potential_tutorial_trondelag_v2_dismissed"
+TUTORIAL_STORAGE_KEYS = [
+    "potential_tutorial_trondelag_v1_dismissed",
+    TUTORIAL_STORAGE_KEY,
+]
 SCENARIO_ALLOCATION_LAYER_LABEL = "Scenariof\u00f6rdelning i etableringshex"
 OUTSIDE_LP_NEED_LAYER_LABEL = "Ytbehov utanf\u00f6r landskapets potential"
 
@@ -236,9 +240,10 @@ def _make_driver(headed: bool) -> webdriver.Remote:
 
 
 def _wait_for_tutorial(driver: webdriver.Remote, timeout: int) -> None:
-    WebDriverWait(driver, timeout).until(
-        lambda current: current.execute_script(
-            r"""
+    try:
+        WebDriverWait(driver, timeout).until(
+            lambda current: current.execute_script(
+                r"""
 const root = document.querySelector('#potential-tutorial-root');
 const highlight = document.querySelector('#potential-tutorial-root .pt-highlight');
 const title = document.querySelector('#potential-tutorial-root h2');
@@ -248,8 +253,20 @@ if (!root || !highlight || !title || getComputedStyle(root).display === 'none') 
 const rect = highlight.getBoundingClientRect();
 return rect.width > 2 && rect.height > 2 && title.textContent.trim().length > 0;
 """
+            )
         )
-    )
+    except TimeoutException as error:
+        state = driver.execute_script(
+            r"""
+return {
+  root: !!document.querySelector('#potential-tutorial-root'),
+  title: (document.querySelector('#potential-tutorial-root h2') || {}).textContent || '',
+  dismissedV1: window.localStorage.getItem('potential_tutorial_trondelag_v1_dismissed'),
+  dismissedV2: window.localStorage.getItem('potential_tutorial_trondelag_v2_dismissed')
+};
+"""
+        )
+        raise AssertionError(f"Tutorial did not open in time. State: {json.dumps(state, sort_keys=True)}") from error
 
 
 def _snapshot(driver: webdriver.Remote) -> dict[str, Any]:
@@ -309,6 +326,37 @@ def _click(driver: webdriver.Remote, selector: str) -> None:
         "const node = document.querySelector(arguments[0]); if (!node) throw new Error('Missing ' + arguments[0]); node.click();",
         selector,
     )
+    _wait_for_overlay_layout(driver)
+
+
+def _clear_tutorial_storage(driver: webdriver.Remote) -> None:
+    driver.execute_script(
+        "for (const key of arguments[0]) for (const suffix of ['', ':progress', ':paused', ':actions']) window.localStorage.removeItem(key + suffix);",
+        TUTORIAL_STORAGE_KEYS,
+    )
+
+
+def _click_button_by_text(driver: webdriver.Remote, label: str) -> None:
+    button = WebDriverWait(driver, 20).until(
+        lambda current: current.execute_script(
+            r"""
+const wanted = String(arguments[0] || '').replace(/\s+/g, ' ').trim().toLowerCase();
+const visible = (node) => {
+  if (!node || !node.getBoundingClientRect) return false;
+  const style = getComputedStyle(node);
+  const rect = node.getBoundingClientRect();
+  return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 2 && rect.height > 2;
+};
+const button = Array.from(document.querySelectorAll('button')).find((node) => {
+  const text = (node.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  return visible(node) && (text === wanted || text.includes(wanted));
+});
+return button || null;
+""",
+            label,
+        )
+    )
+    button.click()
     _wait_for_overlay_layout(driver)
 
 
@@ -375,6 +423,37 @@ return !!root && !!resume && getComputedStyle(root).display === 'none';
     after = _snapshot(driver)
     if after.get("title") != before.get("title"):
         raise AssertionError(f"Tutorial resumed on {after.get('title')!r}, expected {before.get('title')!r}.")
+
+
+def _assert_manual_reopen_after_auto_dismissal(driver: webdriver.Remote, timeout: int) -> None:
+    _wait_for_tutorial(driver, timeout)
+    _click(driver, "#potential-tutorial-root .pt-checkbox input")
+    _click(driver, "#potential-tutorial-root .pt-close")
+    WebDriverWait(driver, timeout).until(
+        lambda current: current.execute_script(
+            r"""
+const root = document.querySelector('#potential-tutorial-root');
+return !root || getComputedStyle(root).display === 'none';
+"""
+        )
+    )
+    dismissed = driver.execute_script("return window.localStorage.getItem(arguments[0]);", TUTORIAL_STORAGE_KEY)
+    if dismissed != "1":
+        raise AssertionError(f"Expected tutorial dismissed preference to be saved, got {dismissed!r}.")
+    driver.refresh()
+    WebDriverWait(driver, timeout).until(
+        lambda current: current.execute_script(
+            r"""
+const root = document.querySelector('#potential-tutorial-root');
+return !root || getComputedStyle(root).display === 'none';
+"""
+        )
+    )
+    _click_button_by_text(driver, "Visa guide")
+    _wait_for_tutorial(driver, timeout)
+    reopened = _snapshot(driver)
+    if reopened.get("title") != "Hitta potential för ny vind och sol":
+        raise AssertionError(f"Guide reopened on {reopened.get('title')!r}, expected first step.")
 
 
 def _wait_for_action_state(driver: webdriver.Remote, state: str, timeout: int) -> str:
@@ -617,13 +696,10 @@ def run(url: str, headed: bool, timeout: int, screenshot_dir: Path | None) -> in
     driver = _make_driver(headed=headed)
     try:
         driver.get(url)
-        driver.execute_script(
-            "for (const suffix of ['', ':progress', ':paused', ':actions']) "
-            "window.localStorage.removeItem(arguments[0] + suffix);",
-            TUTORIAL_STORAGE_KEY,
-        )
+        _clear_tutorial_storage(driver)
         driver.refresh()
         _wait_for_tutorial(driver, timeout)
+        _assert_manual_reopen_after_auto_dismissal(driver, timeout)
         _assert_pause_resume(driver, timeout)
 
         _navigate_to_title(driver, "Potentiell etableringsyta", timeout)
