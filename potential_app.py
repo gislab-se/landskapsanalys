@@ -6803,6 +6803,70 @@ def _lp_selected_area_from_stats(
     return max(0.0, selected_area - outside_area)
 
 
+def _acceptance_adjusted_technology_metrics(
+    technology: str,
+    need_area_km2: float,
+    filtered_potential_area_km2: float,
+    social_effect: dict[str, Any] | None,
+) -> dict[str, float]:
+    need_area = max(0.0, float(need_area_km2 or 0.0))
+    filtered_potential = max(0.0, float(filtered_potential_area_km2 or 0.0))
+    ratio = 1.0
+    if isinstance(social_effect, dict):
+        try:
+            ratio = float(social_effect.get(f"{technology}_potential_acceptance_ratio", 1.0) or 1.0)
+        except Exception:
+            ratio = 1.0
+    ratio = max(0.0, min(1.0, ratio))
+    potential_after_acceptance = filtered_potential * ratio
+    inside_potential = min(need_area, potential_after_acceptance)
+    outside_need = max(0.0, need_area - inside_potential)
+    unused_potential = max(0.0, potential_after_acceptance - inside_potential)
+    return {
+        "need_area_km2": need_area,
+        "filtered_potential_area_km2": filtered_potential,
+        "potential_acceptance_ratio": ratio,
+        "potential_after_acceptance_km2": potential_after_acceptance,
+        "inside_potential_km2": inside_potential,
+        "outside_need_km2": outside_need,
+        "unused_potential_km2": unused_potential,
+        "coverage_pct": (inside_potential / need_area * 100.0) if need_area > 0 else 0.0,
+    }
+
+
+def _acceptance_adjusted_capacity_metrics(
+    wind_need_area_km2: float,
+    wind_filtered_potential_area_km2: float,
+    solar_need_area_km2: float,
+    solar_filtered_potential_area_km2: float,
+    social_effect: dict[str, Any] | None,
+) -> dict[str, Any]:
+    wind = _acceptance_adjusted_technology_metrics(
+        "wind",
+        wind_need_area_km2,
+        wind_filtered_potential_area_km2,
+        social_effect,
+    )
+    solar = _acceptance_adjusted_technology_metrics(
+        "solar",
+        solar_need_area_km2,
+        solar_filtered_potential_area_km2,
+        social_effect,
+    )
+    total_need = wind["need_area_km2"] + solar["need_area_km2"]
+    total_inside = wind["inside_potential_km2"] + solar["inside_potential_km2"]
+    total = {
+        "need_area_km2": total_need,
+        "filtered_potential_area_km2": wind["filtered_potential_area_km2"] + solar["filtered_potential_area_km2"],
+        "potential_after_acceptance_km2": wind["potential_after_acceptance_km2"] + solar["potential_after_acceptance_km2"],
+        "inside_potential_km2": total_inside,
+        "outside_need_km2": wind["outside_need_km2"] + solar["outside_need_km2"],
+        "unused_potential_km2": wind["unused_potential_km2"] + solar["unused_potential_km2"],
+        "coverage_pct": (total_inside / total_need * 100.0) if total_need > 0 else 0.0,
+    }
+    return {"wind": wind, "solar": solar, "total": total}
+
+
 def _combined_outside_lp_shortage_stats(frame: pd.DataFrame, hex_area_km2: float) -> dict[str, float]:
     def _stats_from_area(wind_area_value: float, solar_area_value: float) -> dict[str, float]:
         hex_area = max(float(hex_area_km2 or 0.0), 1e-9)
@@ -11100,6 +11164,8 @@ def _render_establishment_focus(energy_model_state: dict[str, Any], geography_re
     solar_v1_stats = energy_model_state.get("solar_v1_stats") if isinstance(energy_model_state, dict) else None
     proposal_stats = proposal_stats if isinstance(proposal_stats, dict) else {}
     solar_stats = solar_stats if isinstance(solar_stats, dict) else {}
+    social_summary = energy_model_state.get("social_acceptance_summary")
+    social_effect = social_summary if isinstance(social_summary, dict) else {}
 
     wind_need = float(energy_model_state.get("wind_area_need_km2", 0.0) or 0.0)
     solar_need = float(energy_model_state.get("solar_area_need_km2", 0.0) or 0.0)
@@ -11139,11 +11205,34 @@ def _render_establishment_focus(energy_model_state: dict[str, Any], geography_re
     solar_available_area = float(solar_stats.get("available_candidate_area_km2", 0.0) or 0.0)
     solar_available_hex = int(solar_stats.get("available_candidate_hex", 0) or 0)
     total_available_area = wind_available_area + solar_available_area
-    wind_unused_potential = max(0.0, wind_available_area - wind_inside)
-    solar_unused_potential = max(0.0, solar_available_area - solar_inside)
-    total_unused_potential = wind_unused_potential + solar_unused_potential
-    wind_coverage_pct = (wind_inside / wind_need * 100.0) if wind_need > 0 else 0.0
-    solar_coverage_pct = (solar_inside / solar_need * 100.0) if solar_need > 0 else 0.0
+    capacity_metrics = energy_model_state.get("acceptance_adjusted_capacity")
+    if not isinstance(capacity_metrics, dict):
+        capacity_metrics = _acceptance_adjusted_capacity_metrics(
+            wind_need,
+            wind_available_area,
+            solar_need,
+            solar_available_area,
+            social_effect,
+        )
+    wind_capacity = capacity_metrics.get("wind", {}) if isinstance(capacity_metrics.get("wind"), dict) else {}
+    solar_capacity = capacity_metrics.get("solar", {}) if isinstance(capacity_metrics.get("solar"), dict) else {}
+    total_capacity = capacity_metrics.get("total", {}) if isinstance(capacity_metrics.get("total"), dict) else {}
+    wind_after_acceptance_area = float(wind_capacity.get("potential_after_acceptance_km2", wind_available_area) or 0.0)
+    solar_after_acceptance_area = float(solar_capacity.get("potential_after_acceptance_km2", solar_available_area) or 0.0)
+    total_after_acceptance_area = float(total_capacity.get("potential_after_acceptance_km2", wind_after_acceptance_area + solar_after_acceptance_area) or 0.0)
+    wind_inside = float(wind_capacity.get("inside_potential_km2", min(wind_need, wind_after_acceptance_area)) or 0.0)
+    solar_inside = float(solar_capacity.get("inside_potential_km2", min(solar_need, solar_after_acceptance_area)) or 0.0)
+    inside_total = float(total_capacity.get("inside_potential_km2", wind_inside + solar_inside) or 0.0)
+    wind_outside_need = float(wind_capacity.get("outside_need_km2", max(0.0, wind_need - wind_inside)) or 0.0)
+    solar_outside_need = float(solar_capacity.get("outside_need_km2", max(0.0, solar_need - solar_inside)) or 0.0)
+    outside_total = float(total_capacity.get("outside_need_km2", wind_outside_need + solar_outside_need) or 0.0)
+    wind_unused_potential = float(wind_capacity.get("unused_potential_km2", max(0.0, wind_after_acceptance_area - wind_inside)) or 0.0)
+    solar_unused_potential = float(solar_capacity.get("unused_potential_km2", max(0.0, solar_after_acceptance_area - solar_inside)) or 0.0)
+    total_unused_potential = float(total_capacity.get("unused_potential_km2", wind_unused_potential + solar_unused_potential) or 0.0)
+    total_covered = inside_total
+    covered_share = float(total_capacity.get("coverage_pct", (inside_total / total_need * 100.0) if total_need > 0 else 0.0) or 0.0)
+    wind_coverage_pct = float(wind_capacity.get("coverage_pct", (wind_inside / wind_need * 100.0) if wind_need > 0 else 0.0) or 0.0)
+    solar_coverage_pct = float(solar_capacity.get("coverage_pct", (solar_inside / solar_need * 100.0) if solar_need > 0 else 0.0) or 0.0)
     snapshot_key = _establishment_change_snapshot_key(energy_model_state)
     current_snapshot = {
         "total_covered_area_km2": total_covered,
@@ -11187,20 +11276,6 @@ def _render_establishment_focus(energy_model_state: dict[str, Any], geography_re
     if unit not in AREA_DISPLAY_UNITS:
         unit = "km²"
         st.session_state["establishment_area_display_unit"] = unit
-    social_summary = energy_model_state.get("social_acceptance_summary")
-    social_effect = social_summary if isinstance(social_summary, dict) else {}
-
-    def _potential_after_acceptance_area(technology: str, base_area_km2: float) -> float:
-        ratio_key = f"{technology}_potential_acceptance_ratio"
-        try:
-            ratio = float(social_effect.get(ratio_key, 1.0) or 1.0)
-        except Exception:
-            ratio = 1.0
-        return max(0.0, float(base_area_km2 or 0.0) * max(0.0, min(1.0, ratio)))
-
-    wind_after_acceptance_area = _potential_after_acceptance_area("wind", wind_available_area)
-    solar_after_acceptance_area = _potential_after_acceptance_area("solar", solar_available_area)
-    total_after_acceptance_area = wind_after_acceptance_area + solar_after_acceptance_area
     outside_summary_sentence = (
         f"{_format_area_primary(outside_total, unit, hex_area)} behöver hanteras utanför potentialområdet."
         if outside_total > 1e-6
@@ -13012,21 +13087,6 @@ def _unified_workspace_tab(
         )
         wind_stats_for_outside = energy_model_state.get("proposal_stats") if isinstance(energy_model_state.get("proposal_stats"), dict) else {}
         solar_stats_for_outside = energy_model_state.get("solar_proposal_stats") if isinstance(energy_model_state.get("solar_proposal_stats"), dict) else {}
-        wind_outside_need_area = max(
-            0.0,
-            float(energy_model_state.get("wind_area_need_km2", 0.0) or 0.0)
-            - _lp_selected_area_from_stats(wind_stats_for_outside),
-        )
-        solar_outside_need_area = max(
-            0.0,
-            float(energy_model_state.get("solar_area_need_km2", 0.0) or 0.0)
-            - _lp_selected_area_from_stats(solar_stats_for_outside),
-        )
-        energy_model_state["outside_lp_shortage_stats"] = _outside_need_stats_from_areas(
-            wind_outside_need_area,
-            solar_outside_need_area,
-            analysis_hex_area_km2,
-        )
         class_counts = selected_establishment_frame.get("establishment_class", pd.Series(dtype=str)).astype(str).value_counts()
         potential_establishment_frame = _combined_potential_establishment_frame(
             region,
@@ -13046,6 +13106,23 @@ def _unified_workspace_tab(
             analysis_h3_resolution,
             analysis_hex_area_km2,
             social_acceptance_impact_pct,
+        )
+        energy_model_state["acceptance_adjusted_capacity"] = _acceptance_adjusted_capacity_metrics(
+            float(energy_model_state.get("wind_area_need_km2", 0.0) or 0.0),
+            float(wind_stats_for_outside.get("available_candidate_area_km2", 0.0) or 0.0),
+            float(energy_model_state.get("solar_area_need_km2", 0.0) or 0.0),
+            float(solar_stats_for_outside.get("available_candidate_area_km2", 0.0) or 0.0),
+            energy_model_state.get("social_acceptance_summary") if isinstance(energy_model_state.get("social_acceptance_summary"), dict) else {},
+        )
+        adjusted_capacity = energy_model_state["acceptance_adjusted_capacity"]
+        adjusted_wind = adjusted_capacity.get("wind", {}) if isinstance(adjusted_capacity.get("wind"), dict) else {}
+        adjusted_solar = adjusted_capacity.get("solar", {}) if isinstance(adjusted_capacity.get("solar"), dict) else {}
+        wind_outside_need_area = float(adjusted_wind.get("outside_need_km2", 0.0) or 0.0)
+        solar_outside_need_area = float(adjusted_solar.get("outside_need_km2", 0.0) or 0.0)
+        energy_model_state["outside_lp_shortage_stats"] = _outside_need_stats_from_areas(
+            wind_outside_need_area,
+            solar_outside_need_area,
+            analysis_hex_area_km2,
         )
         energy_model_state["establishment_hex_stats"] = {
             "total_hex_count": int(len(selected_establishment_frame)),
@@ -13264,13 +13341,24 @@ def _unified_workspace_tab(
     outside_parts: list[str] = []
     wind_outside_for_note = 0.0
     solar_outside_for_note = 0.0
-    if isinstance(proposal_stats_for_note, dict):
+    adjusted_capacity_for_note = (
+        energy_model_state.get("acceptance_adjusted_capacity")
+        if isinstance(energy_model_state.get("acceptance_adjusted_capacity"), dict)
+        else {}
+    )
+    adjusted_wind_for_note = adjusted_capacity_for_note.get("wind", {}) if isinstance(adjusted_capacity_for_note.get("wind"), dict) else {}
+    adjusted_solar_for_note = adjusted_capacity_for_note.get("solar", {}) if isinstance(adjusted_capacity_for_note.get("solar"), dict) else {}
+    if adjusted_wind_for_note:
+        wind_outside_for_note = float(adjusted_wind_for_note.get("outside_need_km2", 0.0) or 0.0)
+    elif isinstance(proposal_stats_for_note, dict):
         wind_outside_for_note = max(
             0.0,
             float(energy_model_state.get("wind_area_need_km2", 0.0) or 0.0)
             - _lp_selected_area_from_stats(proposal_stats_for_note),
         )
-    if isinstance(solar_stats_for_note, dict):
+    if adjusted_solar_for_note:
+        solar_outside_for_note = float(adjusted_solar_for_note.get("outside_need_km2", 0.0) or 0.0)
+    elif isinstance(solar_stats_for_note, dict):
         solar_outside_for_note = max(
             0.0,
             float(energy_model_state.get("solar_area_need_km2", 0.0) or 0.0)

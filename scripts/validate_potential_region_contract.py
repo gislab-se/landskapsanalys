@@ -430,6 +430,37 @@ def check_social_acceptance_summary(report: ContractReport, region: dict[str, An
     )
 
 
+def check_social_acceptance_adjusted_capacity(report: ContractReport) -> None:
+    import potential_app as app  # noqa: WPS433
+
+    metrics = app._acceptance_adjusted_capacity_metrics(
+        wind_need_area_km2=100.0,
+        wind_filtered_potential_area_km2=80.0,
+        solar_need_area_km2=50.0,
+        solar_filtered_potential_area_km2=100.0,
+        social_effect={
+            "wind_potential_acceptance_ratio": 0.25,
+            "solar_potential_acceptance_ratio": 0.5,
+        },
+    )
+    wind = metrics["wind"]
+    solar = metrics["solar"]
+    total = metrics["total"]
+    report.check(
+        math.isclose(float(wind["potential_after_acceptance_km2"]), 20.0, abs_tol=0.0001)
+        and math.isclose(float(wind["inside_potential_km2"]), 20.0, abs_tol=0.0001)
+        and math.isclose(float(wind["outside_need_km2"]), 80.0, abs_tol=0.0001)
+        and math.isclose(float(wind["unused_potential_km2"]), 0.0, abs_tol=0.0001)
+        and math.isclose(float(solar["potential_after_acceptance_km2"]), 50.0, abs_tol=0.0001)
+        and math.isclose(float(solar["inside_potential_km2"]), 50.0, abs_tol=0.0001)
+        and math.isclose(float(solar["outside_need_km2"]), 0.0, abs_tol=0.0001)
+        and math.isclose(float(total["inside_potential_km2"]), 70.0, abs_tol=0.0001)
+        and math.isclose(float(total["outside_need_km2"]), 80.0, abs_tol=0.0001),
+        "Social acceptance adjusted capacity recalculates inside, unused and outside table metrics.",
+        f"Acceptance-adjusted capacity metrics are inconsistent: {metrics!r}.",
+    )
+
+
 def check_social_acceptance_allocation_priority(report: ContractReport, region: dict[str, Any]) -> None:
     import pandas as pd  # noqa: WPS433
     import potential_app as app  # noqa: WPS433
@@ -511,7 +542,7 @@ def check_social_acceptance_impact_control(report: ContractReport) -> None:
     report.check(
         "potential efter acceptanspåverkan" in source
         and "potential_acceptance_ratio" in source
-        and "_potential_after_acceptance_area" in source,
+        and "_acceptance_adjusted_capacity_metrics" in source,
         "Right-panel table shows potential after acceptance impact as a separate derived column.",
         "Right-panel table is missing the separate acceptance-adjusted potential column.",
     )
@@ -866,6 +897,7 @@ def main() -> int:
         check_social_acceptance_impact_control(report)
         check_social_acceptance_impact_visual_weight(report, trondelag)
         check_social_acceptance_summary(report, trondelag)
+        check_social_acceptance_adjusted_capacity(report)
         check_social_acceptance_allocation_priority(report, trondelag)
         check_trondelag_region(report, trondelag)
         check_map_auto_resolution(report)
