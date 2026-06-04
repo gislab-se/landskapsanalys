@@ -601,7 +601,7 @@ def _audit_language_switch(driver: webdriver.Remote, timeout: int, skip_language
         _click_button(driver, ["Show guide"])
     try:
         WebDriverWait(driver, timeout).until(
-            lambda current: "potential app is a prototype" in _tutorial_title(current).casefold()
+            lambda current: "find potential for new wind and solar" in _tutorial_title(current).casefold()
         )
     except Exception:
         findings.append(

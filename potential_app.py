@@ -517,13 +517,11 @@ APP_TRANSLATIONS: dict[str, dict[str, str]] = {
         "Avstånd till befolkning": "Afstand til befolkning",
         "Använd ändringar": "Anvend ændringer",
         "Energimix": "Energimix",
-        "Placering": "Placering",
-        "Placera automatiskt": "Placér automatisk",
-        "Placera själv": "Placér selv",
         "Visa föreslagen etableringsyta": "Vis foreslået etableringsareal",
         "Sammanfattning": "Sammenfatning",
         "Vind/sol och landskapspåverkan": "Vind/sol og landskabspåvirkning",
         "Så läses tabellen": "Sådan læses tabellen",
+        "Potentialfördelning per landskapstyp": "Potentialefordeling per landskabstype",
         "Avancerade inställningar": "Avancerede indstillinger",
         "Avancerade kartinställningar": "Avancerede kortindstillinger",
         "Vindandel": "Vindandel",
@@ -609,13 +607,11 @@ APP_TRANSLATIONS: dict[str, dict[str, str]] = {
         "Avstånd till befolkning": "Distance to population",
         "Använd ändringar": "Apply changes",
         "Energimix": "Energy mix",
-        "Placering": "Placement",
-        "Placera automatiskt": "Place automatically",
-        "Placera själv": "Place manually",
         "Visa föreslagen etableringsyta": "Show proposed establishment area",
         "Sammanfattning": "Summary",
         "Vind/sol och landskapspåverkan": "Wind/Solar and Landscape Impact",
         "Så läses tabellen": "How to read the table",
+        "Potentialfördelning per landskapstyp": "Potential distribution by landscape type",
         "Avancerade inställningar": "Advanced Settings",
         "Avancerade kartinställningar": "Advanced Map Settings",
         "Vindandel": "Wind Share",
@@ -697,21 +693,21 @@ def _render_tutorial_launcher(region: dict[str, Any], panel: Any | None = None) 
 def _tutorial_text(key: str, **kwargs: Any) -> str:
     texts = {
         "sv": {
-            "prototype_title": "Potentialappen är en prototyp",
+            "prototype_title": "Hitta potential för ny vind och sol",
             "prototype_body": (
-                "{region_label}-appen hjälper dig pröva ett försiktigt startläge för vind och sol. "
-                "Den kombinerar geografi, energimodellering och social acceptans så att beslutsfrågan syns först, "
-                "medan de tekniska GIS-antagandena går att öppna när du behöver granska dem."
+                "Det här är en prototyp som hjälper dig att utforska var ny vind- och solenergi kan passa. "
+                "Du kan pröva olika energibehov och se hur landskap, avstånd och social acceptans påverkar möjliga etableringar, "
+                "så att viktiga vägval blir lättare att förstå."
             ),
             "geography_title": "Börja med geografin",
             "geography_body": (
-                "Startläget har redan valda filter för vind och sol, till exempel befolkning, större vägar, nät och skyddad natur. "
-                "Käll- och buffertlager visas inte i kartan från början, men kan slås på under avancerade inställningar när du vill se exakt vad som påverkar ytan."
+                "Startläget visar analysens resultat: den potentiella etableringsytan för vind och sol. "
+                "Alla GIS-lager som används i analysen visas inte i kartan från start, men de kan öppnas under avancerade inställningar "
+                "när du vill se vilka antaganden som påverkar ytan."
             ),
             "energy_title": "Koppla yta till energi",
             "energy_body": (
-                "Energimixen i huvudytan låter dig pröva balansen mellan vind och sol. Energimodelleringen översätter valt scenario till ett ytanspråk. "
-                "Totalraden i resultatet är en tekniksumma: samma fysiska hex kan räknas för både vind och sol när ytan kan samnyttjas."
+                "Energimixen i huvudytan låter dig pröva balansen mellan vind och sol. Energimodelleringen översätter valt scenario till ett ytanspråk."
             ),
             "scenario_title": "Energiscenario och markintensitet",
             "scenario_body": (
@@ -723,6 +719,9 @@ def _tutorial_text(key: str, **kwargs: Any) -> str:
             "acceptance_body": (
                 "Social acceptans hjälper dig förstå var potentialen kan vara mer eller mindre realistisk utifrån landskapets användning, "
                 "värden och möjliga konflikter. I Trøndelag är detta syntetiskt testdata, inte färdiga IVL-resultat."
+            ),
+            "acceptance_suggestion": (
+                "Dra i reglaget Acceptanspåverkan och följ hur energilandskapet förändras i kartan och i tabellen till höger."
             ),
             "establishment_body": (
                 "Kartan visar den sammanvägda etableringspotentialen: grön betyder både vind och sol, gul bara sol, blå bara vind och röd ej lämpligt. "
@@ -744,7 +743,7 @@ def _tutorial_text(key: str, **kwargs: Any) -> str:
             "wind_solar_title": "Vind och sol styrs under Geografier",
             "wind_solar_body": (
                 "Under Geografier finns Landskapspotential Vind och Landskapspotential Sol. Där kan du ändra de förvalda filtren, buffertarna och nätantagandena. "
-                "Analysen använder valen även när käll- och buffertlager är dolda i kartan."
+                "Analysen använder valen även när GIS-lagren är dolda i kartan."
             ),
             "wind_apply_title": "Ändra vindantaganden och använd dem",
             "wind_apply_body": (
@@ -757,10 +756,17 @@ def _tutorial_text(key: str, **kwargs: Any) -> str:
             "action_open_wind_done": "Bra, nu är potentialkontrollerna synliga. Testa ett filter eller fortsätt till omräkningen.",
             "action_apply_wind_todo": "Klicka på Använd ändringar när du vill räkna om kartan och resultatet med filtervalen.",
             "action_apply_wind_done": "Bra, appen har fått en apply-signal. Kontrollera kartan och resultatpanelen innan du går vidare.",
-            "right_panel_title": "Högerpanelen förklarar varför",
-            "right_panel_body": (
-                "Högerpanelen börjar med tabellen som visar om scenariot ryms. Därefter följer Geografier, Energimodellering och Social acceptans. "
-                "Läs totalraden som en tekniksumma, inte som unik fysisk markyta."
+            "table_title": "Läs resultatet i tabellen",
+            "table_body": (
+                "Tabellen visar om energimixen ryms inom den beräknade potentialen. Totalraden är en tekniksumma: samma fysiska hex kan räknas för både vind och sol när ytan kan samnyttjas."
+            ),
+            "right_geographies_title": "Geografier visar antagandena",
+            "right_geographies_body": (
+                "Här sammanfattas vilka GIS-lager och filter som formar kartan, till exempel befolkning, vägar, naturvärden och kulturmiljöer."
+            ),
+            "landscape_distribution_title": "Potential per landskapstyp",
+            "landscape_distribution_body": (
+                "De två expandrarna visar hur vind- och solpotentialen fördelas mellan landskapstyper. Det hjälper dig se vilken typ av landskap potentialen hamnar i."
             ),
             "reopen_title": "Du kan alltid öppna guiden igen",
             "reopen_body": (
@@ -768,21 +774,21 @@ def _tutorial_text(key: str, **kwargs: Any) -> str:
             ),
         },
         "en": {
-            "prototype_title": "The potential app is a prototype",
+            "prototype_title": "Find potential for new wind and solar",
             "prototype_body": (
-                "The {region_label} app helps you test a cautious starting point for wind and solar. "
-                "It combines geography, energy modelling and social acceptance so the planning question is visible first, "
-                "while the technical GIS assumptions can be opened when you need to inspect them."
+                "This prototype helps you explore where new wind and solar energy may fit. "
+                "You can test energy needs and see how landscape, distances and social acceptance affect possible establishments, "
+                "so important choices become easier to understand."
             ),
             "geography_title": "Start with geography",
             "geography_body": (
-                "The starting point already has selected filters for wind and solar, such as population, major roads, grid infrastructure and protected nature. "
-                "Source and buffer layers are hidden on the map by default, but can be enabled under advanced settings when you want to see exactly what shapes the area."
+                "The starting point shows the analysis result: the potential establishment area for wind and solar. "
+                "Not every GIS layer used in the analysis is shown on the map by default, but they can be opened under advanced settings "
+                "when you want to see which assumptions shape the area."
             ),
             "energy_title": "Connect area to energy",
             "energy_body": (
-                "The energy mix control in the main view lets you test the balance between wind and solar. Energy modelling translates the selected scenario into an area claim. "
-                "The total row in the result is a technology sum: the same physical hex can count for both wind and solar when the area can be shared."
+                "The energy mix control in the main view lets you test the balance between wind and solar. Energy modelling translates the selected scenario into an area claim."
             ),
             "scenario_title": "Energy scenario and land intensity",
             "scenario_body": (
@@ -794,6 +800,9 @@ def _tutorial_text(key: str, **kwargs: Any) -> str:
             "acceptance_body": (
                 "Social acceptance helps you understand where the potential may be more or less realistic given landscape use, "
                 "values and possible conflicts. In Trøndelag this is synthetic test data, not finished IVL results."
+            ),
+            "acceptance_suggestion": (
+                "Drag the Acceptance impact slider and watch how the energy landscape changes on the map and in the table to the right."
             ),
             "establishment_body": (
                 "The map shows the combined establishment potential: green means both wind and solar, yellow solar only, blue wind only and red not suitable. "
@@ -815,7 +824,7 @@ def _tutorial_text(key: str, **kwargs: Any) -> str:
             "wind_solar_title": "Wind and solar are controlled under Geographies",
             "wind_solar_body": (
                 "Under Geographies you will find Landscape Potential Wind and Landscape Potential Solar. This is where you can change the preset filters, buffers and grid assumptions. "
-                "The analysis uses those choices even when source and buffer layers are hidden on the map."
+                "The analysis uses those choices even when the GIS layers are hidden on the map."
             ),
             "wind_apply_title": "Change wind assumptions and apply them",
             "wind_apply_body": (
@@ -828,10 +837,17 @@ def _tutorial_text(key: str, **kwargs: Any) -> str:
             "action_open_wind_done": "Good, the potential controls are visible. Try a filter or continue to recalculation.",
             "action_apply_wind_todo": "Click Apply changes when you want to recalculate the map and result using the filter choices.",
             "action_apply_wind_done": "Good, the app received an apply signal. Check the map and result panel before continuing.",
-            "right_panel_title": "The right panel explains why",
-            "right_panel_body": (
-                "The right panel starts with the table showing whether the scenario fits. It then follows with Geographies, Energy Modelling and Social Acceptance. "
-                "Read the total row as a technology sum, not as unique physical land area."
+            "table_title": "Read the result table",
+            "table_body": (
+                "The table shows whether the energy mix fits within the calculated potential. The total row is a technology sum: the same physical hex can count for both wind and solar when the area can be shared."
+            ),
+            "right_geographies_title": "Geographies show the assumptions",
+            "right_geographies_body": (
+                "This section summarizes which GIS layers and filters shape the map, such as population, roads, nature values and cultural environments."
+            ),
+            "landscape_distribution_title": "Potential by landscape type",
+            "landscape_distribution_body": (
+                "The two expanders show how wind and solar potential are distributed across landscape types. This helps you see which kinds of landscape the potential falls within."
             ),
             "reopen_title": "You can always open the guide again",
             "reopen_body": (
@@ -839,21 +855,21 @@ def _tutorial_text(key: str, **kwargs: Any) -> str:
             ),
         },
         "da_no": {
-            "prototype_title": "Potentialappen er en prototype",
+            "prototype_title": "Find potentiale for ny vind og sol",
             "prototype_body": (
-                "{region_label}-appen hjælper dig med at teste et forsigtigt startpunkt for vind og sol. "
-                "Den kombinerer geografi, energimodellering og social accept, så planlægningsspørgsmålet vises først, "
-                "mens de tekniske GIS-antagelser kan åbnes, når du vil granske dem."
+                "Denne prototype hjælper dig med at udforske, hvor ny vind- og solenergi kan passe. "
+                "Du kan teste energibehov og se hvordan landskab, afstande og social accept påvirker mulige etableringer, "
+                "så vigtige valg bliver lettere at forstå."
             ),
             "geography_title": "Begynd med geografien",
             "geography_body": (
-                "Startpunktet har allerede valgte filtre for vind og sol, for eksempel befolkning, større veje, netinfrastruktur og beskyttet natur. "
-                "Kilde- og bufferlag vises ikke på kortet fra start, men kan slås til under avancerede indstillinger, når du vil se præcis hvad der former arealet."
+                "Startpunktet viser analysens resultat: det potentielle etableringsareal for vind og sol. "
+                "Ikke alle GIS-lag, der bruges i analysen, vises på kortet fra start, men de kan åbnes under avancerede indstillinger, "
+                "når du vil se hvilke antagelser der påvirker arealet."
             ),
             "energy_title": "Kobl areal til energi",
             "energy_body": (
-                "Energimix-kontrollen i hovedvisningen lader dig teste balancen mellem vind og sol. Energimodelleringen oversætter valgt scenarie til et arealkrav. "
-                "Totalrækken i resultatet er en teknologisum: samme fysiske hex kan tælle for både vind og sol, når arealet kan deles."
+                "Energimix-kontrollen i hovedvisningen lader dig teste balancen mellem vind og sol. Energimodelleringen oversætter valgt scenarie til et arealkrav."
             ),
             "scenario_title": "Energiscenarie og markintensitet",
             "scenario_body": (
@@ -865,6 +881,9 @@ def _tutorial_text(key: str, **kwargs: Any) -> str:
             "acceptance_body": (
                 "Social accept hjælper dig med at forstå hvor potentialet kan være mere eller mindre realistisk ud fra landskabets anvendelse, "
                 "værdier og mulige konflikter. I Trøndelag er dette syntetiske testdata, ikke færdige IVL-resultater."
+            ),
+            "acceptance_suggestion": (
+                "Træk i skyderen Acceptpåvirkning og følg hvordan energilandskabet ændrer sig på kortet og i tabellen til højre."
             ),
             "establishment_body": (
                 "Kortet viser det samlede etableringspotentiale: grøn betyder både vind og sol, gul kun sol, blå kun vind og rød ikke egnet. "
@@ -886,7 +905,7 @@ def _tutorial_text(key: str, **kwargs: Any) -> str:
             "wind_solar_title": "Vind og sol styres under Geografier",
             "wind_solar_body": (
                 "Under Geografier findes Landskabspotentiale Vind og Landskabspotentiale Sol. Her kan du ændre de forvalgte filtre, buffere og netantagelser. "
-                "Analysen bruger valgene, selv når kilde- og bufferlag er skjult på kortet."
+                "Analysen bruger valgene, selv når GIS-lagene er skjult på kortet."
             ),
             "wind_apply_title": "Ændr vindantagelser og anvend dem",
             "wind_apply_body": (
@@ -899,10 +918,17 @@ def _tutorial_text(key: str, **kwargs: Any) -> str:
             "action_open_wind_done": "Godt, nu er potentialekontrollerne synlige. Test et filter eller fortsæt til genberegningen.",
             "action_apply_wind_todo": "Klik på Använd ändringar når du vil beregne kortet og resultatet igen med filtervalgene.",
             "action_apply_wind_done": "Godt, appen har fået et apply-signal. Kontrollér kortet og resultatpanelet før du går videre.",
-            "right_panel_title": "Højrepanelet forklarer hvorfor",
-            "right_panel_body": (
-                "Højrepanelet starter med tabellen som viser om scenariet kan rummes. Derefter følger Geografier, Energimodellering og Social accept. "
-                "Læs totalrækken som en teknologisum, ikke som unik fysisk landflade."
+            "table_title": "Læs resultatet i tabellen",
+            "table_body": (
+                "Tabellen viser om energimixet kan rummes inden for det beregnede potentiale. Totalrækken er en teknologisum: samme fysiske hex kan tælle for både vind og sol, når arealet kan deles."
+            ),
+            "right_geographies_title": "Geografier viser antagelserne",
+            "right_geographies_body": (
+                "Her sammenfattes hvilke GIS-lag og filtre der former kortet, for eksempel befolkning, veje, naturværdier og kulturmiljøer."
+            ),
+            "landscape_distribution_title": "Potentiale per landskabstype",
+            "landscape_distribution_body": (
+                "De to expandere viser hvordan vind- og solpotentialet fordeles mellem landskabstyper. Det hjælper dig med at se hvilken type landskab potentialet havner i."
             ),
             "reopen_title": "Du kan altid åbne guiden igen",
             "reopen_body": (
@@ -957,6 +983,7 @@ def _trondelag_tutorial_steps(region: dict[str, Any]) -> list[dict[str, Any]]:
             "selector": "section[data-testid=\"stSidebar\"]",
             "title": _tutorial_text("acceptance_title"),
             "body": _tutorial_text("acceptance_body"),
+            "suggestion": _tutorial_text("acceptance_suggestion"),
             "openTexts": [_t("Social acceptans")],
         },
         {
@@ -1036,10 +1063,23 @@ def _trondelag_tutorial_steps(region: dict[str, Any]) -> list[dict[str, Any]]:
             },
         },
         {
-            "selector": "div[data-testid=\"column\"]:has(#right-panel-content-anchor)",
+            "selector": ".change-table-wrap",
             "anchor": "right-panel",
-            "title": _tutorial_text("right_panel_title"),
-            "body": _tutorial_text("right_panel_body"),
+            "scrollWindowToTarget": True,
+            "title": _tutorial_text("table_title"),
+            "body": _tutorial_text("table_body"),
+        },
+        {
+            "selector": "[data-potential-tutorial-anchor=\"right-geographies\"]",
+            "scrollWindowToTarget": True,
+            "title": _tutorial_text("right_geographies_title"),
+            "body": _tutorial_text("right_geographies_body"),
+        },
+        {
+            "selector": "[data-potential-tutorial-anchor=\"landscape-distribution\"]",
+            "scrollWindowToTarget": True,
+            "title": _tutorial_text("landscape_distribution_title"),
+            "body": _tutorial_text("landscape_distribution_body"),
         },
         {
             "target": "buttonText",
@@ -1506,6 +1546,8 @@ def _render_tutorial_component(region: dict[str, Any], force_open: bool = False)
   };
 
   const normalizedText = (value) => String(value || "").replace(/\s+/g, " ").trim().toLowerCase();
+  const rightPanelScope = () => parentDocument.querySelector('div[data-testid="column"]:has(#right-panel-content-anchor)') || parentDocument;
+  const scopeForStep = (step) => (step && step.scope === "rightPanel" ? rightPanelScope() : parentDocument);
   const isVisible = (node) => {
     if (!node || !node.getBoundingClientRect) {
       return false;
@@ -1667,12 +1709,13 @@ def _render_tutorial_component(region: dict[str, Any], force_open: bool = False)
     });
   };
 
-  const findExpanderForLabel = (label) => {
+  const findExpanderForLabel = (label, scope = parentDocument) => {
     const wanted = normalizedText(label);
     if (!wanted) {
       return null;
     }
-    const details = Array.from(parentDocument.querySelectorAll("details"));
+    const searchScope = scope || parentDocument;
+    const details = Array.from(searchScope.querySelectorAll("details"));
     const matches = details.filter((node) => {
       const summary = node.querySelector("summary");
       const text = normalizedText(summary ? summary.textContent : node.textContent);
@@ -1687,18 +1730,33 @@ def _render_tutorial_component(region: dict[str, Any], force_open: bool = False)
     );
   };
 
-  const findButtonByText = (label) => {
+  const findButtonByText = (label, scope = parentDocument) => {
     const wanted = normalizedText(label);
     if (!wanted) {
       return null;
     }
-    return Array.from(parentDocument.querySelectorAll("button")).find((button) => {
+    const searchScope = scope || parentDocument;
+    return Array.from(searchScope.querySelectorAll("button")).find((button) => {
       const text = normalizedText(button.textContent);
       return isVisible(button) && (text === wanted || text.includes(wanted));
     }) || null;
   };
 
-  const findElementByText = (label) => findExpanderForLabel(label) || findButtonByText(label);
+  const findTextBlockByText = (label, scope = parentDocument) => {
+    const wanted = normalizedText(label);
+    if (!wanted) {
+      return null;
+    }
+    const searchScope = scope || parentDocument;
+    return Array.from(searchScope.querySelectorAll("h1,h2,h3,h4,h5,h6,summary,p,li")).find((node) => {
+      const text = normalizedText(node.textContent);
+      return isVisible(node) && (text === wanted || text.includes(wanted));
+    }) || null;
+  };
+
+  const findElementByText = (label, scope = parentDocument) => (
+    findExpanderForLabel(label, scope) || findButtonByText(label, scope) || findTextBlockByText(label, scope)
+  );
 
   const actionIdentity = (action) => String((action && (action.id || action.text)) || "");
 
@@ -1745,6 +1803,12 @@ def _render_tutorial_component(region: dict[str, Any], force_open: bool = False)
   const updateActionStatus = () => {
     const step = payload.steps[index] || {};
     const action = step.action || null;
+    if (!action && step.showActionStatus !== false && step.suggestion) {
+      actionStatus.hidden = false;
+      actionStatus.dataset.state = "todo";
+      actionStatus.textContent = `${payload.labels.actionTodo}: ${step.suggestion || ""}`;
+      return;
+    }
     if (!action || step.showActionStatus === false) {
       actionStatus.hidden = true;
       actionStatus.textContent = "";
@@ -1780,9 +1844,9 @@ def _render_tutorial_component(region: dict[str, Any], force_open: bool = False)
     parentWindow.setTimeout(updateActionStatus, 120);
   };
 
-  const combinedTextTarget = (labels) => {
+  const combinedTextTarget = (labels, scope = parentDocument) => {
     const nodes = (Array.isArray(labels) ? labels : [])
-      .map((label) => findElementByText(label))
+      .map((label) => findElementByText(label, scope))
       .filter(Boolean);
     return combineRects(nodes);
   };
@@ -1921,7 +1985,7 @@ def _render_tutorial_component(region: dict[str, Any], force_open: bool = False)
       return findButtonByText(step.buttonText);
     }
     if (Array.isArray(step.highlightTexts)) {
-      const textTarget = combinedTextTarget(step.highlightTexts);
+      const textTarget = combinedTextTarget(step.highlightTexts, scopeForStep(step));
       if (textTarget) {
         return textTarget;
       }
@@ -3174,15 +3238,8 @@ def _render_energy_modeling_panel(
         f"modellkälla: {source_label}, {planning_year}"
     )
 
-    placement_key = f"energy_model_placement_{region.get('region_id', 'region')}"
-    placement_mode = panel.radio(
-        _t("Placering"),
-        options=["auto", "manual"],
-        key=placement_key,
-        format_func=lambda value: {"auto": _t("Placera automatiskt"), "manual": _t("Placera själv")}.get(value, value),
-    )
-    if placement_mode == "manual":
-        panel.info("Självplacering är förberedd som arbetsläge. Första robusta steg blir klicka för att lägga till/ta bort hex; drag-and-drop kräver ett separat kartinteraktionssteg.")
+    st.session_state.pop(f"energy_model_placement_{region.get('region_id', 'region')}", None)
+    placement_mode = "auto"
 
     selected_mix = select_planning_mix(mix, selected_planning)
     if selected_mix.empty:
@@ -6747,7 +6804,7 @@ def _render_impact_change_table(rows: list[dict[str, str]]) -> None:
             + "</tr>"
         )
     st.markdown(
-        "<div class='change-table-wrap'>"
+        "<div class='change-table-wrap' data-potential-tutorial-anchor='results-table'>"
         "<table class='change-table'>"
         f"{colgroup_html}"
         "<thead><tr>"
@@ -7976,9 +8033,7 @@ def _wind_group_controls(
     selected: dict[str, list[str]] = {group.id: [] for group in ordered_groups()}
 
     st.header(ui_text("groups_header", language))
-    st.caption(ui_text("groups_caption", language))
     with st.form(f"{widget_prefix}_group_controls", clear_on_submit=False):
-        st.caption(ui_text("apply_hint", language))
         for group in ordered_groups():
             is_protected_group = group.id == SOLAR_PROTECTED_GROUP_ID
             is_settlement_group = group.id == WIND_SETTLEMENT_GROUP_ID
@@ -11951,16 +12006,30 @@ def _combined_summary(map_state: dict[str, Any], scenario_state: dict[str, Any])
         target_classes = [str(value) for value in (high_classes or ["high", "very_high"])]
         return float(frame[class_col].astype(str).isin(target_classes).mean() * 100.0)
 
-    st.subheader(_t("Geografier"))
+    st.markdown(
+        f"<h3 data-potential-tutorial-anchor='right-geographies'>{html.escape(_t('Geografier'))}</h3>",
+        unsafe_allow_html=True,
+    )
     _render_geography_user_summary(map_state)
 
     unit = str(st.session_state.get("establishment_area_display_unit", "km²") or "km²")
     if unit not in AREA_DISPLAY_UNITS:
         unit = "km²"
     visible_potential_labels = {SOLAR_LANDSCAPE_POTENTIAL_LABEL, WIND_LANDSCAPE_POTENTIAL_LABEL}
-    for item in map_state.get("potential_frames") or []:
-        if str(item.get("label", "")) not in visible_potential_labels:
-            continue
+    potential_items = [
+        item
+        for item in (map_state.get("potential_frames") or [])
+        if str(item.get("label", "")) in visible_potential_labels
+    ]
+    if potential_items:
+        st.markdown(
+            "<div data-potential-tutorial-anchor='landscape-distribution' "
+            "style='margin-top:0.65rem;margin-bottom:0.25rem;font-weight:650;color:#374151;'>"
+            f"{html.escape(_t('Potentialfördelning per landskapstyp'))}"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+    for item in potential_items:
         frame = item["frame"]
         technology = item["technology"]
         item_resolution = item.get("resolution")
@@ -12119,13 +12188,6 @@ def _missing_energy_controls(status_rows: list[dict[str, Any]]) -> None:
         options=["Låg", "Mellan", "Hög"],
         index=1,
         key="missing_area_intensity",
-        disabled=True,
-    )
-    st.radio(
-        _t("Placering"),
-        options=["auto", "manual"],
-        key="missing_energy_placement",
-        format_func=lambda value: {"auto": _t("Placera automatiskt"), "manual": _t("Placera själv")}.get(value, value),
         disabled=True,
     )
     st.slider(_t("Energimix"), min_value=0, max_value=100, value=50, step=5, format="%d%% sol", key="missing_energy_mix", disabled=True)
@@ -12336,7 +12398,6 @@ def _unified_workspace_tab(
         else 0.0
     )
     active_landscape_count = _count_enabled(show_pdf_types)
-    active_wind_count = _count_enabled(show_user_wind)
     active_solar_count = _count_enabled(show_user_solar, show_solar_v1)
     _, acceptance_layers_for_labels, _ = load_acceptance_registry()
     population_layer_label = layer_label(
@@ -12377,22 +12438,6 @@ def _unified_workspace_tab(
             analysis_hex_area_km2 = float(h3_hex_area_km2(analysis_h3_resolution))
 
             with st.expander(_t(WIND_LANDSCAPE_POTENTIAL_LABEL), expanded=False):
-                if _wind_empty_selection_is_active(wind_selected_layers):
-                    wind_status_caption = "Status: aktiv utan filter"
-                elif active_wind_count:
-                    wind_status_caption = "Status: aktiv"
-                else:
-                    wind_status_caption = "Status: inga vindlager valda"
-                st.caption(wind_status_caption)
-                st.caption(
-                    f"Bygg {WIND_LANDSCAPE_POTENTIAL_LABEL} direkt i samma vy. Potentialandelen beräknas alltid i R{WIND_RUNTIME_BASE_RESOLUTION} "
-                    "och används här för vindpolygonen och den gemensamma etableringsytan."
-                )
-                if zoom_family_enabled:
-                    st.caption("Utforskningsläge är aktivt. Hexlager kan växla till grövre H3-upplösningar när du zoomar ut.")
-                else:
-                    st.caption("Snabb visning är aktiv. Hexlager byggs bara i vald H3-upplösning.")
-                st.caption("Separat sparning behövs inte längre i den här arbetsvyn.")
                 wind_selected_layers, wind_ui_params, wind_controls_applied = _wind_group_controls("wind_unified", language=_wind_control_language())
                 show_user_wind = _wind_potential_is_active(wind_selected_layers)
                 if _wind_empty_selection_is_active(wind_selected_layers):

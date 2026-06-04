@@ -55,6 +55,7 @@ const overlap = (a, b) => {
   return Math.max(0, right - left) * Math.max(0, bottom - top);
 };
 const sidebar = document.querySelector('section[data-testid="stSidebar"]');
+const rightPanel = document.querySelector('div[data-testid="column"]:has(#right-panel-content-anchor)');
 const frames = Array.from(document.querySelectorAll('iframe'))
   .map((iframe) => {
     const container = iframe.closest('div[data-testid="stIFrame"]') || iframe;
@@ -91,6 +92,29 @@ const labels = {};
   });
   labels[label] = rect(details || button);
 });
+const findScopedLabel = (scope, label) => {
+  if (!scope) return null;
+  const wanted = label.toLowerCase();
+  const details = Array.from(scope.querySelectorAll('details')).find((node) => {
+    const summary = node.querySelector('summary');
+    const text = (summary ? summary.textContent : node.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    return text === wanted || text.includes(wanted);
+  });
+  const button = Array.from(scope.querySelectorAll('button')).find((node) => {
+    const text = (node.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    return visible(node) && (text === wanted || text.includes(wanted));
+  });
+  const heading = Array.from(scope.querySelectorAll('h1,h2,h3,h4,h5,h6,summary,p,li')).find((node) => {
+    const text = (node.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    return visible(node) && (text === wanted || text.includes(wanted));
+  });
+  return details || button || heading || null;
+};
+const rightLabels = {};
+['Geografier', 'Landskapspotential Vind', 'Landskapspotential Sol'].forEach((label) => {
+  rightLabels[label] = rect(findScopedLabel(rightPanel, label));
+});
+rightLabels['Geografier'] = rect(document.querySelector('[data-potential-tutorial-anchor="right-geographies"]')) || rightLabels['Geografier'];
 const legendSections = {};
 let legendOverall = null;
 const combineRects = (rects) => {
@@ -166,9 +190,13 @@ return {
   highlight: rect(highlight),
   popover: rect(popover),
   sidebar: rect(sidebar),
+  rightPanel: rect(rightPanel),
+  table: rect(document.querySelector('[data-potential-tutorial-anchor="results-table"]')),
+  landscapeDistribution: rect(document.querySelector('[data-potential-tutorial-anchor="landscape-distribution"]')),
   map: rect(mapFrame),
   details: allDetails,
   labels,
+  rightLabels,
   legendOverall,
   legendSections,
   frames: frames.map((item) => ({
@@ -534,6 +562,40 @@ def _assert_step8(data: dict[str, Any]) -> None:
         raise AssertionError("Step 8 highlight does not cover Använd ändringar.")
 
 
+def _assert_table_step(data: dict[str, Any]) -> None:
+    if data.get("title") != "Läs resultatet i tabellen":
+        raise AssertionError(f"Expected table step title, got {data.get('title')!r}.")
+    table = data.get("table")
+    if not table:
+        raise AssertionError("Result table anchor was not found.")
+    overlap_area = _overlap_area(data["highlight"], table)
+    if overlap_area < max(20.0, table["width"] * table["height"] * 0.30):
+        raise AssertionError(
+            "Table step highlight does not cover the result table: "
+            f"highlight={json.dumps(data['highlight'], sort_keys=True)} table={json.dumps(table, sort_keys=True)}"
+        )
+
+
+def _assert_right_geographies_step(data: dict[str, Any]) -> None:
+    if data.get("title") != "Geografier visar antagandena":
+        raise AssertionError(f"Expected right-panel geographies step title, got {data.get('title')!r}.")
+    label = (data.get("rightLabels") or {}).get("Geografier")
+    if not label:
+        raise AssertionError("Right-panel Geografier heading was not found.")
+    if _overlap_area(data["highlight"], label) <= 0:
+        raise AssertionError("Right-panel Geografier step highlight does not cover the heading.")
+
+
+def _assert_landscape_distribution_step(data: dict[str, Any]) -> None:
+    if data.get("title") != "Potential per landskapstyp":
+        raise AssertionError(f"Expected landscape distribution step title, got {data.get('title')!r}.")
+    target = data.get("landscapeDistribution")
+    if not target:
+        raise AssertionError("Landscape distribution anchor was not found.")
+    if _overlap_area(data["highlight"], target) <= 0:
+        raise AssertionError("Landscape distribution step highlight does not cover the group heading.")
+
+
 def _print_snapshot(data: dict[str, Any]) -> None:
     snapshot = StepSnapshot(
         count=data.get("count", ""),
@@ -646,7 +708,7 @@ def run(url: str, headed: bool, timeout: int, screenshot_dir: Path | None) -> in
             driver,
             "Startläget är försiktigt",
             timeout,
-            _similar_map_checker(green_start["highlight"], "Green-start previous-navigation", tolerance=96.0),
+            _is_map_highlight,
         )
         _print_snapshot(back_green)
 
@@ -690,6 +752,33 @@ def run(url: str, headed: bool, timeout: int, screenshot_dir: Path | None) -> in
             _assert_step8,
         )
         _print_snapshot(again8)
+
+        _click(driver, "#potential-tutorial-root .pt-next")
+        table_step = _wait_for_checked_state(
+            driver,
+            "Läs resultatet i tabellen",
+            timeout,
+            _assert_table_step,
+        )
+        _print_snapshot(table_step)
+
+        _click(driver, "#potential-tutorial-root .pt-next")
+        right_geographies = _wait_for_checked_state(
+            driver,
+            "Geografier visar antagandena",
+            timeout,
+            _assert_right_geographies_step,
+        )
+        _print_snapshot(right_geographies)
+
+        _click(driver, "#potential-tutorial-root .pt-next")
+        landscape_distribution = _wait_for_checked_state(
+            driver,
+            "Potential per landskapstyp",
+            timeout,
+            _assert_landscape_distribution_step,
+        )
+        _print_snapshot(landscape_distribution)
 
         if screenshot_dir:
             screenshot_dir.mkdir(parents=True, exist_ok=True)
