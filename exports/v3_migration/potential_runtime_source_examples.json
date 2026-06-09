@@ -1,0 +1,313 @@
+{
+  "schema_name": "v3_potential_runtime_source_examples",
+  "schema_version": "2026-06-09",
+  "notes": [
+    "Examples are intentionally small and show mapping shape, not complete regional output.",
+    "Bornholm rows are neutral source/unfiltered examples from the R10 landscape GeoJSON and demonstrate how hex_id/geometry can seed a technology_potential_frame. Runtime wind/solar filters in V2 may change score and area.",
+    "Trondelag wind rows are from the unfiltered R7 wind base. A strict default selected-layer run can yield an empty filtered wind frame; that should be represented as data_status empty, not as missing source data.",
+    "Scenario allocation fields are omitted because the current V3 task is base potential rendering only."
+  ],
+  "regions": {
+    "bornholm": {
+      "data_status": "ok",
+      "source_path": "docs/geocontext/model_comparisons/bornholm_v10_landscape_types/map/bornholm_v10_landscape_types_map_data.geojson",
+      "format": "GeoJSON",
+      "source_h3_resolution": 10,
+      "display_h3_resolution_examples": [
+        10,
+        8
+      ],
+      "render_crs": "EPSG:4326",
+      "example_mode": "source_unfiltered_landscape_rows",
+      "h3_average_area_km2_r10": 0.01504750190766435,
+      "examples": [
+        {
+          "technology_id": "wind",
+          "original_v2_fields": {
+            "hex_id": "8a1f0c916407fff",
+            "class_k8": 5,
+            "F1": 1.9946,
+            "F2": 1.9453,
+            "F3": -0.8802,
+            "F4": 0.0397,
+            "F5": 0.9088,
+            "v10_type_id": "LT01",
+            "v10_type_name": "Klippigt kustlandskap",
+            "v10_confidence": "hög",
+            "geometry_type": "Polygon"
+          },
+          "mapped_v3_technology_potential_frame": {
+            "hex_id": "8a1f0c916407fff",
+            "technology_id": "wind",
+            "suitable": true,
+            "potential_score_pct": 100.0,
+            "potential_area_km2": 0.01504750190766435,
+            "data_status": "ok",
+            "mapping_note": "Unfiltered source example. Final V2 wind runtime can reduce this through wind/social/selection filters."
+          },
+          "geometry": {
+            "mode": "build_from_hex_id_or_read_display_geometry",
+            "id_field": "hex_id",
+            "render_crs": "EPSG:4326"
+          }
+        },
+        {
+          "technology_id": "wind",
+          "original_v2_fields": {
+            "hex_id": "8a1f0c916417fff",
+            "class_k8": 5,
+            "F1": 2.0627,
+            "F2": 1.7536,
+            "F3": -0.8422,
+            "F4": 0.0886,
+            "F5": 0.6939,
+            "v10_type_id": "LT01",
+            "v10_type_name": "Klippigt kustlandskap",
+            "v10_confidence": "hög",
+            "geometry_type": "Polygon"
+          },
+          "mapped_v3_technology_potential_frame": {
+            "hex_id": "8a1f0c916417fff",
+            "technology_id": "wind",
+            "suitable": true,
+            "potential_score_pct": 100.0,
+            "potential_area_km2": 0.01504750190766435,
+            "data_status": "ok",
+            "mapping_note": "Unfiltered source example."
+          },
+          "geometry": {
+            "mode": "build_from_hex_id_or_read_display_geometry",
+            "id_field": "hex_id",
+            "render_crs": "EPSG:4326"
+          }
+        },
+        {
+          "technology_id": "solar",
+          "original_v2_fields": {
+            "hex_id": "8a1f0c916427fff",
+            "class_k8": 5,
+            "F1": 1.8375,
+            "F2": 1.8454,
+            "F3": -0.7466,
+            "F4": 0.2066,
+            "F5": 0.5904,
+            "v10_type_id": "LT01",
+            "v10_type_name": "Klippigt kustlandskap",
+            "v10_confidence": "hög",
+            "geometry_type": "Polygon"
+          },
+          "mapped_v3_technology_potential_frame": {
+            "hex_id": "8a1f0c916427fff",
+            "technology_id": "solar",
+            "suitable": true,
+            "potential_score_pct": 100.0,
+            "potential_area_km2": 0.01504750190766435,
+            "data_status": "ok",
+            "mapping_note": "Unfiltered source example. Final V2 solar runtime can reduce this through large/small solar filters."
+          },
+          "geometry": {
+            "mode": "build_from_hex_id_or_read_display_geometry",
+            "id_field": "hex_id",
+            "render_crs": "EPSG:4326"
+          }
+        }
+      ]
+    },
+    "trondelag": {
+      "data_status": "ok",
+      "source_path": "docs/geocontext/potential_framework/data/trondelag_r7_app_bundle/hex.geojson",
+      "format": "GeoJSON",
+      "source_h3_resolution": 7,
+      "display_h3_resolution_examples": [
+        7,
+        6,
+        5
+      ],
+      "render_crs": "EPSG:4326",
+      "examples": [
+        {
+          "technology_id": "wind",
+          "example_mode": "unfiltered_wind_base",
+          "original_v2_fields": {
+            "hex_id": "870800092ffffff",
+            "class_km": 4,
+            "class_k8": 4,
+            "landscape_type": "Low fjord and island coastal fringe",
+            "landscape_type_id": "LT04",
+            "potential_area_share_pct": 100.0,
+            "potential_area_km2": 5.1612933597,
+            "wind_score": 100.0,
+            "wind_class": "share_9",
+            "wind_class_label": ">80-100%",
+            "core_score": 0.0,
+            "core_label": "Kantzon",
+            "wind_color": "#1d4ed8",
+            "display_area_m2": 3162861.014750123,
+            "source_h3_resolution": 7,
+            "target_h3_resolution": 7,
+            "value_status": "modelled_r7_geocontext_offshore_trim",
+            "geometry_status": "source_r7_model_geometry_offshore_trim"
+          },
+          "mapped_v3_technology_potential_frame": {
+            "hex_id": "870800092ffffff",
+            "technology_id": "wind",
+            "suitable": true,
+            "potential_score_pct": 100.0,
+            "potential_area_km2": 5.1612933597,
+            "data_status": "ok"
+          },
+          "geometry": {
+            "mode": "build_from_hex_id_or_read_display_geometry",
+            "id_field": "hex_id",
+            "render_crs": "EPSG:4326"
+          }
+        },
+        {
+          "technology_id": "wind",
+          "example_mode": "unfiltered_wind_base",
+          "original_v2_fields": {
+            "hex_id": "870800093ffffff",
+            "class_km": 4,
+            "class_k8": 4,
+            "landscape_type": "Low fjord and island coastal fringe",
+            "landscape_type_id": "LT04",
+            "potential_area_share_pct": 100.0,
+            "potential_area_km2": 5.1612933597,
+            "wind_score": 100.0,
+            "wind_class": "share_9",
+            "wind_class_label": ">80-100%",
+            "core_score": 0.0,
+            "core_label": "Kantzon",
+            "wind_color": "#1d4ed8",
+            "display_area_m2": 3161425.215264678,
+            "source_h3_resolution": 7,
+            "target_h3_resolution": 7,
+            "value_status": "modelled_r7_geocontext_offshore_trim",
+            "geometry_status": "source_r7_model_geometry_offshore_trim"
+          },
+          "mapped_v3_technology_potential_frame": {
+            "hex_id": "870800093ffffff",
+            "technology_id": "wind",
+            "suitable": true,
+            "potential_score_pct": 100.0,
+            "potential_area_km2": 5.1612933597,
+            "data_status": "ok"
+          },
+          "geometry": {
+            "mode": "build_from_hex_id_or_read_display_geometry",
+            "id_field": "hex_id",
+            "render_crs": "EPSG:4326"
+          }
+        },
+        {
+          "technology_id": "solar",
+          "example_mode": "default_large_solar_filtered",
+          "original_v2_fields": {
+            "hex_id": "870800092ffffff",
+            "class_km": 4,
+            "landscape_type": "Low fjord and island coastal fringe",
+            "landscape_type_id": "LT04",
+            "potential_area_m2": 2740646.7740098285,
+            "potential_area_km2": 2.740646774,
+            "potential_area_share_pct": 53.1,
+            "protected_buffer_share_pct": 46.9,
+            "solar_score": 53.1,
+            "solar_class": "medium_high",
+            "solar_class_label": "50-75%",
+            "solar_color": "#facc15"
+          },
+          "mapped_v3_technology_potential_frame": {
+            "hex_id": "870800092ffffff",
+            "technology_id": "solar",
+            "suitable": true,
+            "potential_score_pct": 53.1,
+            "potential_area_km2": 2.740646774,
+            "data_status": "ok"
+          },
+          "geometry": {
+            "mode": "build_from_hex_id_or_read_display_geometry",
+            "id_field": "hex_id",
+            "render_crs": "EPSG:4326"
+          }
+        },
+        {
+          "technology_id": "solar",
+          "example_mode": "default_large_solar_filtered",
+          "original_v2_fields": {
+            "hex_id": "870800093ffffff",
+            "class_km": 4,
+            "landscape_type": "Low fjord and island coastal fringe",
+            "landscape_type_id": "LT04",
+            "potential_area_m2": 5161293.3597171912,
+            "potential_area_km2": 5.1612933597,
+            "potential_area_share_pct": 100.0,
+            "protected_buffer_share_pct": 0.0,
+            "solar_score": 100.0,
+            "solar_class": "high",
+            "solar_class_label": "75-100%",
+            "solar_color": "#ca8a04"
+          },
+          "mapped_v3_technology_potential_frame": {
+            "hex_id": "870800093ffffff",
+            "technology_id": "solar",
+            "suitable": true,
+            "potential_score_pct": 100.0,
+            "potential_area_km2": 5.1612933597,
+            "data_status": "ok"
+          },
+          "geometry": {
+            "mode": "build_from_hex_id_or_read_display_geometry",
+            "id_field": "hex_id",
+            "render_crs": "EPSG:4326"
+          }
+        },
+        {
+          "technology_id": "solar",
+          "example_mode": "default_large_solar_filtered",
+          "original_v2_fields": {
+            "hex_id": "870800098ffffff",
+            "class_km": 4,
+            "landscape_type": "Low fjord and island coastal fringe",
+            "landscape_type_id": "LT04",
+            "potential_area_m2": 5161293.3597171912,
+            "potential_area_km2": 5.1612933597,
+            "potential_area_share_pct": 100.0,
+            "protected_buffer_share_pct": 0.0,
+            "solar_score": 100.0,
+            "solar_class": "high",
+            "solar_class_label": "75-100%",
+            "solar_color": "#ca8a04"
+          },
+          "mapped_v3_technology_potential_frame": {
+            "hex_id": "870800098ffffff",
+            "technology_id": "solar",
+            "suitable": true,
+            "potential_score_pct": 100.0,
+            "potential_area_km2": 5.1612933597,
+            "data_status": "ok"
+          },
+          "geometry": {
+            "mode": "build_from_hex_id_or_read_display_geometry",
+            "id_field": "hex_id",
+            "render_crs": "EPSG:4326"
+          }
+        }
+      ],
+      "empty_case": {
+        "data_status": "empty",
+        "description": "A filtered Trondelag wind run with strict/default selected layers may produce zero suitable rows. Treat this as empty result for that applied config, not as missing source geometry."
+      }
+    },
+    "skaraborg_vara": {
+      "data_status": "missing",
+      "source_path": null,
+      "format": null,
+      "source_h3_resolution": null,
+      "display_h3_resolution_examples": [],
+      "render_crs": "EPSG:4326",
+      "examples": [],
+      "reason": "V2 has only a planned Vara manifest with no available H3 resolutions, no potential source path and no display geometry."
+    }
+  }
+}
+

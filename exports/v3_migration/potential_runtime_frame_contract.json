@@ -1,0 +1,371 @@
+{
+  "schema_name": "v3_potential_runtime_frame_contract",
+  "schema_version": "2026-06-09",
+  "scope": "Base potential frames and geometry for rendering Potentiell etableringsyta. Scenario allocation and outside-LP are optional extensions.",
+  "technology_potential_frame": {
+    "required_fields": [
+      {
+        "name": "hex_id",
+        "type": "string",
+        "unit": "H3 cell id",
+        "description": "Analysis/source H3 id. Must be stable within a region and source resolution."
+      },
+      {
+        "name": "technology_id",
+        "type": "string",
+        "allowed_values": [
+          "wind",
+          "solar"
+        ],
+        "description": "Technology represented by this row."
+      },
+      {
+        "name": "suitable",
+        "type": "boolean",
+        "description": "True when the technology has positive remaining potential area in the cell after base filters."
+      },
+      {
+        "name": "potential_score_pct",
+        "type": "number",
+        "unit": "percent",
+        "minimum": 0,
+        "maximum": 100,
+        "description": "Potential share/score normalized to 0-100."
+      },
+      {
+        "name": "potential_area_km2",
+        "type": "number",
+        "unit": "km2",
+        "minimum": 0,
+        "description": "Potential area available for the technology."
+      }
+    ],
+    "recommended_optional_fields": [
+      {
+        "name": "potential_area_share_pct",
+        "type": "number",
+        "unit": "percent",
+        "description": "Original V2 area share when available."
+      },
+      {
+        "name": "source_resolution",
+        "type": "integer",
+        "unit": "H3 resolution"
+      },
+      {
+        "name": "display_resolution",
+        "type": "integer",
+        "unit": "H3 resolution"
+      },
+      {
+        "name": "data_status",
+        "type": "string",
+        "allowed_values": [
+          "ok",
+          "proxy",
+          "placeholder",
+          "synthetic",
+          "experimental",
+          "missing",
+          "empty"
+        ]
+      },
+      {
+        "name": "source_path",
+        "type": "string"
+      },
+      {
+        "name": "source_function",
+        "type": "string"
+      }
+    ],
+    "v2_field_mapping": {
+      "wind": [
+        {
+          "v2_name": "hex_id",
+          "v3_name": "hex_id",
+          "type": "string",
+          "unit": "H3 cell id",
+          "required": true,
+          "origin": "read_from_frame_or_geojson"
+        },
+        {
+          "v2_name": "implicit wind branch",
+          "v3_name": "technology_id",
+          "type": "string",
+          "unit": "enum",
+          "required": true,
+          "origin": "defaulted_to_wind"
+        },
+        {
+          "v2_name": "potential_area_share_pct",
+          "v3_name": "potential_score_pct",
+          "type": "number",
+          "unit": "percent",
+          "required": false,
+          "origin": "preferred_read_or_calculated"
+        },
+        {
+          "v2_name": "wind_score",
+          "v3_name": "potential_score_pct",
+          "type": "number",
+          "unit": "percent",
+          "required": false,
+          "origin": "fallback_when_potential_area_share_pct_missing"
+        },
+        {
+          "v2_name": "potential_area_km2",
+          "v3_name": "potential_area_km2",
+          "type": "number",
+          "unit": "km2",
+          "required": true,
+          "origin": "read_if_present_else_score_share_times_h3_area"
+        },
+        {
+          "v2_name": "potential_area_km2 > 1e-9",
+          "v3_name": "suitable",
+          "type": "boolean",
+          "unit": "boolean",
+          "required": true,
+          "origin": "calculated"
+        }
+      ],
+      "solar": [
+        {
+          "v2_name": "hex_id",
+          "v3_name": "hex_id",
+          "type": "string",
+          "unit": "H3 cell id",
+          "required": true,
+          "origin": "read_from_frame_or_geojson"
+        },
+        {
+          "v2_name": "implicit solar branch",
+          "v3_name": "technology_id",
+          "type": "string",
+          "unit": "enum",
+          "required": true,
+          "origin": "defaulted_to_solar"
+        },
+        {
+          "v2_name": "potential_area_share_pct",
+          "v3_name": "potential_score_pct",
+          "type": "number",
+          "unit": "percent",
+          "required": false,
+          "origin": "preferred_read_or_calculated"
+        },
+        {
+          "v2_name": "solar_score",
+          "v3_name": "potential_score_pct",
+          "type": "number",
+          "unit": "percent",
+          "required": false,
+          "origin": "fallback_when_potential_area_share_pct_missing"
+        },
+        {
+          "v2_name": "potential_area_km2",
+          "v3_name": "potential_area_km2",
+          "type": "number",
+          "unit": "km2",
+          "required": false,
+          "origin": "preferred_read_or_calculated"
+        },
+        {
+          "v2_name": "potential_area_m2",
+          "v3_name": "potential_area_km2",
+          "type": "number",
+          "unit": "km2",
+          "required": false,
+          "origin": "fallback_divide_by_1000000"
+        },
+        {
+          "v2_name": "potential_area_km2 > 1e-9",
+          "v3_name": "suitable",
+          "type": "boolean",
+          "unit": "boolean",
+          "required": true,
+          "origin": "calculated"
+        }
+      ]
+    },
+    "suitability_rules": {
+      "default": "suitable = potential_area_km2 > 1e-9",
+      "wind": "Use potential_area_share_pct when present, else wind_score. Area is read from potential_area_km2 or derived from score and H3 source-cell area.",
+      "solar": "Use potential_area_km2 when present, else potential_area_m2 / 1e6. Score is potential_area_share_pct when present, else solar_score or area/source-cell-area.",
+      "trondelag_solar_coarse_exception": "For Trondelag target resolution <= 7, V2 can force suitable=false when _solar_filter_intersection_share_pct > 0 and _solar_small_area_km2 <= 1e-9."
+    }
+  },
+  "potential_establishment_result_layer": {
+    "layer_id": "potential_establishment",
+    "label": "Potentiell etableringsyta",
+    "layer_kind": "result",
+    "result_type": "potential_establishment",
+    "visible_default": true,
+    "requires_energy_scenario": false,
+    "requires_scenario_allocation": false,
+    "required_properties": [
+      "hex_id",
+      "establishment_class",
+      "establishment_label",
+      "wind_suitable",
+      "solar_suitable",
+      "wind_potential_score_pct",
+      "solar_potential_score_pct",
+      "wind_potential_area_km2",
+      "solar_potential_area_km2",
+      "fill",
+      "stroke",
+      "stroke_weight",
+      "fill_opacity",
+      "data_status"
+    ],
+    "establishment_classes": [
+      {
+        "id": "wind_and_solar",
+        "label_sv": "Vind och sol",
+        "rule": "wind_suitable && solar_suitable"
+      },
+      {
+        "id": "wind_only",
+        "label_sv": "Endast vind",
+        "rule": "wind_suitable && !solar_suitable"
+      },
+      {
+        "id": "solar_only",
+        "label_sv": "Endast sol",
+        "rule": "!wind_suitable && solar_suitable"
+      },
+      {
+        "id": "not_suitable",
+        "label_sv": "Inte lämplig",
+        "rule": "!wind_suitable && !solar_suitable"
+      }
+    ],
+    "optional_scenario_properties": [
+      "wind_allocated_area_km2",
+      "solar_allocated_area_km2",
+      "wind_allocated_gwh",
+      "solar_allocated_gwh",
+      "wind_allocated_hex_share_pct",
+      "solar_allocated_hex_share_pct",
+      "outside_lp_shortage",
+      "outside_lp_reason",
+      "wind_outside_lp_area_km2",
+      "solar_outside_lp_area_km2"
+    ],
+    "style_defaults": {
+      "fill_opacity": 0.58,
+      "stroke_weight": 0.12,
+      "source": "V2 _apply_establishment_style_columns and ESTABLISHMENT_CLASS_SPECS"
+    }
+  },
+  "geometry_contract": {
+    "id_field": "hex_id",
+    "render_crs": "EPSG:4326",
+    "native_crs_usage": "Use native CRS for analysis, area and buffers only. Leaflet output must be lon/lat GeoJSON.",
+    "v2_functions": [
+      "apps/potential_model/geometry.py:_full_h3_geometry",
+      "apps/potential_model/geometry.py:load_h3_display_geometries",
+      "apps/potential_model/geometry.py:geometry_for_hex",
+      "potential_app.py:_h3_display_geometry_path",
+      "potential_app.py:_combined_establishment_feature_collection"
+    ],
+    "build_rule": "Read region h3_display_geometries for display resolution. Use H3 boundary from hex_id when possible, otherwise use stored GeoJSON geometry.",
+    "display_rollup": {
+      "bornholm": "R10 source can display at R10/R9/R8/R7/R6; default display is R8.",
+      "trondelag": "R7 source can display at R7/R6/R5 only. R8/R9 should not be exposed.",
+      "skaraborg_vara": "No display geometry in V2."
+    }
+  },
+  "region_runtime_status": {
+    "bornholm": {
+      "data_status": "ok",
+      "native_crs": "EPSG:25833",
+      "render_crs": "EPSG:4326",
+      "source_h3_resolution": 10,
+      "analysis_h3_resolution": 10,
+      "default_display_h3_resolution": 8,
+      "available_display_h3_resolutions": [
+        10,
+        9,
+        8,
+        7,
+        6
+      ],
+      "source_path": "docs/geocontext/model_comparisons/bornholm_v10_landscape_types/map/bornholm_v10_landscape_types_map_data.geojson",
+      "format": "GeoJSON",
+      "geometry_status": "present_and_rebuildable_from_hex_id"
+    },
+    "trondelag": {
+      "data_status": "ok",
+      "notes": "Base R7/R6/R5 app bundle is renderable. Energy scenario/TIMES/AreaDemand is placeholder/proxy and should not be treated as required for base potential rendering.",
+      "native_crs": "EPSG:25832",
+      "render_crs": "EPSG:4326",
+      "source_h3_resolution": 7,
+      "analysis_h3_resolution": 7,
+      "default_display_h3_resolution": 7,
+      "available_display_h3_resolutions": [
+        7,
+        6,
+        5
+      ],
+      "source_path": "docs/geocontext/potential_framework/data/trondelag_r7_app_bundle/hex.geojson",
+      "format": "GeoJSON",
+      "geometry_status": "present_and_rebuildable_from_hex_id",
+      "experimental_sources_not_base": [
+        "docs/geocontext/potential_framework/data/trondelag_lablab_landscape_h3_r7/trondelag_lablab_landskapsanalys_h3_r7.geojson"
+      ]
+    },
+    "skaraborg_vara": {
+      "data_status": "missing",
+      "native_crs": "TBD",
+      "render_crs": "EPSG:4326",
+      "source_h3_resolution": null,
+      "analysis_h3_resolution": null,
+      "default_display_h3_resolution": null,
+      "available_display_h3_resolutions": [],
+      "source_path": null,
+      "format": null,
+      "geometry_status": "missing",
+      "notes": "V2 manifest exists as planned region only. No renderable potential frame or H3 geometry was found."
+    }
+  },
+  "cache_and_state": {
+    "v2_session_keys": [
+      "potential_workspace_render_cache_v2",
+      "wind_builder_selected_layers",
+      "solar_applied_config"
+    ],
+    "v2_fingerprint_inputs": [
+      "region",
+      "scenario",
+      "h3_resolution",
+      "analysis_h3_resolution",
+      "zoom_family_enabled",
+      "applied_solar_config",
+      "wind_selected_layers",
+      "wind_ui_params",
+      "wind_visual_options",
+      "social_acceptance",
+      "energy_model_state"
+    ],
+    "v3_cache_key_recommendation": "region_id + source_h3_resolution + display_h3_resolution + applied wind config fingerprint + applied solar config fingerprint + potential source version + geometry source version",
+    "draft_rule": "Do not read draft/widget keys directly when building result layers. Build from applied state and publish to rendered_snapshot.layers."
+  },
+  "recommended_tests": [
+    "normalizer_accepts_v2_wind_frame_with_potential_area_share_pct",
+    "normalizer_accepts_v2_solar_frame_with_potential_area_m2",
+    "potential_establishment_classifies_wind_and_solar",
+    "potential_establishment_classifies_wind_only",
+    "potential_establishment_classifies_solar_only",
+    "potential_establishment_classifies_not_suitable",
+    "bornholm_runtime_layer_materializes_without_energy_scenario",
+    "trondelag_runtime_layer_materializes_r7_without_energy_scenario",
+    "trondelag_runtime_rejects_or_hides_r8_r9",
+    "skaraborg_vara_reports_missing_without_placeholder_render",
+    "layer_toggle_does_not_recompute_or_fit_bounds",
+    "draft_change_does_not_change_rendered_snapshot_until_apply"
+  ]
+}
+
