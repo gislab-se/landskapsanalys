@@ -1,0 +1,50 @@
+{
+  "schema_version": "2026-06-15",
+  "region_id": "skara",
+  "display_name": "Skara/Skaraborg",
+  "country": "Sweden",
+  "status": "planned",
+  "data_status": "missing",
+  "landing_card": {
+    "title": "Skara/Skaraborg",
+    "subtitle": "Planned stakeholder region",
+    "description": "Visible as a region-card template while regional H3, energy, landscape and potential inputs are prepared.",
+    "badge": "Planned",
+    "sort_order": 30,
+    "enabled": false
+  },
+  "native_crs": "TBD",
+  "web_crs": "EPSG:4326",
+  "crs": {
+    "native": "TBD",
+    "web": "EPSG:4326"
+  },
+  "nominal_scale": "TBD",
+  "default_map_center": [58.39, 13.44],
+  "default_zoom": 9,
+  "map": {
+    "default_center": [58.39, 13.44],
+    "default_zoom": 9
+  },
+  "available_h3_resolutions": [],
+  "default_h3_resolution": null,
+  "default_display_h3_resolution": null,
+  "h3": {
+    "available_display_resolutions": [],
+    "default_analysis_resolution": null,
+    "default_display_resolution": null,
+    "display_geometries": {}
+  },
+  "scenario_manifest": null,
+  "landscape_manifest": null,
+  "potential_manifest": null,
+  "social_acceptance_manifest": null,
+  "manifests": {
+    "scenarios": null,
+    "landscape": null,
+    "potential": null,
+    "social_acceptance": null,
+    "acceptance_registry": null
+  },
+  "runtime_note": "Skaraborg is represented as a planned landing-card region only. Do not synthesize final runtime outputs until regional data and manifests exist."
+}
