@@ -1,0 +1,22 @@
+{
+  "landmask_source": "DAGI_Landsdel_Scale10000_BOL_33",
+  "landmask_selected_at": "2026-06-23",
+  "display_geometry_counts": {
+    "6": 32,
+    "7": 166,
+    "8": 1035,
+    "9": 6852
+  },
+  "landscape_rows": 6877,
+  "landscape_geojson_features": 6852,
+  "landscape_display_features_without_properties": 0,
+  "score_rows": 6878,
+  "score_source_rows": 47117,
+  "social_rows": 6878,
+  "social_source_rows": 47117,
+  "display_without_score_rows": 0,
+  "display_without_social_rows": 0,
+  "landscape_rows_outside_display": 25,
+  "score_rows_outside_display": 26,
+  "social_rows_outside_display": 26
+}

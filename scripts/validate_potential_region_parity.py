@@ -73,8 +73,10 @@ def _electrical_test_layer_ids(region_id: str) -> list[str]:
 
 
 def _force_acceptance_registry(region_id: str) -> None:
-    registry_name = "registry_trondelag.json" if str(region_id).lower() == "trondelag" else "registry.json"
+    registry_name = "registry_trondelag.json" if str(region_id).lower() == "trondelag" else "registry_bornholm.json"
     path = ROOT / "apps" / "acceptance_model" / registry_name
+    if not path.exists():
+        path = ROOT / "apps" / "acceptance_model" / "registry.json"
     acceptance_layers.registry_path = lambda path=path: path
     runtime_geometry.active_registry_path = lambda path=path: path
 

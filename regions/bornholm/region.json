@@ -4,12 +4,12 @@
   "display_name": "Bornholm",
   "country": "Denmark",
   "status": "active",
-  "data_status": "r9_v2_export_review",
+  "data_status": "r9_dagi_landsdel_landmask_review",
   "landing_card": {
     "title": "Bornholm",
     "subtitle": "R9 island pilot",
     "description": "Bornholm package imported from the v1 R9 export for V2. Active H3 levels are R9 to R6.",
-    "badge": "R9 export",
+    "badge": "R9 DAGI mask",
     "sort_order": 20,
     "enabled": true
   },
@@ -32,26 +32,39 @@
   "default_h3_resolution": 9,
   "default_display_h3_resolution": 8,
   "land_mask": {
-    "source_path": "data/raw/manual_extra_layers/shape format/Prekvart_Bornholm.shp",
-    "display_geojson": "docs/geocontext/potential_framework/data/bornholm_landmask/bornholm_landmask_wgs84.geojson",
+    "source_path": "D:/LABLAB_Energiforsk/Projekt SL01/Geodatakatalog_SL01/Utkommande_SL01/UT_Bornholm_SL01/Basmap_BOR/DAGI_Landsdel_Scale10000_BOL_33.shp",
+    "display_geojson": "exports/v2_multiregion/bornholm/landmask/bornholm_dagi_landsdel_landmask_wgs84.geojson",
+    "outline_geojson": "exports/v2_multiregion/bornholm/landmask/bornholm_dagi_landsdel_landmask_outline_wgs84.geojson",
     "source_crs": "EPSG:25833",
-    "note": "Pragmatic Bornholm landmask for display clipping. V2 R9 export records Bornholm native analysis CRS as EPSG:25833."
+    "note": "DAGI Landsdel Bornholm selected 2026-06-23 after QGIS comparison against the previous Prekvart-derived helper mask. The old mask had poor coastline alignment and 99 interior rings; DAGI Landsdel has no interior rings and is used for app display clipping."
   },
   "h3_display_geometries": {
-    "6": "exports/v2_multiregion/bornholm/h3_display_geometries/bornholm_h3_res_6_land_clipped.geojson",
-    "7": "exports/v2_multiregion/bornholm/h3_display_geometries/bornholm_h3_res_7_land_clipped.geojson",
-    "8": "exports/v2_multiregion/bornholm/h3_display_geometries/bornholm_h3_res_8_land_clipped.geojson",
-    "9": "exports/v2_multiregion/bornholm/h3_display_geometries/bornholm_h3_res_9_land_clipped.geojson"
+    "6": "exports/v2_multiregion/bornholm/h3_display_geometries/bornholm_h3_res_6_dagi_landsdel_land_clipped.geojson",
+    "7": "exports/v2_multiregion/bornholm/h3_display_geometries/bornholm_h3_res_7_dagi_landsdel_land_clipped.geojson",
+    "8": "exports/v2_multiregion/bornholm/h3_display_geometries/bornholm_h3_res_8_dagi_landsdel_land_clipped.geojson",
+    "9": "exports/v2_multiregion/bornholm/h3_display_geometries/bornholm_h3_res_9_dagi_landsdel_land_clipped.geojson"
+  },
+  "h3_display_geometry_counts": {
+    "6": 32,
+    "7": 166,
+    "8": 1035,
+    "9": 6852
   },
   "h3": {
     "available_display_resolutions": [6, 7, 8, 9],
     "default_analysis_resolution": 9,
     "default_display_resolution": 8,
     "display_geometries": {
-      "6": "exports/v2_multiregion/bornholm/h3_display_geometries/bornholm_h3_res_6_land_clipped.geojson",
-      "7": "exports/v2_multiregion/bornholm/h3_display_geometries/bornholm_h3_res_7_land_clipped.geojson",
-      "8": "exports/v2_multiregion/bornholm/h3_display_geometries/bornholm_h3_res_8_land_clipped.geojson",
-      "9": "exports/v2_multiregion/bornholm/h3_display_geometries/bornholm_h3_res_9_land_clipped.geojson"
+      "6": "exports/v2_multiregion/bornholm/h3_display_geometries/bornholm_h3_res_6_dagi_landsdel_land_clipped.geojson",
+      "7": "exports/v2_multiregion/bornholm/h3_display_geometries/bornholm_h3_res_7_dagi_landsdel_land_clipped.geojson",
+      "8": "exports/v2_multiregion/bornholm/h3_display_geometries/bornholm_h3_res_8_dagi_landsdel_land_clipped.geojson",
+      "9": "exports/v2_multiregion/bornholm/h3_display_geometries/bornholm_h3_res_9_dagi_landsdel_land_clipped.geojson"
+    },
+    "display_geometry_counts": {
+      "6": 32,
+      "7": 166,
+      "8": 1035,
+      "9": 6852
     }
   },
   "scenario_manifest": "apps/potential_model/manifests/scenarios/bornholm_scenarios_placeholder.json",
@@ -78,7 +91,7 @@
     "potential": "apps/potential_model/manifests/potential/bornholm_potential_v0.json",
     "social_acceptance": "exports/v2_multiregion/bornholm/bornholm_synthetic_social_acceptance_r9_manifest.json",
     "parameter_buffers": "regions/bornholm/parameter_buffers.json",
-    "acceptance_registry": "apps/acceptance_model/registry.json"
+    "acceptance_registry": "apps/acceptance_model/registry_bornholm.json"
   },
   "source_package": {
     "repo": "C:/tmp/landskapsanalys-v1-bornholm",
@@ -86,5 +99,5 @@
     "export_root": "exports/v2_multiregion/bornholm",
     "handoff": "docs/BORNHOLM_R9_EXPORT_FOR_V2_HANDOFF_2026-06-15.md"
   },
-  "package_note": "Bornholm V2 package now advertises R6-R9 only. R10 remains only as source/provenance in the imported R9 export manifests and v1 runtime."
+  "package_note": "Bornholm V2 package now advertises R6-R9 only. R10 remains only as source/provenance in the imported R9 export manifests and v1 runtime. Active display clipping uses the DAGI Landsdel Bornholm mask selected on 2026-06-23."
 }

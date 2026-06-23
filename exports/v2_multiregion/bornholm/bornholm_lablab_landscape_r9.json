@@ -1,0 +1,74 @@
+{
+  "analysis_id": "bornholm_lablab_landscape_r9",
+  "display_name": "Bornholm LABLAB landskapstyper R9",
+  "region_id": "bornholm",
+  "native_crs": "EPSG:25833",
+  "web_crs": "EPSG:4326",
+  "source_h3_resolution": 9,
+  "default_h3_resolution": 9,
+  "available_h3_resolutions": [
+    9,
+    8,
+    7,
+    6
+  ],
+  "landscape_geojson": "exports/v2_multiregion/bornholm/bornholm_lablab_landscape_r9_dagi_landsdel_app.geojson",
+  "factor_scores": "exports/v2_multiregion/bornholm/bornholm_lablab_landscape_r9_dagi_landsdel_app.geojson",
+  "use_region_display_geometries": true,
+  "run_summary": null,
+  "factor_labels": {
+    "F1": "Sprickdal och brant relief",
+    "F2": "Flygsand och sandpräglad kust",
+    "F3": "Skog och skyddad natur",
+    "F4": "Tätort och byggd struktur",
+    "F5": "Låglänt öppet land"
+  },
+  "cluster_labels": {
+    "1": "Tätorts- och verksamhetskärnor",
+    "2": "Sprickdalspåverkat övergångslandskap",
+    "3": "Blandat vardagslandskap med låg faktorprofil",
+    "4": "Flygsand och sandkust - kärnzon",
+    "5": "Sprickdal och brant relief - kärnzon med sand/kust",
+    "6": "Öppet och låglänt blandlandskap",
+    "7": "Skog och skyddad natur - kärnzon",
+    "8": "Sand- och kustpräglat landskap"
+  },
+  "landscape_type_labels": {
+    "LT01": "Klippigt kustlandskap",
+    "LT02": "Sandigt kustlandskap",
+    "LT03": "Jordbruks- och sprickdalslandskap",
+    "LT04": "Skogs- och sprickdalslandskap",
+    "LT05": "Slätt- och jordbrukslandskap"
+  },
+  "landscape_type_colors": {
+    "LT01": "#627A93",
+    "LT02": "#D7B882",
+    "LT03": "#A35A3C",
+    "LT04": "#2E6B3E",
+    "LT05": "#C7D84C"
+  },
+  "semantic_roles": {
+    "coastal_lowland": [
+      "F2",
+      "F5"
+    ],
+    "steep_valley_relief": [
+      "F1"
+    ],
+    "protected_forest_habitat": [
+      "F3"
+    ],
+    "settlement_built_structure": [
+      "F4"
+    ],
+    "mixed_everyday_matrix": [
+      "class_km:3",
+      "class_km:6"
+    ]
+  },
+  "method_note": "LABLAB R10 app-underlag aggregerat till H3 R9 för V2-export. Dominant landskapstyp och class_km väljs efter störst summerad dominant_area_m2 från R10-barnhex; F1-F5 är area-viktade medelvärden. R9-displaygeometrin är landklippt och hämtad från Bornholm landmask-exporten.",
+  "landmask_source": "DAGI_Landsdel_Scale10000_BOL_33",
+  "runtime_summary": "exports/v2_multiregion/bornholm/bornholm_dagi_landsdel_runtime_summary.json",
+  "runtime_note": "Active app GeoJSON was rebuilt on 2026-06-23 against the DAGI Landsdel Bornholm mask after QGIS review of the previous Prekvart-derived helper mask.",
+  "landscape_csv": "exports/v2_multiregion/bornholm/bornholm_lablab_landscape_r9.csv"
+}

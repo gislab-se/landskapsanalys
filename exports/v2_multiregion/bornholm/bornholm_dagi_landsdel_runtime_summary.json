@@ -1,0 +1,48 @@
+{
+  "created_at": "2026-06-23",
+  "region_id": "bornholm",
+  "selected_landmask": "dagi_landsdel_bornholm",
+  "landmask": {
+    "source_path": "D:\\LABLAB_Energiforsk\\Projekt SL01\\Geodatakatalog_SL01\\Utkommande_SL01\\UT_Bornholm_SL01\\Basmap_BOR\\DAGI_Landsdel_Scale10000_BOL_33.shp",
+    "source_crs": "EPSG:25833",
+    "display_geojson": "exports/v2_multiregion/bornholm/landmask/bornholm_dagi_landsdel_landmask_wgs84.geojson",
+    "outline_geojson": "exports/v2_multiregion/bornholm/landmask/bornholm_dagi_landsdel_landmask_outline_wgs84.geojson",
+    "area_km2": 587.6353334140897,
+    "perimeter_km": 199.20312901099535,
+    "display_clip_simplify_tolerance_m": 1.0,
+    "display_clip_area_km2": 587.6353122819457,
+    "display_clip_perimeter_km": 196.95760686875084
+  },
+  "source_universe": {
+    "r9_source_universe_count": 6879,
+    "current_r9_display_count": 6855,
+    "landscape_csv_rows": 6877,
+    "score_csv_rows": 6878,
+    "social_csv_rows": 6878,
+    "method": "Current R9 display IDs union landscape/score/social R9 rows; coarser displays use H3 parents of that R9 universe."
+  },
+  "outputs": {
+    "h3_display_geometries": {
+      "9": "exports/v2_multiregion/bornholm/h3_display_geometries/bornholm_h3_res_9_dagi_landsdel_land_clipped.geojson",
+      "8": "exports/v2_multiregion/bornholm/h3_display_geometries/bornholm_h3_res_8_dagi_landsdel_land_clipped.geojson",
+      "7": "exports/v2_multiregion/bornholm/h3_display_geometries/bornholm_h3_res_7_dagi_landsdel_land_clipped.geojson",
+      "6": "exports/v2_multiregion/bornholm/h3_display_geometries/bornholm_h3_res_6_dagi_landsdel_land_clipped.geojson"
+    },
+    "landscape_app_geojson": "exports/v2_multiregion/bornholm/bornholm_lablab_landscape_r9_dagi_landsdel_app.geojson"
+  },
+  "counts": {
+    "display_geometries": {
+      "6": 32,
+      "7": 166,
+      "8": 1035,
+      "9": 6852
+    },
+    "landscape_app_features": 6852,
+    "display_without_landscape_csv": 0,
+    "display_without_score_csv": 0,
+    "display_without_social_csv": 0,
+    "landscape_csv_rows_outside_display": 25,
+    "score_csv_rows_outside_display": 26,
+    "social_csv_rows_outside_display": 26
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "acceptance_id": "bornholm_synthetic_social_acceptance_r9_for_v2",
+  "display_name": "Bornholm syntetisk social acceptans v0",
+  "region_id": "bornholm",
+  "status": "synthetic_test_data",
+  "synthetic": true,
+  "data_status": "synthetic_test_data_not_research",
+  "hex_resolution": 9,
+  "source_hex_geojson": "exports/v2_multiregion/bornholm/bornholm_lablab_landscape_r9_dagi_landsdel_app.geojson",
+  "hex_geometry_path": "exports/v2_multiregion/bornholm/h3_display_geometries/bornholm_h3_res_9_dagi_landsdel_land_clipped.geojson",
+  "acceptance_csv": "exports/v2_multiregion/bornholm/bornholm_synthetic_social_acceptance_r9.csv",
+  "random_seed": 20260519,
+  "scenarios": [
+    {
+      "id": "low",
+      "label": "Låg acceptans",
+      "value_column": "acceptance_low"
+    },
+    {
+      "id": "medium",
+      "label": "Mellanacceptans",
+      "value_column": "acceptance_medium"
+    },
+    {
+      "id": "high",
+      "label": "Hög acceptans",
+      "value_column": "acceptance_high"
+    }
+  ],
+  "value_range": [
+    0,
+    1
+  ],
+  "max_decimals": 3,
+  "method_note": "Syntetisk testdata för UI och integration. Värdena är inte IVL-forskningsdata och ska inte tolkas som uppmätt social acceptans.",
+  "source_hex_resolution": 10,
+  "source_acceptance_id": "bornholm_synthetic_social_acceptance_v0",
+  "aggregation_method": "Synthetic R10 scenario values averaged to H3 R9 parent cells. This remains synthetic UI/integration data, not measured social acceptance.",
+  "runtime_note": "Geometry references were updated on 2026-06-23 to the DAGI Landsdel Bornholm display contract."
+}

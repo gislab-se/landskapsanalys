@@ -7,7 +7,7 @@
   "native_crs": "EPSG:25833",
   "web_crs": "EPSG:4326",
   "source_region_package": "regions/bornholm/region.json",
-  "source_registry": "apps/acceptance_model/registry.json",
+  "source_registry": "apps/acceptance_model/registry_bornholm.json",
   "notes": [
     "Do all distance, buffer and area geometry in EPSG:25833.",
     "Bornholm R9 data package is imported for V2 review, but the full parameter/buffer runtime has not been rebuilt as a clean R9-native workflow.",
@@ -34,7 +34,7 @@
         "built_low_selection"
       ],
       "readiness": "source_registry_review_r9_runtime_not_rebuilt",
-      "source_registry": "apps/acceptance_model/registry.json",
+      "source_registry": "apps/acceptance_model/registry_bornholm.json",
       "interpretation": "Too close is bad. The prototype uses the minimum distance across selected settlement proxies so overlapping settlement layers are not naively added together.",
       "layers": [
         {
@@ -117,7 +117,7 @@
         "roads_large"
       ],
       "readiness": "source_registry_review_r9_runtime_not_rebuilt",
-      "source_registry": "apps/acceptance_model/registry.json",
+      "source_registry": "apps/acceptance_model/registry_bornholm.json",
       "interpretation": "Too close is bad. The transport source is split into small, medium, and large roads using the existing vejkategor road-class mapping from the semi-manual workflow. Some classes may still be empty in the current simplified source.",
       "layers": [
         {
@@ -177,7 +177,7 @@
         "existing_wind_turbines"
       ],
       "readiness": "source_registry_review_r9_runtime_not_rebuilt",
-      "source_registry": "apps/acceptance_model/registry.json",
+      "source_registry": "apps/acceptance_model/registry_bornholm.json",
       "interpretation": "Too far is bad. The group layer shows the land area that remains within the selected maximum connection distance of the chosen electrical infrastructure, including lines, cables, substations, and existing wind turbines when selected. The default is kept lower so the feasible area does not visually collapse into almost the whole island.",
       "layers": [
         {
@@ -248,7 +248,7 @@
         "cultural_conservation_values"
       ],
       "readiness": "source_registry_review_r9_runtime_not_rebuilt",
-      "source_registry": "apps/acceptance_model/registry.json",
+      "source_registry": "apps/acceptance_model/registry_bornholm.json",
       "interpretation": "Treated as a hard exclusion in this first prototype because that matches the current balanced-stage logic. A later scenario layer could relax this into a graded avoidance rule.",
       "layers": [
         {
@@ -311,7 +311,7 @@
         "nature_area_forest"
       ],
       "readiness": "source_registry_review_r9_runtime_not_rebuilt",
-      "source_registry": "apps/acceptance_model/registry.json",
+      "source_registry": "apps/acceptance_model/registry_bornholm.json",
       "interpretation": "Hard exclusion. This keeps statutory nature designations separate from settlement and transport so the combined result can intersect them cleanly instead of baking them into one opaque score.",
       "layers": [
         {
@@ -416,7 +416,7 @@
         "aviation_approach_zones"
       ],
       "readiness": "source_registry_review_r9_runtime_not_rebuilt",
-      "source_registry": "apps/acceptance_model/registry.json",
+      "source_registry": "apps/acceptance_model/registry_bornholm.json",
       "interpretation": "Hard exclusion. Approach zones behave like planning constraints rather than a soft preference surface.",
       "layers": [
         {
@@ -449,7 +449,7 @@
         "aviation_bird_collision"
       ],
       "readiness": "source_registry_review_r9_runtime_not_rebuilt",
-      "source_registry": "apps/acceptance_model/registry.json",
+      "source_registry": "apps/acceptance_model/registry_bornholm.json",
       "interpretation": "Distance-based conflict. The current stage-1 model already treats this layer as a graded clearance factor in the balanced scenario, so it should not be collapsed into generic aviation hard-stop logic.",
       "layers": [
         {
@@ -482,7 +482,7 @@
         "military_areas"
       ],
       "readiness": "source_registry_review_r9_runtime_not_rebuilt",
-      "source_registry": "apps/acceptance_model/registry.json",
+      "source_registry": "apps/acceptance_model/registry_bornholm.json",
       "interpretation": "Hard exclusion. These areas are better handled as a clean mask than as a weighted sensitivity.",
       "layers": [
         {
@@ -516,7 +516,7 @@
         "strand_protection"
       ],
       "readiness": "source_registry_review_r9_runtime_not_rebuilt",
-      "source_registry": "apps/acceptance_model/registry.json",
+      "source_registry": "apps/acceptance_model/registry_bornholm.json",
       "interpretation": "Hard exclusion. This group can now show both the direct strand-protection no-go layer and the broader Kystnaerhedszonen 3 km coastal planning zone as separate selectable coastal constraints.",
       "layers": [
         {

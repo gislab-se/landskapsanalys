@@ -54,6 +54,10 @@ def registry_path() -> Path:
         trondelag_path = Path(__file__).resolve().with_name("registry_trondelag.json")
         if trondelag_path.exists():
             return trondelag_path
+    if region_id == "bornholm":
+        bornholm_path = Path(__file__).resolve().with_name("registry_bornholm.json")
+        if bornholm_path.exists():
+            return bornholm_path
     return Path(__file__).resolve().with_name("registry.json")
 
 

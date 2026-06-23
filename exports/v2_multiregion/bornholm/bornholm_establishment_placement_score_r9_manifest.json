@@ -1,0 +1,114 @@
+{
+  "dataset_id": "bornholm_establishment_placement_score_r9_for_v2",
+  "region_id": "bornholm",
+  "h3_resolution": 9,
+  "created_at": "2026-06-15",
+  "score_columns": [
+    "wind_establishment_placement_score",
+    "solar_establishment_placement_score"
+  ],
+  "eligibility_columns": [
+    "wind_eligible",
+    "solar_eligible"
+  ],
+  "hard_stop_columns": [
+    "wind_hard_stop",
+    "solar_hard_stop"
+  ],
+  "hard_stop_reason_columns": [
+    "wind_hard_stop_reasons",
+    "solar_hard_stop_reasons"
+  ],
+  "input_basis": "Existing UI distance-table layers only. LABLAB landscape analysis, class_km, landscape_type and F1-F5 are intentionally not used in this version.",
+  "score_behavior": "All Bornholm R10 hexes remain in the output and always receive continuous wind and solar placement scores. Hard stops are saved as flags and reasons; they do not remove hexes and do not zero the final score.",
+  "runtime_intent": "Use these scores as the primary soft ranking signal within the potential surface chosen by the user. Potential filters decide which hexes are candidates; selected establishment hexes are allocated by descending combined allocation_priority_score.",
+  "v3_candidate_behavior": "Move this contract to V3 if review is positive: user-selected potential area is the candidate set, establishment_placement_score is the suitability ranking, allocation is score-ranked, and hard_stop flags are explanatory review metadata.",
+  "ui_layer_groups": {
+    "grid": [
+      "power_substations",
+      "high_voltage_lines",
+      "underground_cables",
+      "existing_wind_turbines"
+    ],
+    "roads": [
+      "roads_large",
+      "roads_medium"
+    ],
+    "settlement": [
+      "population_points",
+      "buildings_low",
+      "buildings_high",
+      "built_centre",
+      "built_low_selection"
+    ],
+    "protected": [
+      "protected_areas",
+      "natura_designated_land",
+      "natura_bird_protection",
+      "natura_habitat_areas",
+      "natura_ramsar",
+      "nature_wildlife_reserve",
+      "nature_area_forest"
+    ],
+    "culture": [
+      "cultural_preservation",
+      "valuable_cultural_environment",
+      "cultural_conservation_values"
+    ],
+    "coastal_hard": [
+      "strand_protection"
+    ],
+    "coastal_soft": [
+      "coastal_zone_3km"
+    ],
+    "aviation_approach": [
+      "aviation_approach_zones"
+    ],
+    "aviation_bird": [
+      "aviation_bird_collision"
+    ],
+    "military": [
+      "military_areas"
+    ]
+  },
+  "weights": {
+    "wind": {
+      "grid_component": 0.28,
+      "road_component": 0.14,
+      "wind_settlement_component": 0.18,
+      "protected_component": 0.16,
+      "culture_component": 0.08,
+      "coastal_component": 0.06,
+      "aviation_component": 0.06,
+      "military_component": 0.04
+    },
+    "solar": {
+      "grid_component": 0.3,
+      "road_component": 0.18,
+      "solar_settlement_component": 0.18,
+      "protected_component": 0.18,
+      "culture_component": 0.08,
+      "coastal_component": 0.05,
+      "military_component": 0.03
+    }
+  },
+  "rows": 6878,
+  "wind_eligible_rows": 808,
+  "solar_eligible_rows": 926,
+  "wind_hard_stop_rows": 6070,
+  "solar_hard_stop_rows": 5952,
+  "wind_score_max": 86.72,
+  "solar_score_max": 95.83,
+  "source_dataset_id": "bornholm_establishment_placement_score_v1",
+  "source_h3_resolution": 10,
+  "path": "exports/v2_multiregion/bornholm/bornholm_establishment_placement_score_r9.csv",
+  "source_rows": 47117,
+  "aggregation_method": {
+    "parent": "R10 hex_id mapped to H3 R9 parent with h3.cell_to_parent.",
+    "scores": "Continuous scores and component columns are arithmetic means over R10 child hexes.",
+    "distances": "Distance columns use the minimum R10 child distance inside each R9 parent.",
+    "eligibility": "R9 eligible is true if any R10 child is eligible.",
+    "hard_stop": "R9 hard_stop is true only when all R10 children are hard_stop for that technology.",
+    "reasons": "Reason fields are semicolon-separated unions; exclusion_reason is retained only for all-hard-stop R9 parents."
+  }
+}

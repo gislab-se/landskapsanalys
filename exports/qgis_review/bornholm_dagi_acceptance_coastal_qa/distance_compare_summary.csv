@@ -1,0 +1,3 @@
+layer_id,new_hex_rows,old_rows_matching_new_hexes,old_intersecting_hexes,new_intersecting_hexes,changed_intersection_hexes,old_zero_distance_hexes,new_zero_distance_hexes
+strand_protection,6852,6852,660,664,4,257,412
+coastal_zone_3km,6852,6852,3471,3486,15,3091,3342

@@ -1,0 +1,12 @@
+layer,file,meaning
+landmask,bornholm_dagi_landsdel_landmask_wgs84.geojson,Active DAGI Landsdel landmask used for the refreshed Bornholm app extent.
+strand_protection,strand_protection_raw_source_wgs84.geojson,"Original LABLAB source layer transformed to WGS84, not clipped."
+strand_protection,strand_protection_exact_dagi_clip_wgs84.geojson,"Exact source clipped to the DAGI Landsdel landmask, without display simplification."
+strand_protection,strand_protection_old_prekvart_clip_display.geojson,Legacy app display layer clipped to the old Prekvart-derived landmask.
+strand_protection,strand_protection_new_dagi_clip_display.geojson,New app display layer clipped to DAGI Landsdel and simplified for web display.
+strand_protection,strand_protection_distance_compare_by_hex.csv,Per-hex old/new distance and intersection comparison for the active DAGI app hexes.
+coastal_zone_3km,coastal_zone_3km_raw_source_wgs84.geojson,"Original LABLAB source layer transformed to WGS84, not clipped."
+coastal_zone_3km,coastal_zone_3km_exact_dagi_clip_wgs84.geojson,"Exact source clipped to the DAGI Landsdel landmask, without display simplification."
+coastal_zone_3km,coastal_zone_3km_old_prekvart_clip_display.geojson,Legacy app display layer clipped to the old Prekvart-derived landmask.
+coastal_zone_3km,coastal_zone_3km_new_dagi_clip_display.geojson,New app display layer clipped to DAGI Landsdel and simplified for web display.
+coastal_zone_3km,coastal_zone_3km_distance_compare_by_hex.csv,Per-hex old/new distance and intersection comparison for the active DAGI app hexes.

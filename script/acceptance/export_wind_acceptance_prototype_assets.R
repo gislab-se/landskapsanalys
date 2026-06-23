@@ -7,7 +7,10 @@ suppressPackageStartupMessages({
 })
 
 repo_root <- Sys.getenv("LANDSKAPSANALYS_REPO_ROOT", unset = "C:/gislab/landskapsanalys")
-registry_path <- file.path(repo_root, "apps", "acceptance_model", "registry.json")
+registry_path <- Sys.getenv(
+  "ACCEPTANCE_REGISTRY_PATH",
+  unset = file.path(repo_root, "apps", "acceptance_model", "registry.json")
+)
 
 if (!file.exists(registry_path)) {
   stop("Registry not found: ", registry_path)
@@ -16,7 +19,9 @@ if (!file.exists(registry_path)) {
 source(file.path(repo_root, "script", "semi_manual_r9", "lib", "subcategory_splits.R"))
 
 registry <- jsonlite::fromJSON(registry_path, simplifyVector = TRUE)
-layer_config <- read.csv(file.path(repo_root, registry$source_config_csv), stringsAsFactors = FALSE)
+layer_config <- read.csv(file.path(repo_root, registry$source_config_csv), stringsAsFactors = FALSE, fileEncoding = "UTF-8")
+working_epsg <- if (!is.null(registry$native_crs_epsg)) as.integer(registry$native_crs_epsg[[1]]) else 32633L
+landmask_label <- if (!is.null(registry$landmask_label)) as.character(registry$landmask_label[[1]]) else "bornholm_landmass"
 
 asset_dir <- file.path(repo_root, registry$asset_dir)
 geojson_dir <- file.path(asset_dir, "source_geojson")
@@ -29,7 +34,7 @@ dir.create(analysis_rds_dir, recursive = TRUE, showWarnings = FALSE)
 dir.create(landmask_dir, recursive = TRUE, showWarnings = FALSE)
 
 hex_sf <- st_read(file.path(repo_root, registry$hex_gpkg), quiet = TRUE) |>
-  st_transform(32633) |>
+  st_transform(working_epsg) |>
   select(hex_id)
 hex_centroids <- st_point_on_surface(hex_sf)
 
@@ -42,6 +47,22 @@ layer_path <- function(layer_key) {
 }
 
 load_landmask <- function() {
+  if (!is.null(registry$landmask_source_path) && nzchar(as.character(registry$landmask_source_path[[1]]))) {
+    landmask_path <- as.character(registry$landmask_source_path[[1]])
+    if (!file.exists(landmask_path)) {
+      stop("Landmask source not found: ", landmask_path)
+    }
+    landmask_sf <- st_read(landmask_path, quiet = TRUE) |>
+      suppressWarnings(st_zm(drop = TRUE, what = "ZM")) |>
+      st_make_valid() |>
+      st_transform(working_epsg)
+
+    return(
+      st_sf(mask_id = landmask_label, geometry = st_sfc(st_union(landmask_sf), crs = working_epsg)) |>
+        st_make_valid()
+    )
+  }
+
   landmask_key <- registry$landmask_layer_key[[1]]
   landmask_path <- layer_path(landmask_key)
   if (is.na(landmask_path) || !file.exists(landmask_path)) {
@@ -50,9 +71,9 @@ load_landmask <- function() {
   landmask_sf <- st_read(landmask_path, quiet = TRUE) |>
     suppressWarnings(st_zm(drop = TRUE, what = "ZM")) |>
     st_make_valid() |>
-    st_transform(32633)
+    st_transform(working_epsg)
 
-  st_sf(mask_id = "bornholm_landmass", geometry = st_sfc(st_union(landmask_sf), crs = 32633)) |>
+  st_sf(mask_id = landmask_label, geometry = st_sfc(st_union(landmask_sf), crs = working_epsg)) |>
     st_make_valid()
 }
 
@@ -69,7 +90,7 @@ clip_to_landmass <- function(x) {
 }
 
 clip_geom_to_landmass <- function(geom) {
-  geom_sfc <- if (inherits(geom, "sfc")) geom else st_sfc(geom, crs = 32633)
+  geom_sfc <- if (inherits(geom, "sfc")) geom else st_sfc(geom, crs = working_epsg)
   clipped <- suppressWarnings(st_intersection(st_make_valid(geom_sfc), landmask_geom))
   st_make_valid(clipped)
 }
@@ -133,7 +154,7 @@ build_analysis_asset <- function(source_sf, spec) {
   }
 
   analysis_geom <- st_make_valid(analysis_geom)
-  analysis_geom <- suppressWarnings(st_simplify(st_sfc(analysis_geom, crs = 32633), dTolerance = 20, preserveTopology = TRUE))
+  analysis_geom <- suppressWarnings(st_simplify(st_sfc(analysis_geom, crs = working_epsg), dTolerance = 20, preserveTopology = TRUE))
   analysis_geom <- clip_geom_to_landmass(analysis_geom)
   analysis_sf <- st_sf(
     tibble(
@@ -180,7 +201,7 @@ for (i in seq_len(nrow(registry$layers))) {
       source_sf <- st_read(source_path, quiet = TRUE) |>
         suppressWarnings(st_zm(drop = TRUE, what = "ZM")) |>
         st_make_valid() |>
-        st_transform(32633)
+        st_transform(working_epsg)
 
       source_sf <- apply_registry_filter(source_sf, spec)
       source_sf <- clip_to_landmass(source_sf)
