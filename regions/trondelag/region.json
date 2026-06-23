@@ -19,7 +19,7 @@
     "native": "EPSG:25832",
     "web": "EPSG:4326"
   },
-  "nominal_scale": "R7 data-driven geocontext app bundle, offshore-trimmed",
+  "nominal_scale": "R7 LABLAB landscape-type app bundle, offshore-trimmed",
   "default_map_center": [63.43, 10.39],
   "default_zoom": 6,
   "map": {
@@ -55,13 +55,13 @@
     }
   },
   "scenario_manifest": "apps/potential_model/manifests/scenarios/trondelag_scenarios_placeholder.json",
-  "landscape_manifest": "apps/potential_model/manifests/landscape/trondelag_landscape_placeholder.json",
+  "landscape_manifest": "apps/potential_model/manifests/landscape/trondelag_lablab_landscape_r7.json",
   "potential_manifest": "apps/potential_model/manifests/potential/trondelag_potential_placeholder.json",
   "social_acceptance_manifest": "apps/potential_model/manifests/social_acceptance/trondelag_synthetic_acceptance_v0.json",
   "parameter_buffer_catalog": "regions/trondelag/parameter_buffers.json",
   "manifests": {
     "scenarios": "apps/potential_model/manifests/scenarios/trondelag_scenarios_placeholder.json",
-    "landscape": "apps/potential_model/manifests/landscape/trondelag_landscape_placeholder.json",
+    "landscape": "apps/potential_model/manifests/landscape/trondelag_lablab_landscape_r7.json",
     "potential": "apps/potential_model/manifests/potential/trondelag_potential_placeholder.json",
     "social_acceptance": "apps/potential_model/manifests/social_acceptance/trondelag_synthetic_acceptance_v0.json",
     "parameter_buffers": "regions/trondelag/parameter_buffers.json",
@@ -70,7 +70,7 @@
   "constraints": [
     "Do not expose H3 R8/R9 in the interactive app.",
     "Render population/settlement buffers as dissolved polygons from the 250 m proxy.",
-    "Treat PDF-derived landscape types as experimental unless handoff checks pass."
+    "Use the QGIS-reviewed LABLAB R7 app-extent landscape layer as default; keep full LABLAB extent as review/reference only."
   ],
-  "runtime_note": "Trondelag opens in light runtime mode on the offshore-trimmed R7 app bundle. R6 and R5 are lightweight rollups for display. R8/R9 are intentionally not exposed or required. The R7 app bundle is mirrored into the repo for Streamlit Cloud runtime. Energy scenarios still use Bornholm placeholder TIMES/AreaDemand files until EML or a Norwegian equivalent supplies regional data."
+  "runtime_note": "Trondelag opens in light runtime mode on the offshore-trimmed R7 app bundle. R6 and R5 are lightweight rollups for display. R8/R9 are intentionally not exposed or required. The default landscape basis is now the QGIS-reviewed LABLAB R7 app-extent layer; the older data-driven geocontext bundle remains method/debug context. Energy scenarios still use Bornholm placeholder TIMES/AreaDemand files until EML or a Norwegian equivalent supplies regional data."
 }

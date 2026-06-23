@@ -10,6 +10,7 @@ the JSON manifests.
 
 - Region catalog workbook: `docs/REGION_CATALOG_SIDE_BY_SIDE_2026-06-15.xlsx`
 - Parameter/buffer catalog workbook: `docs/REGION_PARAMETER_BUFFER_CATALOG_2026-06-15.xlsx`
+- Next steps and governance: `docs/V2_MULTIREGION_NEXT_STEPS_AND_GOVERNANCE_2026-06-15.md`
 - Trondelag parameter/buffer JSON: `regions/trondelag/parameter_buffers.json`
 - Bornholm parameter/buffer JSON: `regions/bornholm/parameter_buffers.json`
 - Rebuild command: `python scripts/export_region_review_workbooks.py`
@@ -20,12 +21,12 @@ the JSON manifests.
 | --- | --- | --- |
 | Region package | `regions/trondelag/region.json` | `regions/bornholm/region.json` |
 | Region index | `regions/index.json` | `regions/index.json` |
-| Landscape manifest | `apps/potential_model/manifests/landscape/trondelag_landscape_placeholder.json` | `exports/v2_multiregion/bornholm/bornholm_lablab_landscape_r9.json` |
+| Landscape manifest | `apps/potential_model/manifests/landscape/trondelag_lablab_landscape_r7.json` | `exports/v2_multiregion/bornholm/bornholm_lablab_landscape_r9.json` |
 | Potential manifest | `apps/potential_model/manifests/potential/trondelag_potential_placeholder.json` | `apps/potential_model/manifests/potential/bornholm_potential_v0.json` |
 | Parameter/buffer catalog | `regions/trondelag/parameter_buffers.json` | `regions/bornholm/parameter_buffers.json` |
 | Social acceptance manifest | `apps/potential_model/manifests/social_acceptance/trondelag_synthetic_acceptance_v0.json` | `exports/v2_multiregion/bornholm/bornholm_synthetic_social_acceptance_r9_manifest.json` |
 | Acceptance registry | `apps/acceptance_model/registry_trondelag.json` | `apps/acceptance_model/registry.json` |
-| Region handoff / provenance | `docs/TRONDELAG_PDF_LANDSCAPE_HANDOFF_2026-05-13.md` for PDF-derived landscape caution | `docs/BORNHOLM_R9_EXPORT_FOR_V2_HANDOFF_2026-06-15.md` |
+| Region handoff / provenance | `docs/LANDSCAPE_QGIS_REVIEW_AND_BASELAYER_AUDIT_2026-06-23.md` and `docs/TRONDELAG_PDF_LANDSCAPE_HANDOFF_2026-05-13.md` | `docs/BORNHOLM_R9_EXPORT_FOR_V2_HANDOFF_2026-06-15.md` |
 
 ## Active Region Contract
 
@@ -45,13 +46,13 @@ the JSON manifests.
 
 | Field | Trondelag | Bornholm |
 | --- | --- | --- |
-| Base landscape source | Offshore-trimmed R7 app bundle | Imported Bornholm LABLAB R9 export |
+| Base landscape source | QGIS-reviewed LABLAB R7 layer clipped to current app extent | Imported Bornholm LABLAB R9 export |
 | Source H3 | R7 | R9 |
 | Display rollups | R6, R5 | R8, R7, R6 |
-| Main GeoJSON | `docs/geocontext/potential_framework/data/trondelag_r7_app_bundle/hex.geojson` | `exports/v2_multiregion/bornholm/bornholm_lablab_landscape_r9_app.geojson` |
-| Factor fields | `F1` to `F5` in R7 bundle | `F1` to `F5` in R9 export |
-| Landscape type status | Data-driven app bundle is active; separate PDF-derived LABLAB layer is experimental | R9 export is aggregated from v1 R10 app source; marked review |
-| Known caveat | PDF-derived Trondelag landscape layer still blocks full contract validation | 2 R9 display cells lack R10-derived landscape properties; 24 R9 landscape rows lack land-clipped display geometry |
+| Main GeoJSON | `docs/geocontext/potential_framework/data/trondelag_lablab_landscape_h3_r7/trondelag_lablab_landskapsanalys_h3_r7_app_extent.geojson` | `exports/v2_multiregion/bornholm/bornholm_lablab_landscape_r9_app.geojson` |
+| Factor fields | LABLAB default uses `class_km` and `LT01`-`LT09`; older `F1`-`F5` geocontext remains method/debug context | `F1` to `F5` in R9 export |
+| Landscape type status | LABLAB R7 app-extent layer is active after QGIS review; data-driven geocontext is retained as method/debug context | R9 export is aggregated from v1 R10 app source; marked review |
+| Known caveat | Full LABLAB extent has `4,795` cells outside the current app extent; keep them reference-only unless a later extent audit expands runtime geography | 2 R9 display cells lack R10-derived landscape properties; 24 R9 landscape rows lack land-clipped display geometry |
 
 ## Potential And Buffers
 
@@ -61,7 +62,7 @@ the JSON manifests.
 | Current PEY behavior | Shared app logic with Trondelag-specific R7 constraints and proxy layers | Shared app logic with new R9 region package, but old Bornholm potential scaffold still informs controls/runtime |
 | Buffer/runtime status | Population uses 250 m proxy rules; user-facing buffers should be dissolved polygons | Parameter buffers are expected to be imperfect now; R9 package did not rebuild the full parameter/buffer runtime |
 | What is ready | R7/R6/R5 display family and social acceptance are wired | R9 landscape, display geometries, placement score, synthetic social acceptance |
-| What is not complete | Regional energy scenario data and final reviewed LABLAB/PDF landscape layer | Clean R9-native PEY parameter runtime and buffer semantics |
+| What is not complete | Regional energy scenario data and any later full-LABLAB-extent expansion audit | Clean R9-native PEY parameter runtime and buffer semantics |
 
 ## Scenario And Social Acceptance
 
@@ -78,6 +79,7 @@ These are useful, but they are not the same as this side-by-side review:
 
 - `docs/POTENTIAL_APP_REGION_DIRECTORY_PROPOSAL_2026-06-15.md`
 - `docs/BORNHOLM_R9_EXPORT_FOR_V2_HANDOFF_2026-06-15.md`
+- `docs/LANDSCAPE_QGIS_REVIEW_AND_BASELAYER_AUDIT_2026-06-23.md`
 - `docs/POTENTIAL_APP_DATA_INVENTORY_2026-05-22.md`
 - `docs/POTENTIAL_APP_REGION_ACTIVATION_PLAN.md`
 - `docs/TRONDELAG_PDF_LANDSCAPE_HANDOFF_2026-05-13.md`

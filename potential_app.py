@@ -33,6 +33,7 @@ import potential_model.landscape as landscape_model  # noqa: E402
 from potential_model.manifests import (  # noqa: E402
     load_linked_manifest,
     load_region,
+    list_regions,
     read_manifest,
     resolve_repo_path,
 )
@@ -172,6 +173,7 @@ TUTORIAL_FORCE_OPEN_TOKEN_KEY = "potential_tutorial_force_open_token"
 TUTORIAL_STORAGE_KEY = "potential_tutorial_trondelag_v2_dismissed"
 # Kept only so shared registry helpers can resolve the Trondelag layer registry.
 REGION_SELECT_KEY = "potential_selected_region_id"
+REGION_LANDING_VIEW = "landing"
 DEFAULT_REGION_ID = "trondelag"
 WIND_LAYER_SELECTION_KEY = "wind_builder_selected_layers"
 WIND_RUNTIME_OVERLAY_KEY = "wind_builder_runtime_overlay_enabled"
@@ -2833,13 +2835,191 @@ def _workspace_shell() -> tuple[Any | None, Any, Any | None]:
     return left_panel, main_col, right_panel
 
 
-def _active_region() -> dict[str, Any]:
-    st.session_state[REGION_SELECT_KEY] = DEFAULT_REGION_ID
+def _query_param_value(key: str) -> str | None:
     try:
-        return load_region(DEFAULT_REGION_ID)
+        value = st.query_params.get(key)
+    except Exception:
+        return None
+    if isinstance(value, list):
+        return str(value[0]) if value else None
+    return str(value) if value not in {None, ""} else None
+
+
+def _set_query_param(key: str, value: str) -> None:
+    try:
+        st.query_params[key] = value
+    except Exception:
+        return
+
+
+def _clear_query_param(key: str) -> None:
+    try:
+        del st.query_params[key]
+    except Exception:
+        return
+
+
+def _region_sort_key(region: dict[str, Any]) -> tuple[int, str]:
+    card = region.get("landing_card") or {}
+    try:
+        order = int(card.get("sort_order", 999))
+    except Exception:
+        order = 999
+    return order, str(region.get("display_name", region.get("region_id", "")))
+
+
+def _landing_regions() -> list[dict[str, Any]]:
+    return sorted(
+        [region for region in list_regions() if isinstance(region.get("landing_card"), dict)],
+        key=_region_sort_key,
+    )
+
+
+def _region_lookup() -> dict[str, dict[str, Any]]:
+    return {str(region.get("region_id", "")).lower(): region for region in _landing_regions()}
+
+
+def _region_card_enabled(region: dict[str, Any]) -> bool:
+    card = region.get("landing_card") or {}
+    if "enabled" in card:
+        return bool(card.get("enabled"))
+    return str(region.get("status", "")).lower() in {"active", "ready", "app_ready"}
+
+
+def _selected_region_id() -> str | None:
+    regions = _region_lookup()
+    query_region = _query_param_value("region")
+    if query_region and query_region.lower() in regions and _region_card_enabled(regions[query_region.lower()]):
+        return str(regions[query_region.lower()].get("region_id"))
+
+    session_region = st.session_state.get(REGION_SELECT_KEY)
+    if session_region and str(session_region).lower() in regions and _region_card_enabled(regions[str(session_region).lower()]):
+        return str(regions[str(session_region).lower()].get("region_id"))
+    return None
+
+
+def _should_show_region_landing() -> bool:
+    if _query_param_value("view") == REGION_LANDING_VIEW:
+        return True
+    return _selected_region_id() is None
+
+
+def _reset_session_for_region(region_id: str) -> None:
+    for key in [
+        WORKSPACE_RENDER_CACHE_KEY,
+        "combined_h3_resolution",
+        "combined_h3_display_mode",
+        "workspace_cache_invalidated_reason",
+    ]:
+        st.session_state.pop(key, None)
+    st.session_state[MAP_VIEW_RESET_TOKEN_KEY] = int(st.session_state.get(MAP_VIEW_RESET_TOKEN_KEY, 0) or 0) + 1
+
+
+def _select_region(region_id: str) -> None:
+    previous = str(st.session_state.get(REGION_SELECT_KEY, "") or "")
+    if previous.lower() != str(region_id).lower():
+        _reset_session_for_region(str(region_id))
+    st.session_state[REGION_SELECT_KEY] = str(region_id)
+    _set_query_param("region", str(region_id))
+    _clear_query_param("view")
+    st.rerun()
+
+
+def _open_region_landing() -> None:
+    _set_query_param("view", REGION_LANDING_VIEW)
+    st.rerun()
+
+
+def _render_region_landing() -> None:
+    _render_language_switcher(st.sidebar)
+    regions = _landing_regions()
+    if not regions:
+        st.error(_t("Inga regionmanifest hittades."))
+        return
+
+    st.markdown(
+        """
+        <style>
+        .region-landing {
+          max-width: 1180px;
+          margin: 0 auto;
+          padding: 1.5rem 0 2.5rem;
+        }
+        .region-landing h1 {
+          font-size: clamp(2.2rem, 4vw, 4rem);
+          line-height: 1.02;
+          margin-bottom: 0.6rem;
+        }
+        .region-landing p {
+          max-width: 780px;
+          color: rgba(49, 51, 63, 0.78);
+          font-size: 1.04rem;
+          line-height: 1.55;
+        }
+        .region-card-meta {
+          color: rgba(49, 51, 63, 0.68);
+          font-size: 0.88rem;
+          line-height: 1.35;
+          margin-bottom: 0.45rem;
+        }
+        </style>
+        <div class="region-landing">
+          <h1>Sol- och vindpotential</h1>
+          <p>
+            Välj region för att öppna analysvyn. Regionkorten läses från manifest,
+            så nya regioner kan läggas till genom en regionkatalog utan ändringar i den gemensamma appkoden.
+          </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    for start in range(0, len(regions), 3):
+        cols = st.columns(3, gap="medium")
+        for col, region in zip(cols, regions[start : start + 3]):
+            with col.container(border=True):
+                card = region.get("landing_card") or {}
+                title = str(card.get("title") or region.get("display_name") or region.get("region_id"))
+                subtitle = str(card.get("subtitle") or region.get("country") or "")
+                description = str(card.get("description") or region.get("runtime_note") or "")
+                badge = str(card.get("badge") or region.get("status") or "")
+                enabled = _region_card_enabled(region)
+                region_id = str(region.get("region_id"))
+                st.subheader(title)
+                meta = " · ".join(part for part in [badge, subtitle] if part)
+                if meta:
+                    st.markdown(f'<div class="region-card-meta">{html.escape(meta)}</div>', unsafe_allow_html=True)
+                if description:
+                    st.caption(description)
+                st.caption(f"CRS: {region.get('native_crs', 'TBD')} · H3: {', '.join(f'R{int(value)}' for value in region.get('available_h3_resolutions') or []) or 'saknas'}")
+                if st.button(
+                    "Öppna analys",
+                    key=f"select_region_{region_id}",
+                    disabled=not enabled,
+                    width="stretch",
+                ):
+                    _select_region(region_id)
+
+
+def _active_region() -> dict[str, Any]:
+    region_id = _selected_region_id() or DEFAULT_REGION_ID
+    try:
+        region = load_region(region_id)
     except Exception as exc:
-        st.error(f"Trøndelag-regionens manifest kunde inte laddas: {exc}")
-        st.stop()
+        if str(region_id).lower() != DEFAULT_REGION_ID:
+            st.warning(f"Regionen {region_id} kunde inte laddas, öppnar {DEFAULT_REGION_ID}.")
+            region = load_region(DEFAULT_REGION_ID)
+        else:
+            st.error(f"Regionmanifest kunde inte laddas: {exc}")
+            st.stop()
+    st.session_state[REGION_SELECT_KEY] = str(region.get("region_id", region_id))
+    return region
+
+
+def _render_region_switcher(region: dict[str, Any]) -> None:
+    st.sidebar.caption(f"{_t('Region')}: {region.get('display_name', region.get('region_id'))}")
+    if st.sidebar.button("Byt region", key="potential_region_landing_button", width="stretch"):
+        _open_region_landing()
 
 
 def _scenario_sidebar(region: dict[str, Any]) -> dict[str, Any]:
@@ -7075,7 +7255,13 @@ def _landscape_frame(
 def _pdf_landscape_manifest(landscape_manifest: dict[str, Any]) -> dict[str, Any] | None:
     pdf_path = landscape_manifest.get("pdf_landscape_geojson")
     if not pdf_path:
-        return None
+        if not bool(landscape_manifest.get("is_lablab_landscape")):
+            return None
+        manifest = landscape_manifest.copy()
+        manifest["use_region_display_geometries"] = bool(
+            landscape_manifest.get("use_region_display_geometries", True)
+        )
+        return manifest
     manifest = landscape_manifest.copy()
     manifest["landscape_geojson"] = pdf_path
     manifest["factor_scores"] = pdf_path
@@ -8701,7 +8887,8 @@ def _target_resolution_distance_frame(
         target = pd.DataFrame({"hex_id": list(display_geometries.keys())})
         if not target.empty:
             target["source_hex_id"] = target["hex_id"].map(lambda value: str(h3.cell_to_parent(str(value), source_resolution)))
-            work = target.merge(work, on="source_hex_id", how="left")[["hex_id", "distance_m", "intersects"]]
+            source_work = work[["source_hex_id", "distance_m", "intersects"]].copy()
+            work = target.merge(source_work, on="source_hex_id", how="left")[["hex_id", "distance_m", "intersects"]]
     work["distance_m"] = pd.to_numeric(work["distance_m"], errors="coerce")
     work["intersects"] = work["intersects"].fillna(False).astype(bool)
     return work[["hex_id", "distance_m", "intersects"]].copy()
@@ -11876,14 +12063,39 @@ def _combined_summary(map_state: dict[str, Any], scenario_state: dict[str, Any])
                 _hexagoner=("hex_id", "count"),
                 _potential_km2=("potential_area_km2__derived", "sum"),
             )
-            .sort_values("_potential_km2", ascending=False)
         )
+        labels = (lablab_landscape_manifest or {}).get("landscape_type_labels") or {}
+        if isinstance(labels, dict) and labels:
+            ordered_types = pd.DataFrame(
+                [
+                    {"Landskapstyp": str(label), "_type_order": order}
+                    for order, (_, label) in enumerate(
+                        sorted(
+                            labels.items(),
+                            key=lambda item: int(str(item[0]).replace("LT", "")) if str(item[0]).replace("LT", "").isdigit() else 999,
+                        )
+                    )
+                ]
+            )
+            grouped = ordered_types.merge(grouped, on="Landskapstyp", how="left")
+        else:
+            grouped["_type_order"] = range(len(grouped))
+        grouped["_hexagoner"] = pd.to_numeric(grouped["_hexagoner"], errors="coerce").fillna(0).astype(int)
+        grouped["_potential_km2"] = pd.to_numeric(grouped["_potential_km2"], errors="coerce").fillna(0.0)
         grouped["_andel_potential_pct"] = grouped["_potential_km2"] / max(total_area, 1e-9) * 100.0
+        grouped["_has_potential"] = grouped["_potential_km2"].gt(0.0)
+        grouped = grouped.sort_values(
+            ["_has_potential", "_potential_km2", "_type_order"],
+            ascending=[False, False, True],
+        )
         top = grouped.iloc[0]
+        zero_count = int((~grouped["_has_potential"]).sum())
         text = (
             f"Störst del av potentialen ligger i {top['Landskapstyp']} "
             f"({float(top['_andel_potential_pct']):.1f}% av potentialytan)."
         )
+        if zero_count > 0:
+            text += f" {zero_count} landskapstyp(er) saknar positiv potential i aktuellt urval och visas som 0."
         display = pd.DataFrame(
             {
                 "Landskapstyp": grouped["Landskapstyp"],
@@ -12378,10 +12590,15 @@ def _unified_workspace_tab(
     solar_large_protected_active = bool(solar_large_protected_layer_ids)
     solar_large_filter_configs = _solar_active_filter_configs(applied_solar_config)
     show_user_wind = _wind_potential_is_active(_selected_wind_layers())
-    pdf_landscape_available = bool((landscape_manifest or {}).get("pdf_landscape_geojson"))
+    lablab_landscape_manifest = _pdf_landscape_manifest(landscape_manifest)
+    pdf_landscape_available = lablab_landscape_manifest is not None
     show_v10 = False
     show_pdf_types = bool(st.session_state.get("show_landscape_pdf_types", True)) and pdf_landscape_available
-    pdf_landscape_label = str((landscape_manifest or {}).get("pdf_landscape_display_name") or "Landskapstyper från PDF")
+    pdf_landscape_label = str(
+        (lablab_landscape_manifest or {}).get("display_name")
+        or (landscape_manifest or {}).get("pdf_landscape_display_name")
+        or "LABLAB:s landskapstyper"
+    )
     show_cluster = False
     show_factor = False
     selected_factor = str(st.session_state.get("combined_landscape_factor", factors[0] if factors else ""))
@@ -13585,6 +13802,10 @@ def _unified_workspace_tab(
 def main() -> None:
     st.session_state.setdefault(APP_LANGUAGE_KEY, "sv")
     st.set_page_config(page_title=f"{_t(PAGE_TITLE)} · {APP_RELEASE_STAGE}", layout="wide", initial_sidebar_state="expanded")
+    if _should_show_region_landing():
+        _render_region_landing()
+        return
+
     region = _active_region()
     scenario_state = _scenario_state(region, None)
     context = _load_context(region)
@@ -13595,6 +13816,7 @@ def main() -> None:
     with main_panel:
         _workspace_header(region, scenario_state, h3_resolution)
         _unified_workspace_tab(region, scenario_state, context, left_panel, right_panel)
+    _render_region_switcher(region)
     force_tutorial_open = _render_tutorial_launcher(region, st.sidebar)
     _render_language_switcher(st.sidebar)
     _render_tutorial_component(region, force_open=force_tutorial_open)

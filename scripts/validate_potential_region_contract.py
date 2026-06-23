@@ -22,6 +22,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from apps.potential_model.manifests import (  # noqa: E402
+    list_regions,
     load_linked_manifest,
     load_region,
     resolve_repo_path,
@@ -34,7 +35,8 @@ EXPECTED_TRONDELAG_COUNTS = {7: 13735, 6: 2163, 5: 365}
 EXPECTED_SYNTHETIC_ACCEPTANCE_RESOLUTIONS = {"bornholm": 10, "trondelag": 7}
 EXPECTED_SYNTHETIC_ACCEPTANCE_ROLLUP_RESOLUTIONS = {"bornholm": [8], "trondelag": [6, 5]}
 SYNTHETIC_ACCEPTANCE_COLUMNS = ["acceptance_low", "acceptance_medium", "acceptance_high"]
-REQUIRED_LANDSCAPE_FIELDS = ["hex_id", "class_km", "F1", "F2", "F3", "F4", "F5"]
+REQUIRED_LANDSCAPE_FIELDS = ["hex_id", "class_km"]
+OPTIONAL_FACTOR_FIELDS = ["F1", "F2", "F3", "F4", "F5"]
 LANDSCAPE_DISPLAY_FIELDS = [
     "landscape_type",
     "landscape_type_id",
@@ -42,6 +44,7 @@ LANDSCAPE_DISPLAY_FIELDS = [
     "v10_type_id",
     "v10_type_name",
 ]
+EXPECTED_TRONDELAG_LABLAB_TYPES = {f"LT{idx:02d}" for idx in range(1, 10)}
 
 
 class ContractReport:
@@ -158,11 +161,34 @@ def check_default_region(report: ContractReport) -> None:
     )
     report.check(
         "_active_region" in source
-        and "_select_region" not in source
-        and "_reset_session_for_region" not in source
-        and "_sync_region_selection_state" not in source,
-        "The app uses a fixed Trondelag region path with no region switch/reset code.",
-        "Region switch/reset code is still present in potential_app.py.",
+        and "_render_region_landing" in source
+        and "_select_region" in source
+        and "list_regions" in source,
+        "The app has a manifest-driven region landing path and keeps Trondelag as fallback default.",
+        "Region landing/selection code is missing from potential_app.py.",
+    )
+
+
+def check_region_package_index(report: ContractReport) -> None:
+    regions = {str(region.get("region_id")): region for region in list_regions()}
+    for region_id in ["trondelag", "bornholm", "skara"]:
+        report.check(
+            region_id in regions,
+            f'Region package/index exposes "{region_id}".',
+            f'Region package/index does not expose "{region_id}".',
+        )
+    trondelag = regions.get("trondelag") or {}
+    bornholm = regions.get("bornholm") or {}
+    skara = regions.get("skara") or {}
+    report.check(
+        bool((trondelag.get("landing_card") or {}).get("enabled")) and bool((bornholm.get("landing_card") or {}).get("enabled")),
+        "Trondelag and Bornholm landing cards are enabled.",
+        "Trondelag/Bornholm landing cards should be enabled.",
+    )
+    report.check(
+        not bool((skara.get("landing_card") or {}).get("enabled")) and str(skara.get("status")) == "planned",
+        "Skara/Skaraborg is visible as a planned disabled landing card.",
+        "Skara/Skaraborg should be planned and disabled until runtime data exists.",
     )
 
 
@@ -194,7 +220,7 @@ def check_h3_session_state_sanitizer(report: ContractReport, region: dict[str, A
             st.session_state[state_key] = original
 
 
-def check_fixed_region_does_not_reset_session(report: ContractReport) -> None:
+def check_selected_region_loading(report: ContractReport) -> None:
     import streamlit as st  # noqa: WPS433
     import potential_app as app  # noqa: WPS433
 
@@ -207,12 +233,12 @@ def check_fixed_region_does_not_reset_session(report: ContractReport) -> None:
         st.session_state["show_landscape_factor"] = True
         region = app._active_region()
         report.check(
-            str(region.get("region_id")) == "trondelag"
-            and st.session_state.get(app.REGION_SELECT_KEY) == "trondelag"
+            str(region.get("region_id")) == "bornholm"
+            and st.session_state.get(app.REGION_SELECT_KEY) == "bornholm"
             and st.session_state.get("show_social_acceptance") is True
             and st.session_state.get("show_landscape_factor") is True,
-            "Fixed-region loading forces Trondelag without clearing existing session controls.",
-            "Fixed-region loading still behaves like a region switch/reset.",
+            "Selected-region loading opens Bornholm without clearing unrelated session controls.",
+            "Selected-region loading did not preserve expected selected-region/session behavior.",
         )
     finally:
         st.session_state.clear()
@@ -761,8 +787,13 @@ def check_landscape_manifest(report: ContractReport, manifest: dict[str, Any] | 
     )
     report.check(
         manifest.get("pdf_landscape_geojson") in {None, ""},
-        "Trondelag PDF landscape path is not active.",
-        f"Trondelag pdf_landscape_geojson is active: {manifest.get('pdf_landscape_geojson')!r}.",
+        "Trondelag LABLAB layer is promoted through the main landscape_geojson path.",
+        f"Trondelag pdf_landscape_geojson is still active instead of the main landscape_geojson path: {manifest.get('pdf_landscape_geojson')!r}.",
+    )
+    report.check(
+        bool(manifest.get("is_lablab_landscape")),
+        "Trondelag default landscape manifest is LABLAB-first.",
+        "Trondelag default landscape manifest is not marked is_lablab_landscape=true.",
     )
 
     landscape_path = _path_from_manifest(manifest, "landscape_geojson")
@@ -791,7 +822,7 @@ def check_landscape_manifest(report: ContractReport, manifest: dict[str, Any] | 
     missing_fields = [field for field in REQUIRED_LANDSCAPE_FIELDS if field not in field_names]
     report.check(
         not missing_fields,
-        "Trondelag landscape data contains hex_id, class_km and F1-F5.",
+        "Trondelag landscape data contains hex_id and class_km.",
         f"Trondelag landscape data is missing required fields: {missing_fields}.",
     )
     report.check(
@@ -800,7 +831,36 @@ def check_landscape_manifest(report: ContractReport, manifest: dict[str, Any] | 
         f"Trondelag landscape data lacks a landscape type display field; checked {LANDSCAPE_DISPLAY_FIELDS}.",
     )
 
-    for factor in ["F1", "F2", "F3", "F4", "F5"]:
+    report.check(
+        len(features) == EXPECTED_TRONDELAG_COUNTS[7],
+        f"Trondelag LABLAB default layer has {EXPECTED_TRONDELAG_COUNTS[7]} current-app-extent R7 features.",
+        f"Trondelag LABLAB default layer has {len(features)} features, expected {EXPECTED_TRONDELAG_COUNTS[7]}.",
+    )
+    type_ids = {
+        str(row.get("landscape_type_id") or row.get("v10_type_id") or "")
+        for row in rows
+        if row.get("landscape_type_id") or row.get("v10_type_id")
+    }
+    missing_types = sorted(EXPECTED_TRONDELAG_LABLAB_TYPES - type_ids)
+    report.check(
+        not missing_types,
+        "Trondelag LABLAB default layer contains all 9 landscape types.",
+        f"Trondelag LABLAB default layer is missing landscape types: {missing_types}.",
+    )
+    lt09_count = sum(
+        1
+        for row in rows
+        if str(row.get("landscape_type_id") or row.get("v10_type_id") or "") == "LT09"
+    )
+    report.check(
+        lt09_count > 0,
+        f"Trondelag LABLAB default layer contains LT09 ({lt09_count} features).",
+        "Trondelag LABLAB default layer has no LT09 Vidsträckt fjällandskap features.",
+    )
+
+    for factor in OPTIONAL_FACTOR_FIELDS:
+        if factor not in field_names:
+            continue
         bad_values = [
             row.get(factor)
             for row in rows
@@ -883,13 +943,14 @@ def main() -> int:
     report = ContractReport()
     with contextlib.redirect_stderr(StringIO()):
         check_default_region(report)
+        check_region_package_index(report)
 
         trondelag = load_region("trondelag")
         landscape = load_linked_manifest(trondelag, "landscape_manifest")
         scenario = load_linked_manifest(trondelag, "scenario_manifest")
 
         check_h3_session_state_sanitizer(report, trondelag)
-        check_fixed_region_does_not_reset_session(report)
+        check_selected_region_loading(report)
         check_trondelag_default_zoom_family(report, trondelag)
         check_trondelag_zoom_family_recovery(report, trondelag)
         check_zoom_family_layer_contract(report, trondelag)

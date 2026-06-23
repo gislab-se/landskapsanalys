@@ -2,6 +2,13 @@
 
 This note captures where we stopped with the Trondelag landscape-type digitizing work. The current result is useful as process material, but **not yet good enough as a final dataset**.
 
+Update 2026-06-23: a clipped R7 LABLAB layer derived from this work was reviewed
+in QGIS and promoted as the Trondelag app-default landscape source. See
+`docs/LANDSCAPE_QGIS_REVIEW_AND_BASELAYER_AUDIT_2026-06-23.md` and
+`apps/potential_model/manifests/landscape/trondelag_lablab_landscape_r7.json`.
+The full LABLAB extent remains reference material and should not expand runtime
+geography without a separate extent audit.
+
 ## Goal
 
 Create a clean GIS layer for Trondelag's 9 landscape types from the source PDF map material, eventually usable both as:

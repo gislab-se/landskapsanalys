@@ -68,6 +68,11 @@ Trondelag har nu preliminara manifest sa att regionen kan visas i samma UI-skele
 - `apps/potential_model/manifests/potential/trondelag_wind_rules_placeholder.json`
 - `apps/potential_model/manifests/scenarios/trondelag_scenarios_placeholder.json`
 
+Update 2026-06-23: Trondelag's active landscape default is now
+`apps/potential_model/manifests/landscape/trondelag_lablab_landscape_r7.json`
+after QGIS review of the clipped LABLAB app-extent layer. The older
+`trondelag_landscape_placeholder.json` remains method/debug geocontext.
+
 Appen skiljer nu mellan att manifest finns och att full runtime ar redo. Placeholder-manifest far alltsa regionstatusen att visa konkreta filplatser, men full berakning startar inte forran nodvandiga datafiler finns.
 
 Regionstatus och runtime-validering ar nu flyttad till:
