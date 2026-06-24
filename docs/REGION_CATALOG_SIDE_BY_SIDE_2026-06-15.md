@@ -77,11 +77,11 @@ the JSON manifests.
 
 These are useful, but they are not the same as this side-by-side review:
 
-- `docs/POTENTIAL_APP_REGION_DIRECTORY_PROPOSAL_2026-06-15.md`
+- `docs/archive/app_backlog_2026-06-24/POTENTIAL_APP_REGION_DIRECTORY_PROPOSAL_2026-06-15.md`
 - `docs/BORNHOLM_R9_EXPORT_FOR_V2_HANDOFF_2026-06-15.md`
 - `docs/LANDSCAPE_QGIS_REVIEW_AND_BASELAYER_AUDIT_2026-06-23.md`
-- `docs/POTENTIAL_APP_DATA_INVENTORY_2026-05-22.md`
-- `docs/POTENTIAL_APP_REGION_ACTIVATION_PLAN.md`
+- `docs/archive/app_backlog_2026-06-24/POTENTIAL_APP_DATA_INVENTORY_2026-05-22.md`
+- `docs/archive/app_backlog_2026-06-24/POTENTIAL_APP_REGION_ACTIVATION_PLAN.md`
 - `docs/TRONDELAG_PDF_LANDSCAPE_HANDOFF_2026-05-13.md`
 
 ## Recommended Next Step

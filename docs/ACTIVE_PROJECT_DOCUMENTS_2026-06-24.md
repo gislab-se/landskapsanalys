@@ -31,16 +31,29 @@ to avoid treating old transition notes as active implementation instructions.
   V2 provenance and is referenced by `regions/bornholm/region.json`.
 - `docs/TRONDELAG_PDF_LANDSCAPE_HANDOFF_2026-05-13.md` remains the relevant
   warning note before using PDF-derived Trondelag landscape layers.
-- `docs/BORNHOLM_PDF_LANDSCAPE_HANDOFF_2026-05-28.md` remains historical
-  Bornholm PDF landscape provenance unless a newer review note supersedes it.
+- `docs/REGION_CATALOG_SIDE_BY_SIDE_2026-06-15.md` remains the current
+  region-catalog navigation aid.
+- `docs/LANDSKAPSPOTENTIAL_SOL_UNDERLAG.md` remains a source/model reference for
+  the landscape-solar concept.
+- `docs/POTENTIAL_APP_SCENARIO_ALLOCATION_EXPLANATION.md` remains a runtime
+  explanation of scenario allocation, not a governance document.
+- `docs/archive/provenance_2026-06-24/BORNHOLM_PDF_LANDSCAPE_HANDOFF_2026-05-28.md`
+  remains historical Bornholm PDF landscape provenance unless a newer review
+  note supersedes it.
+- `docs/archive/provenance_2026-06-24/SYNTHETIC_SOCIAL_ACCEPTANCE_HANDOFF_2026-05-19.md`
+  remains provenance for synthetic social-acceptance data.
 
 ## Paused Or Backlog Material
 
 - `exports/v3_migration/*` and
-  `docs/V3_RENDERED_LAYER_STATUS_CONTRACT_2026-06-09.md` are useful reference
-  material, but V2 multiregion is the active implementation track.
-- `docs/FLOWCORE_USABLE_MIGRATION_HANDOFF_2026-06-24.md` is a future migration
-  reference, not the current runtime app contract.
+  `docs/archive/v3_backlog_2026-06-24/V3_RENDERED_LAYER_STATUS_CONTRACT_2026-06-09.md`
+  are useful reference material, but V2 multiregion is the active
+  implementation track.
+- `docs/archive/future_migration_2026-06-24/FLOWCORE_USABLE_MIGRATION_HANDOFF_2026-06-24.md`
+  is a future migration reference, not the current runtime app contract.
+- `docs/archive/app_backlog_2026-06-24/` contains older app proposals, TODOs,
+  prompts, and backlog notes. They are not active unless promoted back into this
+  index or a region note.
 
 ## Archived Transition Handoffs
 
@@ -50,6 +63,10 @@ to `docs/archive/bornholm_dagi_transition_2026-06-24/`.
 They remain available as audit trail, but their "next steps" are superseded by
 the current Bornholm region manifest, `regions/bornholm/REGIONAL_NOTES.md`, and
 the app bugfixes made after the QGIS review.
+
+Older provenance and handoff notes that remain useful for audit trail were moved
+to `docs/archive/provenance_2026-06-24/`. They are not active implementation
+instructions.
 
 ## Next Larger Focus
 

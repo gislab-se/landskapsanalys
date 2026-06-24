@@ -21,7 +21,7 @@ Kort handoff efter dagens Trøndelag-anpassning av potentialappen. Appen ska fö
 - `apps/potential_model/manifests/regions/trondelag.json`
 - `script/acceptance/render_trondelag_population_buffer.R`
 - `AGENTS.md`
-- `docs/TRONDELAG_POTENTIAL_APP_HANDOFF_2026-05-13.md`
+- `docs/archive/provenance_2026-06-24/TRONDELAG_POTENTIAL_APP_HANDOFF_2026-05-13.md`
 
 ## Aktuellt beteende
 

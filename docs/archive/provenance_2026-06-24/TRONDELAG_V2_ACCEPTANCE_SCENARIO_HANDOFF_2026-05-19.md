@@ -33,7 +33,8 @@ This handoff captures the current stable state of the Trondelag-focused v2 poten
 - Parity validation: `scripts/validate_potential_region_parity.py`
 - Synthetic acceptance manifest: `apps/potential_model/manifests/social_acceptance/trondelag_synthetic_acceptance_v0.json`
 - Synthetic acceptance data: `docs/geocontext/potential_framework/data/social_acceptance/trondelag_synthetic_social_acceptance_r7.csv`
-- Earlier acceptance-data handoff: `docs/SYNTHETIC_SOCIAL_ACCEPTANCE_HANDOFF_2026-05-19.md`
+- Earlier acceptance-data handoff:
+  `docs/archive/provenance_2026-06-24/SYNTHETIC_SOCIAL_ACCEPTANCE_HANDOFF_2026-05-19.md`
 
 ## Validation Commands
 

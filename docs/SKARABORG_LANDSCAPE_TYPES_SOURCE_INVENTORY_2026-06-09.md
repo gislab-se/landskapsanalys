@@ -116,7 +116,7 @@ Relevanta lokala arbetssätt:
   - `docs/TRONDELAG_PDF_LANDSCAPE_HANDOFF_2026-05-13.md`
   - särskilt kontroll av alla typer, gaps/overlaps och felklassningar
 - Bornholm PDF-spåret är separerat från den datadrivna Bornholm v10-modellen:
-  - `docs/BORNHOLM_PDF_LANDSCAPE_HANDOFF_2026-05-28.md`
+  - `docs/archive/provenance_2026-06-24/BORNHOLM_PDF_LANDSCAPE_HANDOFF_2026-05-28.md`
 
 ## Föreslagen pipeline
 

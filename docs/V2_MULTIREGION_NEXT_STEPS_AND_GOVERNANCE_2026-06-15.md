@@ -132,7 +132,7 @@ What should be cleaned up:
 
 Documents/scripts to mark as V3 archive/backlog rather than active direction:
 
-- `docs/V3_RENDERED_LAYER_STATUS_CONTRACT_2026-06-09.md`
+- `docs/archive/v3_backlog_2026-06-24/V3_RENDERED_LAYER_STATUS_CONTRACT_2026-06-09.md`
 - `exports/v3_migration/*`
 - `exports/v3_geojson/*`
 - `scripts/export_trondelag_v3_inventory.py`
