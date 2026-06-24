@@ -54,6 +54,7 @@ CULTURE_TEST_LAYER_IDS = ["cultural_preservation", "valuable_cultural_environmen
 REINDEER_TEST_LAYER_IDS = ["reindeer_grazing_merged", "reindeer_migration_routes"]
 ELECTRICAL_TEST_LAYER_IDS = ["high_voltage_lines", "underground_cables", "existing_wind_turbines"]
 BORNHOLM_ELECTRICAL_TEST_LAYER_IDS = ["high_voltage_lines", "underground_cables", "power_substations", "existing_wind_turbines"]
+BORNHOLM_COASTAL_TEST_LAYER_ID = "strand_protection"
 SOLAR_ROAD_BUFFER_M = 100.0
 WIND_ROAD_BUFFER_M = 1000.0
 ELECTRICAL_MAX_DISTANCE_M = 2000.0
@@ -582,6 +583,41 @@ def _region_workspace_contract(region_id: str) -> dict[str, Any]:
         for layer in solar_reindeer_source_layers
     )
     solar_reindeer_buffer_features = _feature_count(solar_reindeer_buffer_layer)
+    solar_coastal_filter_configs = [
+        *solar_road_filter_configs,
+        {
+            "group_id": app.SOLAR_COASTAL_GROUP_ID,
+            "layer_ids": [BORNHOLM_COASTAL_TEST_LAYER_ID] if region_id == "bornholm" else [],
+            "buffer_m": 0.0,
+            "label": "Strandskydd / kust",
+        },
+    ]
+    solar_coastal = app._solar_large_scale_frame(
+        region,
+        landscape_manifest,
+        analysis_resolution,
+        solar_population_buffer_m,
+        None,
+        [],
+        False,
+        solar_coastal_filter_configs,
+    )
+    solar_coastal_area_reduction_km2 = max(0.0, _solar_area_km2(solar_large) - _solar_area_km2(solar_coastal))
+    solar_coastal_source_layers = (
+        app._solar_filter_source_layers(app.SOLAR_COASTAL_GROUP_ID, [BORNHOLM_COASTAL_TEST_LAYER_ID])
+        if region_id == "bornholm"
+        else []
+    )
+    solar_coastal_buffer_layer = (
+        app._solar_filter_buffer_layer(app.SOLAR_COASTAL_GROUP_ID, 0.0, [BORNHOLM_COASTAL_TEST_LAYER_ID])
+        if region_id == "bornholm"
+        else None
+    )
+    solar_coastal_source_features = sum(
+        _feature_count(layer)
+        for layer in solar_coastal_source_layers
+    )
+    solar_coastal_buffer_features = _feature_count(solar_coastal_buffer_layer)
     solar_potential = app._combined_solar_hex_frame(
         region,
         landscape_manifest,
@@ -683,6 +719,46 @@ def _region_workspace_contract(region_id: str) -> dict[str, Any]:
     solar_road_establishment_class_changes = _establishment_class_change_count(
         establishment_without_solar_road,
         establishment_with_solar_road,
+    )
+    solar_potential_with_coastal = app._combined_solar_hex_frame(
+        region,
+        landscape_manifest,
+        analysis_resolution,
+        pd.DataFrame(),
+        solar_coastal,
+    )
+    solar_proposal_with_coastal, solar_stats_with_coastal = app._solar_establishment_frame(
+        region,
+        pd.DataFrame(),
+        solar_coastal,
+        float(energy_state.get("solar_area_need_km2", 0.0) or 0.0),
+        float(energy_state.get("solar_twh", 0.0) or 0.0),
+        float(energy_state.get("solar_km2_per_twh", math.nan) or math.nan),
+        analysis_hex_area_km2,
+        analysis_resolution,
+    )
+    solar_proposal_with_coastal, solar_stats_with_coastal = app._expand_solar_area_outside_lp(
+        solar_potential_with_coastal,
+        solar_proposal_with_coastal,
+        solar_stats_with_coastal,
+        analysis_display_geometry_path,
+        analysis_hex_area_km2,
+        float(energy_state.get("solar_twh", 0.0) or 0.0),
+        float(energy_state.get("solar_area_need_km2", 0.0) or 0.0),
+        float(energy_state.get("solar_km2_per_twh", math.nan) or math.nan),
+    )
+    establishment_with_solar_coastal = app._combined_potential_establishment_frame(
+        region,
+        wind_potential,
+        solar_potential_with_coastal,
+        wind_proposal,
+        solar_proposal_with_coastal,
+        analysis_resolution,
+        analysis_resolution,
+    )
+    solar_coastal_establishment_class_changes = _establishment_class_change_count(
+        establishment_with_solar_road,
+        establishment_with_solar_coastal,
     )
 
     establishment_layers = app._combined_potential_establishment_family_layers(
@@ -787,6 +863,10 @@ def _region_workspace_contract(region_id: str) -> dict[str, Any]:
         "solar_culture_buffer_features": int(solar_culture_buffer_features),
         "solar_reindeer_source_features": int(solar_reindeer_source_features),
         "solar_reindeer_buffer_features": int(solar_reindeer_buffer_features),
+        "solar_coastal_area_reduction_km2": float(solar_coastal_area_reduction_km2),
+        "solar_coastal_establishment_class_changes": int(solar_coastal_establishment_class_changes),
+        "solar_coastal_source_features": int(solar_coastal_source_features),
+        "solar_coastal_buffer_features": int(solar_coastal_buffer_features),
         "solar_electrical_source_features": int(solar_electrical_source_features),
         "solar_electrical_buffer_features": int(solar_electrical_buffer_features),
         "solar_electrical_area_m2": solar_electrical_area_m2,
@@ -920,6 +1000,30 @@ def _check_region_contract(report: ParityReport, result: dict[str, Any], referen
         f"{region_id}: solar UI can render the near-grid feasibility layer.",
         f"{region_id}: solar UI cannot render the near-grid feasibility layer.",
     )
+    if region_id == "bornholm":
+        report.check(
+            float(result.get("solar_coastal_area_reduction_km2", 0.0) or 0.0) > 0.0,
+            "bornholm: strand-protection coastal filter reduces right-panel solar candidate area.",
+            "bornholm: strand-protection coastal filter did not reduce solar candidate area.",
+        )
+        report.check(
+            int(result.get("solar_coastal_establishment_class_changes", 0) or 0) > 0,
+            "bornholm: strand-protection coastal filter changes the shared establishment area at R9 analysis resolution.",
+            (
+                "bornholm: strand-protection coastal filter did not change R9 establishment classes; "
+                f"area reduction={result.get('solar_coastal_area_reduction_km2')}."
+            ),
+        )
+        report.check(
+            int(result.get("solar_coastal_source_features", 0) or 0) > 0,
+            "bornholm: solar UI can render the strand-protection source layer.",
+            "bornholm: solar UI cannot render the strand-protection source layer.",
+        )
+        report.check(
+            int(result.get("solar_coastal_buffer_features", 0) or 0) > 0,
+            "bornholm: solar UI can render the strand-protection analysis layer.",
+            "bornholm: solar UI cannot render the strand-protection analysis layer.",
+        )
     road_ui = result.get("road_ui_contract") or {}
     report.check(
         int(road_ui.get("solar_source_count", 0) or 0) >= 1 and int(road_ui.get("wind_source_count", 0) or 0) >= 1,

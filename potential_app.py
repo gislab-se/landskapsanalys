@@ -4583,9 +4583,11 @@ def _solar_draft_config_from_session() -> dict[str, Any]:
             if active
             else []
         )
+        if active and not layer_ids:
+            layer_ids = list(_solar_default_filter_layer_ids(group_id))
         layer_ids = list(_solar_available_filter_layer_ids(group_id, layer_ids))
         filter_values[str(spec["layer_ids_key"])] = layer_ids
-        filter_values[str(spec["active_key"])] = bool(layer_ids) or (group_id == SOLAR_COASTAL_GROUP_ID and active)
+        filter_values[str(spec["active_key"])] = bool(layer_ids)
         filter_values[str(spec["buffer_key"])] = float(
             st.session_state.get(str(spec["draft_buffer_key"]), spec.get("buffer_default_m", 0.0)) or 0.0
         )
