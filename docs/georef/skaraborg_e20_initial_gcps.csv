@@ -1,0 +1,17 @@
+id,label,src_x,src_y,lon,lat,role,notes
+gcp_01,Uddevalla,155,540,11.9356,58.3498,fit,Approximate town centre read from PDF crop.
+gcp_02,Trollhattan,385,660,12.2886,58.2837,fit,Approximate town centre read from PDF crop.
+gcp_03,Vanersborg,475,560,12.3234,58.3807,fit,Approximate town centre read from PDF crop.
+gcp_04,Alingsas,520,1090,12.5330,57.9300,fit,Approximate town centre read from PDF crop.
+gcp_05,Vargarda,665,970,12.8090,58.0371,fit,Approximate town centre read from PDF crop.
+gcp_06,Vara,810,710,12.9541,58.2623,fit,Approximate town centre read from PDF crop.
+gcp_07,Lidkoping,925,370,13.1577,58.5052,fit,Approximate town centre read from PDF crop.
+gcp_08,Gotene,1130,395,13.4946,58.5284,fit,Approximate town centre read from PDF crop.
+gcp_09,Skara,1110,570,13.4386,58.3866,fit,Approximate town centre read from PDF crop.
+gcp_10,Skovde,1340,560,13.8461,58.3903,fit,Approximate town centre read from PDF crop.
+gcp_11,Falkoping,1135,800,13.5507,58.1735,fit,Approximate town centre read from PDF crop.
+gcp_12,Mariestad,1340,180,13.8237,58.7097,fit,Approximate town centre read from PDF crop.
+gcp_13,Tibro,1535,430,14.1616,58.4245,fit,Approximate town centre read from PDF crop.
+gcp_14,Hjo,1640,675,14.2870,58.3013,fit,Approximate town centre read from PDF crop.
+gcp_15,Karlsborg,1835,430,14.5047,58.5372,fit,Approximate town centre read from PDF crop.
+gcp_16,Toreboda,1580,120,14.1259,58.7056,fit,Approximate town centre read from PDF crop.

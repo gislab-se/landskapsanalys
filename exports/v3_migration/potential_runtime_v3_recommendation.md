@@ -1,140 +1,276 @@
 # Potential Runtime V3 Recommendation
 
-## Vad V3 bör portera direkt
+Date: 2026-06-10
 
-Portera den smala delen av V2 som bygger `Potentiell etableringsyta` från två teknikramar:
+## Recommendation In One Sentence
 
-1. Normalisera vind till `technology_potential_frame`.
-2. Normalisera sol till `technology_potential_frame`.
-3. Merga båda på display-hex.
-4. Sätt `wind_suitable` och `solar_suitable`.
-5. Klassificera till `wind_and_solar`, `wind_only`, `solar_only`, `not_suitable`.
-6. Bygg GeoJSON FeatureCollection i `EPSG:4326`.
-7. Publicera som ett result layer i `rendered_snapshot.layers`.
+Port V2's `Potentiell etableringsyta` behavior as a small typed runtime contract: two `technology_potential_frame`s in, one result layer out, no scenario allocation and no outside-LP.
 
-V2-referenserna är:
+## What To Port Directly
 
-- `potential_app.py:9346` `_potential_establishment_source_frame(...)`
-- `potential_app.py:9441` `_combined_establishment_class(...)`
-- `potential_app.py:9463` `_apply_establishment_style_columns(...)`
-- `potential_app.py:9676` `_combined_potential_establishment_frame(...)`
-- `potential_app.py:10486` `_combined_establishment_feature_collection(...)`
-- `potential_app.py:10652` `_combined_potential_establishment_family_layers(...)`
+Port these V2 behaviors:
 
-## Vad V3 bör förenkla
+- Wind and solar are normalized separately.
+- `suitable` is based on positive potential area after active base filters.
+- Wind and solar booleans map to exactly four establishment classes.
+- Geometry comes from region H3 display geometry manifests.
+- GeoJSON for Leaflet is EPSG:4326.
+- Native CRS remains region-specific for distance, buffer and area logic.
+- Trondelag exposes only R7/R6/R5.
+- Trondelag R6/R5 rollups follow dominant R7 child establishment classes.
+- Layer toggle is UI-only and does not recompute analysis or change map view.
 
-V3 bör börja utan scenario-allokering.
+## What Not To Port Yet
 
-Första implementationen kan sätta följande scenariofält till `null`, `0` eller utelämna dem:
+Do not port these into the first runtime layer:
 
-- `wind_allocated_area_km2`
-- `solar_allocated_area_km2`
-- `wind_allocated_gwh`
-- `solar_allocated_gwh`
+- energy scenario requirement
+- TIMES/AreaDemand coupling
+- scenario allocation
 - `outside_lp_shortage`
-- `outside_lp_reason`
-- `wind_outside_lp_area_km2`
-- `solar_outside_lp_area_km2`
+- outside-LP markers
+- GWh allocation fields
+- popup HTML as the data contract
+- V2's broad Streamlit session-state shape
+- V2's large `potential_app.py` structure
 
-Det räcker att visa grundpotential:
+Scenario and outside-LP can be added later as separate result layers/properties once the base layer is stable.
 
-- var vind kan vara möjlig
-- var sol kan vara möjlig
-- var båda kan vara möjliga
-- var ingen av dem är möjlig
+## Proposed V3 Functions
 
-## Vad V3 bör undvika
+```python
+def load_technology_potential_frame(
+    region_id: str,
+    technology_id: Literal["wind", "solar"],
+    applied_state: AppliedState,
+) -> TechnologyPotentialFrame:
+    ...
 
-Undvik att:
 
-- läsa draft/widget keys direkt i layer-buildern
-- kräva energiscenario för att visa grundpotential
-- presentera Trøndelag TIMES/AreaDemand-placeholder som verklig scenarioanalys
-- exponera Trøndelag R8/R9 i interaktiv app
-- använda PDF-/LABLAB-landskap som baspotential utan explicit experimentflagga
-- köra `fitBounds` när användaren togglar result layer
-- blanda teknisk datastatus i huvudlagrets Leaflet layer control-label
+def materialize_potential_establishment_layer(
+    region: RegionManifest,
+    wind_frame: TechnologyPotentialFrame,
+    solar_frame: TechnologyPotentialFrame,
+    display_h3_resolution: int,
+) -> ResultLayerSpec:
+    ...
+```
 
-## Kan `Potentiell etableringsyta` renderas utan energiscenario?
+The loader should never read draft/widget keys. It should consume normalized `applied_state`.
 
-Ja, för Bornholm och Trøndelag där V2 har renderbara potential-/displaykällor.
+## Technology Frame Normalization
 
-`Potentiell etableringsyta` behöver endast:
+### Required V3 fields
 
-- vindpotential per `hex_id`
-- solpotential per `hex_id`
-- displaygeometri per `hex_id`
-- klassningsregeln från `wind_suitable` och `solar_suitable`
+```text
+hex_id
+technology_id
+suitable
+potential_score_pct
+potential_area_km2
+source_h3_resolution
+display_h3_resolution
+data_status
+source_ref
+```
 
-Energiscenario behövs först när V3 ska visa scenariofördelning, energimängd, prioritet, eller yta utanför landskapets potential.
+### Wind mapping from V2
 
-För Skaraborg/Vara är svaret nej tills V3 har en faktisk Skaraborg-källa eller generator för potentialframe och displaygeometri.
+V2 source fields:
 
-## Minsta säkra V3-implementation
+- `hex_id`
+- `potential_area_share_pct` preferred
+- `wind_score` fallback
+- `potential_area_km2` optional
 
-Minsta säkra steg är:
+V3 mapping:
 
-- Lägg till en runtime loader som returnerar `technology_potential_frame` för `wind` och `solar`.
-- Stöd Bornholm och Trøndelag först.
-- Returnera `missing` för Skaraborg/Vara utan att rendera placeholder.
-- Materialisera `potential_establishment` från dessa frames.
-- Publicera layern i `rendered_snapshot.layers`.
-- Gör layern default visible, men rendera bara när `feature_collection.features.length > 0`.
-- Visa en neutral tomstatus i högerpanel/debug om regionen saknar data.
+```text
+potential_score_pct = potential_area_share_pct ?? wind_score ?? derived_from_area
+potential_area_km2 = potential_area_km2 ?? potential_score_pct / 100 * source_h3_area_km2
+suitable = potential_area_km2 > 1e-9
+```
 
-## Regionpolicy
+If rolling from source to display resolution:
+
+```text
+display_hex_id = h3.cell_to_parent(source_hex_id, display_h3_resolution)
+potential_area_km2 = sum(child potential_area_km2)
+potential_area_km2 = min(potential_area_km2, display_h3_area_km2)
+potential_score_pct = potential_area_km2 / display_h3_area_km2 * 100
+```
+
+### Solar mapping from V2
+
+V2 source fields:
+
+- `hex_id`
+- `potential_area_km2` preferred
+- `potential_area_m2` fallback
+- `potential_area_share_pct` preferred score
+- `solar_score` fallback score
+- optional filter fields:
+  - `large_filter_buffer_share_pct`
+  - `filter_buffer_share_pct`
+  - `protected_buffer_share_pct`
+  - `small_area_m2`
+
+V3 mapping:
+
+```text
+potential_area_km2 = potential_area_km2 ?? potential_area_m2 / 1e6 ?? 0
+potential_score_pct = potential_area_share_pct ?? solar_score ?? derived_from_area
+suitable = potential_area_km2 > 1e-9
+```
+
+Trondelag coarse-display rule:
+
+```text
+if region_id == "trondelag" and display_h3_resolution <= 7:
+    filter_share = max(
+        large_filter_buffer_share_pct,
+        filter_buffer_share_pct,
+        protected_buffer_share_pct,
+    )
+    if filter_share > 0 and small_area_m2 <= 0:
+        suitable = False
+```
+
+## Result Layer Contract
+
+V3 should publish one result layer:
+
+```json
+{
+  "id": "result:potential_establishment_area:{region_id}:r{display_h3_resolution}",
+  "label": "Potentiell etableringsyta",
+  "layer_kind": "result",
+  "result_type": "potential_establishment_area",
+  "default_visible": true,
+  "visible": true,
+  "data_status": "ok",
+  "feature_collection": {
+    "type": "FeatureCollection",
+    "features": []
+  }
+}
+```
+
+Recommended feature properties:
+
+```text
+hex_id
+establishment_class
+establishment_label
+wind_suitable
+solar_suitable
+wind_potential_score
+solar_potential_score
+wind_potential_area_km2
+solar_potential_area_km2
+data_status
+fill
+stroke
+fill_opacity
+tooltip_title
+tooltip_body
+```
+
+Keep popup text derived from structured properties, not the other way around.
+
+## Region Policy
 
 ### Bornholm
 
-Portera som `ok`.
+V3 status: `ok`
 
-- Analyskälla R10.
-- Display kan vara R10/R9/R8/R7/R6.
-- Default display enligt V2-regionmanifest: R8.
-- Native CRS `EPSG:25833`, render `EPSG:4326`.
+- Native CRS: `EPSG:25833`
+- Render CRS: `EPSG:4326`
+- Source/default analysis H3: R10
+- Default display H3: R8
+- Available display H3: R10/R9/R8/R7/R6
+- Scenario manifests are placeholder and should not be required for base potential rendering.
 
-### Trøndelag
+### Trondelag
 
-Portera som `ok`/`proxy` beroende på delkälla.
+V3 status: `ok_with_proxy_notes`
 
-- Analyskälla R7.
-- Display bara R7/R6/R5.
-- Native CRS `EPSG:25832`, render `EPSG:4326`.
-- Markera energiscenario som placeholder/proxy separat från grundpotential.
+- Native CRS: `EPSG:25832`
+- Render CRS: `EPSG:4326`
+- Source/default analysis H3: R7
+- Available display H3: R7/R6/R5 only
+- Feature counts must remain R7 `13735`, R6 `2163`, R5 `365`
+- R8/R9 must not be exposed in the interactive app.
+- Wind/solar runtime is usable for base potential, but some source semantics are proxy/modelled.
+- Population/settlement uses a 250 m grid/centroid proxy.
+- Energy scenario/TIMES/AreaDemand is placeholder/proxy and separate from the base layer.
+- LABLAB/PDF landscape is experimental and should not be used as the base potential source.
 
-### Skaraborg/Vara
+### Vara/Skaraborg
 
-Markera som `missing`.
+V3 status: `missing`
 
-- Ingen V2-runtimekälla hittad.
-- Ingen H3-displaygeometri hittad.
-- Ingen default H3-resolution.
-- Rendera inte syntetiskt lager som om det vore analys.
+- No available H3 resolutions in V2 region manifest.
+- No potential manifest.
+- No display geometry.
+- Return missing status and render no synthetic establishment layer.
 
-## Föreslagna tester
+## Trondelag R7/R6/R5 Rule
 
-- `test_potential_frame_normalizes_wind_share_pct`
-- `test_potential_frame_normalizes_solar_area_m2`
-- `test_potential_establishment_class_wind_and_solar`
-- `test_potential_establishment_class_wind_only`
-- `test_potential_establishment_class_solar_only`
-- `test_potential_establishment_class_not_suitable`
+V3 should enforce this in both configuration and tests:
+
+```text
+available_h3_resolutions == [7, 6, 5]
+default_h3_resolution == 7
+default_display_h3_resolution == 7
+8 not in available_h3_resolutions
+9 not in available_h3_resolutions
+```
+
+Rollup rule:
+
+- Build R7 establishment classes first.
+- For R6/R5, map R7 children to parent cells.
+- Sum area by establishment class.
+- Parent class is the class with dominant child area.
+- Manual R6/R5 and zoom-family R6/R5 must match.
+
+## V3 Test Backlog For This Layer
+
+Port these V2 test intentions directly:
+
+- `test_normalize_wind_uses_potential_area_share_pct`
+- `test_normalize_wind_falls_back_to_wind_score`
+- `test_normalize_wind_derives_area_from_score`
+- `test_normalize_solar_uses_potential_area_km2`
+- `test_normalize_solar_falls_back_to_potential_area_m2`
+- `test_normalize_solar_derives_score_from_area`
+- `test_wind_suitable_threshold`
+- `test_solar_suitable_threshold`
+- `test_trondelag_solar_filter_intersection_blocks_coarse_suitability`
+- `test_establishment_class_wind_and_solar`
+- `test_establishment_class_wind_only`
+- `test_establishment_class_solar_only`
+- `test_establishment_class_not_suitable`
+- `test_geojson_uses_display_geometry_for_hex_id`
 - `test_bornholm_potential_establishment_without_energy_scenario`
 - `test_trondelag_potential_establishment_r7_without_energy_scenario`
 - `test_trondelag_display_resolutions_are_r7_r6_r5_only`
-- `test_skaraborg_missing_potential_does_not_render_placeholder`
-- `test_rendered_snapshot_layer_contains_feature_collection_when_data_exists`
-- `test_draft_change_does_not_rebuild_potential_layer_before_apply`
-- `test_layer_toggle_does_not_change_zoom_or_recompute_analysis`
+- `test_trondelag_r8_r9_not_exposed`
+- `test_trondelag_rollup_r6_r5_dominant_child_class`
+- `test_skaraborg_missing_does_not_render_placeholder`
+- `test_draft_change_does_not_rebuild_rendered_snapshot_before_apply`
+- `test_layer_toggle_does_not_recompute_analysis`
+- `test_layer_toggle_does_not_call_fitbounds`
 
-## Implementation Order
+## First Implementation Path
 
-1. Lägg in regionstatus och source-paths i V3:s datakontrakt.
-2. Implementera `load_technology_potential_frame(region_id, technology_id, applied_state)`.
-3. Mappa V2-fält till V3-kontraktet och validera required fields.
-4. Implementera displaygeometri-loader från `hex_id` och regionens H3-displaykälla.
-5. Implementera `materialize_potential_establishment_layer(...)` utan scenariofält.
-6. Publicera layern i `rendered_snapshot.layers` med `layer_kind: "result"` och `data_status`.
-7. Lägg testerna ovan för Bornholm, Trøndelag och Skaraborg/Vara.
-8. Först därefter: bygg scenario-allokering och outside-LP som separata properties/lager.
+1. Add typed region runtime status.
+2. Add `TechnologyPotentialFrame` normalizer.
+3. Add wind and solar loaders that return normalized frames from V2-shaped sources.
+4. Add display-geometry loader keyed by region and display H3 resolution.
+5. Add establishment materializer using the exact four V2 classes.
+6. Add `rendered_snapshot.layers` entry.
+7. Add tests for Bornholm, Trondelag and Vara/Skaraborg.
+8. Only after this passes, start a separate migration for scenario allocation.
 

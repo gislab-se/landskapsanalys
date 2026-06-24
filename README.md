@@ -24,12 +24,24 @@ The full report is meant to become the exhaustive v1-v2-v3 synthesis, while the 
 - `script/config/bornholm_r8_geocontext_scoring.csv`
 - `data/raw/lablab/SpeedLocal/Bornholm/*` (validation reference material)
 
-## Run locally (Windows, using project venv)
+## Run locally (Windows)
 
 ```powershell
-cd C:\gislab\speedlocal
-.\.venv\Scripts\python.exe -m pip install -r external\landskapsanalys\requirements.txt
-.\.venv\Scripts\python.exe -m streamlit run external\landskapsanalys\app.py
+cd C:\tmp\landskapsanalys-v2-multiregion
+python -m pip install -r requirements.txt
+.\scripts\start_potential_app.ps1
+```
+
+If port 8501 is already busy:
+
+```powershell
+.\scripts\start_potential_app.ps1 -AutoPort
+```
+
+To check the environment without starting Streamlit:
+
+```powershell
+.\scripts\start_potential_app.ps1 -CheckOnly
 ```
 
 ## Purpose

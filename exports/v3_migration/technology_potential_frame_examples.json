@@ -1,0 +1,219 @@
+{
+  "schema_name": "technology_potential_frame_examples",
+  "schema_version": "2026-06-10",
+  "scope": "V3 examples for the first runtime layer: Potentiell etableringsyta. Scenario allocation and outside-LP fields are intentionally omitted.",
+  "v2_references": {
+    "normalizer": "potential_app.py:_potential_establishment_source_frame",
+    "class_mapper": "potential_app.py:_combined_establishment_class",
+    "result_builder": "potential_app.py:_combined_potential_establishment_frame",
+    "geojson_builder": "potential_app.py:_combined_establishment_feature_collection",
+    "geometry_loader": "apps/potential_model/geometry.py:load_h3_display_geometries"
+  },
+  "class_mapping": [
+    {
+      "wind_suitable": true,
+      "solar_suitable": true,
+      "establishment_class": "wind_and_solar",
+      "establishment_label_sv": "Vind och sol"
+    },
+    {
+      "wind_suitable": true,
+      "solar_suitable": false,
+      "establishment_class": "wind_only",
+      "establishment_label_sv": "Endast vind"
+    },
+    {
+      "wind_suitable": false,
+      "solar_suitable": true,
+      "establishment_class": "solar_only",
+      "establishment_label_sv": "Endast sol"
+    },
+    {
+      "wind_suitable": false,
+      "solar_suitable": false,
+      "establishment_class": "not_suitable",
+      "establishment_label_sv": "Inte lamplig"
+    }
+  ],
+  "required_frame_fields": [
+    "hex_id",
+    "technology_id",
+    "suitable",
+    "potential_score_pct",
+    "potential_area_km2",
+    "source_h3_resolution",
+    "display_h3_resolution",
+    "data_status",
+    "source_ref"
+  ],
+  "regions": {
+    "bornholm": {
+      "region_status": "ok",
+      "native_crs": "EPSG:25833",
+      "render_crs": "EPSG:4326",
+      "source_h3_resolution": 10,
+      "default_display_h3_resolution": 8,
+      "available_display_h3_resolutions": [
+        10,
+        9,
+        8,
+        7,
+        6
+      ],
+      "display_geometry_refs": {
+        "10": "docs/geocontext/model_comparisons/bornholm_v10_landscape_types/map/bornholm_v10_landscape_types_map_data.geojson",
+        "8": "docs/geocontext/potential_framework/data/bornholm_landmask/bornholm_h3_res_8_land_clipped.geojson",
+        "7": "docs/geocontext/potential_framework/data/bornholm_landmask/bornholm_h3_res_7_land_clipped.geojson",
+        "6": "docs/geocontext/potential_framework/data/bornholm_landmask/bornholm_h3_res_6_land_clipped.geojson"
+      },
+      "example_rows": [
+        {
+          "hex_id": "8a1f0c916407fff",
+          "technology_id": "wind",
+          "suitable": true,
+          "potential_score_pct": 100.0,
+          "potential_area_km2": 0.0150475019,
+          "source_h3_resolution": 10,
+          "display_h3_resolution": 10,
+          "data_status": "ok",
+          "source_ref": "bornholm_r10_v2_runtime_example",
+          "notes": "Unfiltered source-shaped example. Active V2 wind filters can reduce score and area."
+        },
+        {
+          "hex_id": "8a1f0c916427fff",
+          "technology_id": "solar",
+          "suitable": true,
+          "potential_score_pct": 100.0,
+          "potential_area_km2": 0.0150475019,
+          "source_h3_resolution": 10,
+          "display_h3_resolution": 10,
+          "data_status": "ok",
+          "source_ref": "bornholm_r10_v2_runtime_example",
+          "notes": "Unfiltered source-shaped example. Active V2 solar filters can reduce score and area."
+        }
+      ]
+    },
+    "trondelag": {
+      "region_status": "ok_with_proxy_notes",
+      "native_crs": "EPSG:25832",
+      "render_crs": "EPSG:4326",
+      "source_h3_resolution": 7,
+      "default_display_h3_resolution": 7,
+      "available_display_h3_resolutions": [
+        7,
+        6,
+        5
+      ],
+      "forbidden_display_h3_resolutions": [
+        8,
+        9
+      ],
+      "display_geometry_counts": {
+        "7": 13735,
+        "6": 2163,
+        "5": 365
+      },
+      "display_geometry_refs": {
+        "7": "docs/geocontext/potential_framework/data/trondelag_r7_app_bundle/hex.geojson",
+        "6": "docs/geocontext/potential_framework/data/trondelag_r7_app_bundle/h3/trondelag_landscape_h3_r6_rollup.geojson",
+        "5": "docs/geocontext/potential_framework/data/trondelag_r7_app_bundle/h3/trondelag_landscape_h3_r5_rollup.geojson"
+      },
+      "example_rows": [
+        {
+          "hex_id": "870800092ffffff",
+          "technology_id": "wind",
+          "suitable": true,
+          "potential_score_pct": 100.0,
+          "potential_area_km2": 5.1612933597,
+          "source_h3_resolution": 7,
+          "display_h3_resolution": 7,
+          "data_status": "proxy",
+          "source_ref": "trondelag_r7_fast_distance_wind_base",
+          "v2_original_fields": {
+            "potential_area_share_pct": 100.0,
+            "wind_score": 100.0,
+            "wind_class": "share_9",
+            "core_score": 0.0,
+            "value_status": "modelled_r7_geocontext_offshore_trim"
+          },
+          "notes": "Usable base potential row. Some Trondelag wind semantics are runtime/proxy and should be exposed as data_status, not as scenario truth."
+        },
+        {
+          "hex_id": "870800092ffffff",
+          "technology_id": "solar",
+          "suitable": true,
+          "potential_score_pct": 53.1,
+          "potential_area_km2": 2.740646774,
+          "source_h3_resolution": 7,
+          "display_h3_resolution": 7,
+          "data_status": "proxy",
+          "source_ref": "trondelag_r7_large_solar_filtered",
+          "v2_original_fields": {
+            "potential_area_m2": 2740646.7740098285,
+            "potential_area_share_pct": 53.1,
+            "protected_buffer_share_pct": 46.9,
+            "solar_score": 53.1,
+            "solar_class": "medium_high"
+          },
+          "notes": "Usable base potential row. Settlement/population inputs use a 250 m grid/centroid proxy where active."
+        },
+        {
+          "hex_id": "870800099ffffff",
+          "technology_id": "solar",
+          "suitable": false,
+          "potential_score_pct": 35.0,
+          "potential_area_km2": 1.8064526759,
+          "source_h3_resolution": 7,
+          "display_h3_resolution": 7,
+          "data_status": "proxy",
+          "source_ref": "trondelag_coarse_filter_intersection_block_example",
+          "v2_original_fields": {
+            "potential_area_km2": 1.8064526759,
+            "potential_area_share_pct": 35.0,
+            "protected_buffer_share_pct": 65.0,
+            "small_area_m2": 0.0
+          },
+          "notes": "Illustrates the V2 Trondelag coarse rule: filter intersection plus no small-area support forces solar_suitable=false even with positive area."
+        }
+      ],
+      "empty_case": {
+        "technology_id": "wind",
+        "data_status": "empty",
+        "description": "A strict selected-layer Trondelag wind run can return zero suitable rows. Treat as empty for that applied config, not missing source geometry."
+      }
+    },
+    "vara_skaraborg": {
+      "region_status": "missing",
+      "native_crs": null,
+      "render_crs": "EPSG:4326",
+      "source_h3_resolution": null,
+      "default_display_h3_resolution": null,
+      "available_display_h3_resolutions": [],
+      "display_geometry_refs": {},
+      "example_rows": [],
+      "missing_reason": "V2 has a planned Vara/Skaraborg region manifest but no potential source, no H3 display geometry and no default H3 resolution."
+    }
+  },
+  "combined_establishment_examples": [
+    {
+      "hex_id": "870800092ffffff",
+      "wind_suitable": true,
+      "solar_suitable": true,
+      "wind_potential_score": 100.0,
+      "solar_potential_score": 53.1,
+      "wind_potential_area_km2": 5.1612933597,
+      "solar_potential_area_km2": 2.740646774,
+      "establishment_class": "wind_and_solar"
+    },
+    {
+      "hex_id": "8a1f0c916407fff",
+      "wind_suitable": true,
+      "solar_suitable": false,
+      "wind_potential_score": 100.0,
+      "solar_potential_score": 0.0,
+      "wind_potential_area_km2": 0.0150475019,
+      "solar_potential_area_km2": 0.0,
+      "establishment_class": "wind_only"
+    }
+  ]
+}

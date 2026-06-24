@@ -1,0 +1,256 @@
+{
+  "schema_version": "v3_potential_frame_contract_v0",
+  "status": "proposal_from_v2_inventory",
+  "purpose": "Minimum normalized frames V3 needs before materializing potential/result layers.",
+  "required_input_fields": {
+    "common": [
+      "region_id",
+      "native_crs",
+      "analysis_h3_resolution",
+      "display_h3_resolution",
+      "display_geometry_source",
+      "applied_input_fingerprint"
+    ],
+    "wind": [
+      "selected_group_layers",
+      "group_parameters_m",
+      "landscape_or_factor_scores_source",
+      "acceptance_registry_version"
+    ],
+    "solar": [
+      "solar_applied_config",
+      "large_scale_active",
+      "large_population_active",
+      "filter_configs",
+      "population_buffer_m",
+      "panel_area_m2_per_person"
+    ],
+    "scenario_allocation": [
+      "wind_area_need_km2",
+      "solar_area_need_km2",
+      "wind_twh",
+      "solar_twh",
+      "wind_km2_per_twh",
+      "solar_km2_per_twh",
+      "auto_min_potential_share_pct"
+    ]
+  },
+  "technology_potential_frame": {
+    "required_output_fields": [
+      "hex_id",
+      "technology_id",
+      "suitable",
+      "potential_score_pct",
+      "potential_area_km2",
+      "potential_area_share_pct",
+      "data_status"
+    ],
+    "recommended_output_fields": [
+      "analysis_h3_resolution",
+      "display_h3_resolution",
+      "class_id",
+      "class_label",
+      "color",
+      "landscape_type",
+      "class_km",
+      "filter_buffer_share_pct",
+      "feasibility_share_pct",
+      "core_score",
+      "zone_size",
+      "source_resolution"
+    ],
+    "v2_sources": {
+      "wind_bornholm_general": [
+        "potential_app.py:7037 _wind_source_frame",
+        "apps/potential_model/wind_acceptance.py:361 wind_acceptance_potential_frame",
+        "apps/potential_model/wind_acceptance.py:268 _build_wind_acceptance_frame_cached"
+      ],
+      "wind_trondelag_runtime": [
+        "potential_app.py:8989 _wind_fast_distance_runtime_result",
+        "potential_app.py:9075 _wind_runtime_hex_layer_frame",
+        "potential_app.py:10998 _wind_polygon_summary_frame",
+        "potential_app.py:10831 _wind_polygon_preview_state"
+      ],
+      "solar": [
+        "potential_app.py:4794 _solar_v1_frame",
+        "potential_app.py:5813 _solar_large_scale_frame",
+        "potential_app.py:5969 _combined_solar_hex_frame"
+      ]
+    }
+  },
+  "technology_allocation_frame": {
+    "required_output_fields": [
+      "hex_id",
+      "technology_id",
+      "allocated_area_km2",
+      "allocated_hex_share_pct",
+      "allocated_gwh",
+      "selected_rank",
+      "outside_lp"
+    ],
+    "recommended_output_fields": [
+      "potential_score_pct",
+      "potential_area_km2",
+      "allocation_phase",
+      "remaining_area_after_km2",
+      "allocation_priority_score",
+      "allocation_priority_reason",
+      "landscape_priority_score",
+      "social_acceptance_priority_score",
+      "social_acceptance_value",
+      "expansion_ring",
+      "reserved_by_other_technology"
+    ],
+    "v2_sources": {
+      "wind": [
+        "apps/potential_model/energy_modeling.py:866 allocate_wind_area_from_core_hexes",
+        "potential_app.py:10698 _expand_wind_area_outside_et"
+      ],
+      "solar": [
+        "potential_app.py:6175 _solar_establishment_frame",
+        "potential_app.py:6415 _expand_solar_area_outside_lp"
+      ]
+    }
+  },
+  "combined_establishment_frame": {
+    "required_output_fields": [
+      "hex_id",
+      "wind_suitable",
+      "solar_suitable",
+      "wind_potential_score",
+      "solar_potential_score",
+      "wind_potential_area_km2",
+      "solar_potential_area_km2",
+      "establishment_class",
+      "establishment_label",
+      "fill",
+      "stroke",
+      "stroke_weight",
+      "fill_opacity"
+    ],
+    "scenario_optional_fields": [
+      "wind_allocated_area_km2",
+      "solar_allocated_area_km2",
+      "wind_allocated_gwh",
+      "solar_allocated_gwh",
+      "wind_rank",
+      "solar_rank",
+      "wind_outside_lp_area_km2",
+      "solar_outside_lp_area_km2",
+      "outside_lp_shortage",
+      "outside_lp_reason"
+    ],
+    "v2_sources": [
+      "potential_app.py:9346 _potential_establishment_source_frame",
+      "potential_app.py:9441 _combined_establishment_class",
+      "potential_app.py:9463 _apply_establishment_style_columns",
+      "potential_app.py:9676 _combined_potential_establishment_frame",
+      "potential_app.py:10486 _combined_establishment_feature_collection"
+    ]
+  },
+  "classification": {
+    "wind_and_solar": {
+      "when": "wind_suitable == true and solar_suitable == true",
+      "label": "Vind och sol",
+      "color": "#15803d"
+    },
+    "wind_only": {
+      "when": "wind_suitable == true and solar_suitable == false",
+      "label": "Endast vind",
+      "color": "#2563eb"
+    },
+    "solar_only": {
+      "when": "wind_suitable == false and solar_suitable == true",
+      "label": "Endast sol",
+      "color": "#facc15"
+    },
+    "not_suitable": {
+      "when": "wind_suitable == false and solar_suitable == false",
+      "label": "Inte lämplig",
+      "color": "#991b1b"
+    }
+  },
+  "suitability_rules_from_v2": {
+    "potential_source_frame": [
+      "For wind, use potential_area_share_pct or wind_score as potential_score.",
+      "For solar, use potential_area_m2 if present, otherwise potential_area_share_pct or solar_score.",
+      "suitable is true when potential_area_km2 > 0 and potential_score > 0.",
+      "For Trondelag coarse solar display, selected exclusion overlap can force solar_suitable false when filter_share > 0 and small_area is zero."
+    ],
+    "selected_allocation_frame": [
+      "For scenario frames, suitable means allocated_area_km2 > 0 and outside_lp is false.",
+      "Outside-LP area is conflict/shortage visualization, not base potential."
+    ]
+  },
+  "result_feature_properties_minimum": {
+    "potential_establishment_area_now": [
+      "hex_id",
+      "establishment_class",
+      "establishment_label",
+      "wind_suitable",
+      "solar_suitable",
+      "wind_potential_score",
+      "solar_potential_score",
+      "wind_potential_area_km2",
+      "solar_potential_area_km2",
+      "fill",
+      "stroke",
+      "stroke_weight",
+      "fill_opacity",
+      "data_status"
+    ],
+    "scenario_allocation_later": [
+      "hex_id",
+      "parent_hex_id",
+      "allocation_class",
+      "allocation_label",
+      "wind_allocated_area_km2",
+      "solar_allocated_area_km2"
+    ],
+    "outside_lp_later": [
+      "hex_id",
+      "schematic_technology",
+      "schematic_label",
+      "represented_area_km2",
+      "is_schematic",
+      "is_real_location"
+    ]
+  },
+  "region_status": {
+    "bornholm": {
+      "native_crs": "EPSG:25833",
+      "analysis_h3_policy": "source/default R10, display default R8, coarser rollups available",
+      "wind_frame_status": "prototype/real V2 data flow",
+      "solar_frame_status": "prototype/real V2 data flow plus small-scale population schematic when active",
+      "social_acceptance_status": "synthetic"
+    },
+    "trondelag": {
+      "native_crs": "EPSG:25832",
+      "analysis_h3_policy": "R7 app/source level, R6/R5 rollups, no R8/R9 in interactive app",
+      "wind_frame_status": "runtime/proxy fast-distance R7 flow",
+      "solar_frame_status": "runtime/proxy; population uses 250 m grid/centroid proxy",
+      "energy_status": "placeholder",
+      "social_acceptance_status": "synthetic",
+      "pdf_landscape_status": "experimental"
+    },
+    "skaraborg": {
+      "v2_region_proxy": "vara",
+      "native_crs": "TBD",
+      "analysis_h3_policy": "missing in V2",
+      "wind_frame_status": "missing",
+      "solar_frame_status": "missing",
+      "energy_status": "missing",
+      "recommendation": "Do not present final potential layer until regional frames exist."
+    }
+  },
+  "recommended_v3_tests": [
+    "test_wind_potential_frame_minimum_columns",
+    "test_solar_potential_frame_minimum_columns",
+    "test_combined_establishment_class_mapping_four_cases",
+    "test_potential_layer_properties_minimum_contract",
+    "test_scenario_fields_do_not_create_base_suitability",
+    "test_outside_lp_is_not_real_location",
+    "test_trondelag_h3_policy_r7_r6_r5_only",
+    "test_skaraborg_missing_frames_do_not_render_as_final_analysis"
+  ]
+}

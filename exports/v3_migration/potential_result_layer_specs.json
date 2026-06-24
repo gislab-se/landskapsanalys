@@ -1,0 +1,258 @@
+{
+  "schema_version": "v3.result_layers.proposal.2026-06-09",
+  "notes": [
+    "Neutral V3 layer-spec for result layers. This is not a direct copy of V2's internal layer dict.",
+    "Result-layer data should come from applied/rendered_snapshot, not draft widget state.",
+    "Map view state should not be scoped to these cache keys."
+  ],
+  "layers": [
+    {
+      "id": "result.potential_establishment_area",
+      "label": "Potentiell etableringsyta",
+      "layer_kind": "result",
+      "result_type": "potential_establishment_area",
+      "geometry_type": "h3_hex_geojson",
+      "visibility": {
+        "default_visible": true,
+        "user_toggle": true,
+        "persist_visibility": true
+      },
+      "source": {
+        "type": "rendered_snapshot",
+        "snapshot_path": "rendered_snapshot.layers[result.potential_establishment_area].feature_collection",
+        "derived_from": [
+          "applied.wind_potential",
+          "applied.solar_potential",
+          "applied.wind_scenario_allocation",
+          "applied.solar_scenario_allocation"
+        ],
+        "native_crs": "EPSG:4326",
+        "render_crs": "EPSG:4326"
+      },
+      "cache_key": "result:potential_establishment_area:{region_id}:{applied_hash}:{display_resolution}",
+      "legend_group": {
+        "id": "combined_establishment",
+        "label": "Potentiell etableringsyta",
+        "items": [
+          {
+            "value": "wind_and_solar",
+            "label": "Vind och sol",
+            "color": "#15803d"
+          },
+          {
+            "value": "wind_only",
+            "label": "Endast vind",
+            "color": "#2563eb"
+          },
+          {
+            "value": "solar_only",
+            "label": "Endast sol",
+            "color": "#facc15"
+          },
+          {
+            "value": "not_suitable",
+            "label": "Inte lämplig",
+            "color": "#991b1b"
+          }
+        ]
+      },
+      "style": {
+        "type": "property",
+        "fill_color_property": "fill",
+        "stroke_color_property": "stroke",
+        "fill_opacity_property": "fill_opacity",
+        "stroke_width_property": "stroke_weight",
+        "fallback": {
+          "fill_color": "#991b1b",
+          "stroke_color": "#fee2e2",
+          "fill_opacity": 0.58,
+          "stroke_opacity": 0.72,
+          "stroke_width": 0.12
+        },
+        "z_index": 476
+      },
+      "properties": {
+        "required": [
+          "hex_id",
+          "establishment_class",
+          "establishment_label",
+          "wind_suitable",
+          "solar_suitable",
+          "fill",
+          "stroke"
+        ],
+        "optional": [
+          "wind_allocated_area_km2",
+          "solar_allocated_area_km2",
+          "outside_lp_shortage",
+          "outside_lp_reason",
+          "tooltip_title",
+          "tooltip_body",
+          "popup"
+        ]
+      }
+    },
+    {
+      "id": "result.scenario_allocation_hex",
+      "label": "Scenariofördelning i etableringshex",
+      "layer_kind": "result",
+      "result_type": "scenario_allocation",
+      "geometry_type": "h3_child_hex_geojson",
+      "visibility": {
+        "default_visible": false,
+        "default_visible_policy": "May be true for small snapshots, for example display_resolution <= 9 and feature_count <= 12000.",
+        "user_toggle": true,
+        "persist_visibility": true
+      },
+      "source": {
+        "type": "rendered_snapshot",
+        "snapshot_path": "rendered_snapshot.layers[result.scenario_allocation_hex].feature_collection",
+        "derived_from": [
+          "applied.wind_scenario_allocation",
+          "applied.solar_scenario_allocation"
+        ],
+        "native_crs": "EPSG:4326",
+        "render_crs": "EPSG:4326"
+      },
+      "cache_key": "result:scenario_allocation_hex:{region_id}:{applied_hash}:{display_resolution}",
+      "legend_group": {
+        "id": "scenario_allocation",
+        "label": "Scenariofördelning i etableringshex",
+        "items": [
+          {
+            "value": "wind",
+            "label": "Scenarioyta: vind",
+            "color": "#1d4ed8"
+          },
+          {
+            "value": "solar",
+            "label": "Scenarioyta: sol",
+            "color": "#f59e0b"
+          },
+          {
+            "value": "both",
+            "label": "Scenarioyta: vind och sol",
+            "color": "#166534"
+          }
+        ]
+      },
+      "style": {
+        "type": "property",
+        "fill_color_property": "fill",
+        "stroke_color_property": "stroke",
+        "fill_opacity_property": "fill_opacity",
+        "stroke_width_property": "stroke_weight",
+        "fallback": {
+          "fill_color": "#1d4ed8",
+          "stroke_color": "#0f172a",
+          "fill_opacity": 0.88,
+          "stroke_opacity": 0.0,
+          "stroke_width": 0.0
+        },
+        "z_index": 540
+      },
+      "properties": {
+        "required": [
+          "hex_id",
+          "parent_hex_id",
+          "allocation_class",
+          "allocation_label",
+          "wind_allocated_area_km2",
+          "solar_allocated_area_km2",
+          "fill"
+        ],
+        "optional": [
+          "tooltip_title",
+          "tooltip_body",
+          "popup"
+        ]
+      }
+    },
+    {
+      "id": "result.outside_landscape_potential_need",
+      "label": "Ytbehov utanför landskapets potential",
+      "layer_kind": "result",
+      "result_type": "outside_landscape_potential_need",
+      "geometry_type": "schematic_h3_hex_geojson",
+      "visibility": {
+        "default_visible": true,
+        "default_visible_policy": "Visible only when wind or solar shortage area is above the display threshold.",
+        "user_toggle": true,
+        "persist_visibility": true
+      },
+      "source": {
+        "type": "rendered_snapshot",
+        "snapshot_path": "rendered_snapshot.layers[result.outside_landscape_potential_need].feature_collection",
+        "derived_from": [
+          "applied.wind_unmet_area_km2",
+          "applied.solar_unmet_area_km2"
+        ],
+        "placement_semantics": "schematic_not_real_location",
+        "native_crs": "EPSG:4326",
+        "render_crs": "EPSG:4326"
+      },
+      "cache_key": "result:outside_landscape_potential_need:{region_id}:{applied_hash}:{display_resolution}",
+      "legend_group": {
+        "id": "outside_lp_need",
+        "label": "Ytbehov utanför landskapets potential",
+        "items": [
+          {
+            "value": "wind",
+            "label": "Schematisk vindyta utanför potential",
+            "color": "#2563eb"
+          },
+          {
+            "value": "solar",
+            "label": "Schematisk solyta utanför potential",
+            "color": "#facc15"
+          }
+        ]
+      },
+      "style": {
+        "type": "property",
+        "fill_color_property": "fill",
+        "stroke_color_property": "stroke",
+        "fill_opacity_property": "fill_opacity",
+        "stroke_width_property": "stroke_weight",
+        "fallback": {
+          "fill_color": "#2563eb",
+          "stroke_color": "#0f172a",
+          "fill_opacity": 0.76,
+          "stroke_opacity": 0.55,
+          "stroke_width": 0.28
+        },
+        "z_index": 486
+      },
+      "properties": {
+        "required": [
+          "hex_id",
+          "schematic_technology",
+          "schematic_label",
+          "represented_area_km2",
+          "fill"
+        ],
+        "optional": [
+          "represented_base_hex_count",
+          "display_resolution",
+          "tooltip_title",
+          "tooltip_body",
+          "popup"
+        ]
+      }
+    }
+  ],
+  "view_state_rule": {
+    "do_not_scope_map_view_to": [
+      "cache_key",
+      "layer id",
+      "result_type",
+      "rendered_snapshot id",
+      "visibility"
+    ],
+    "recommended_scope": [
+      "region_id",
+      "map_contract_version",
+      "explicit_reset_token"
+    ]
+  }
+}

@@ -20,7 +20,23 @@ __pycache__/
 
 # Local app runtime/cache outputs
 .streamlit/*.log
+artifacts/
+tmp/
 docs/geocontext/acceptance_framework/data/trondelag_prototype_assets/runtime_buffers/
+docs/geocontext/acceptance_framework/data/prototype_runtime/
+
+# Generated GIS/review outputs
+data/processed/**/*.gpkg
+data/processed/**/*.tif
+data/processed/**/*.tiff
+exports/qgis_review/bornholm_landmask_candidate_comparison/
+exports/qgis_review/bornholm_landmask_xyz_review/
+exports/qgis_review/bornholm_r9_runtime_qa/
+exports/qgis_review/landscape_baselayers/
+exports/v2_multiregion/bornholm/bornholm_lablab_landscape_r9_app.geojson
+exports/v2_multiregion/bornholm/h3_display_geometries/bornholm_h3_res_*_land_clipped.geojson
+exports/v3_geojson/
+exports/v3_migration/potential_runtime_full_frames/
 
 # VS Code local workspace artifacts
 .vscode/*.log

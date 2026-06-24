@@ -1,0 +1,220 @@
+{
+  "schema": "landskapspotential.v3.rendered_snapshot.layers.example",
+  "notes": [
+    "V2 uses semantic labels in `name` and renderer-oriented `layer_kind` values like `hex` and `vector`.",
+    "For V3, keep `layer_kind` semantic (`base`, `result`, `source`, `buffer`) and add `geometry_kind` for the Leaflet renderer adapter."
+  ],
+  "layers": [
+    {
+      "layer_id": "base:osm",
+      "label": "OSM",
+      "layer_kind": "base",
+      "geometry_kind": "tile",
+      "is_base_layer": true,
+      "is_overlay": false,
+      "default_visible": true,
+      "tile_url": "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      "attribution": "&copy; OpenStreetMap contributors",
+      "user_visible_fields": ["label"],
+      "internal_fields": ["tile_url", "attribution"]
+    },
+    {
+      "layer_id": "base:satellite",
+      "label": "Satellite",
+      "layer_kind": "base",
+      "geometry_kind": "tile",
+      "is_base_layer": true,
+      "is_overlay": false,
+      "default_visible": false,
+      "tile_url": "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      "attribution": "Tiles &copy; Esri",
+      "user_visible_fields": ["label"],
+      "internal_fields": ["tile_url", "attribution"]
+    },
+    {
+      "layer_id": "result:combined_establishment",
+      "label": "Potentiell etableringsyta",
+      "layer_kind": "result",
+      "geometry_kind": "hex",
+      "is_base_layer": false,
+      "is_overlay": true,
+      "default_visible": true,
+      "feature_collection": {
+        "type": "FeatureCollection",
+        "features": [
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Polygon",
+              "coordinates": [
+                [
+                  [13.42, 58.38],
+                  [13.43, 58.38],
+                  [13.44, 58.39],
+                  [13.43, 58.40],
+                  [13.42, 58.40],
+                  [13.41, 58.39],
+                  [13.42, 58.38]
+                ]
+              ]
+            },
+            "properties": {
+              "hex_id": "example_h3_parent",
+              "establishment_class": "wind_and_solar",
+              "establishment_label": "Vind och sol",
+              "fill": "#15803d",
+              "stroke": "#dcfce7",
+              "fill_opacity": 0.58,
+              "stroke_weight": 0.12,
+              "tooltip_title": "Vind och sol",
+              "tooltip_body": "Vindpotential: ja · Solpotential: ja",
+              "popup": "<strong>Potentiell etableringsyta</strong><br>Klass: Vind och sol"
+            }
+          }
+        ]
+      },
+      "style": {
+        "fill_property": "fill",
+        "fill_opacity_property": "fill_opacity",
+        "stroke_property": "stroke",
+        "stroke_weight_property": "stroke_weight",
+        "stroke": true,
+        "stroke_opacity": 0.72,
+        "fill_opacity": 0.58,
+        "weight": 0.12
+      },
+      "legend_id": "combined_establishment",
+      "legend_title": "Potentiell etableringsyta",
+      "legend_items": [
+        {"label": "Endast vind", "color": "#2563eb"},
+        {"label": "Endast sol", "color": "#facc15"},
+        {"label": "Vind och sol", "color": "#15803d"},
+        {"label": "Inte lämplig", "color": "#dc2626"}
+      ],
+      "tooltip_fields": ["tooltip_title", "tooltip_body"],
+      "popup_fields": ["popup"],
+      "z_index": 476,
+      "group": "result",
+      "technology_id": "combined",
+      "parameter_id": null,
+      "distance_m": null,
+      "user_visible_fields": ["label", "legend_title", "legend_items", "tooltip_fields", "popup_fields"],
+      "internal_fields": ["layer_id", "geometry_kind", "feature_collection", "style", "z_index", "technology_id", "parameter_id"]
+    },
+    {
+      "layer_id": "result:scenario_allocation",
+      "label": "Scenariofördelning i etableringshex",
+      "layer_kind": "result",
+      "geometry_kind": "hex",
+      "is_base_layer": false,
+      "is_overlay": true,
+      "default_visible": false,
+      "feature_collection": {
+        "type": "FeatureCollection",
+        "features": []
+      },
+      "style": {
+        "fill_property": "fill",
+        "fill_opacity_property": "fill_opacity",
+        "stroke_property": "stroke",
+        "stroke": false,
+        "stroke_opacity": 0.0,
+        "fill_opacity": 0.88,
+        "weight": 0.0
+      },
+      "legend_id": "scenario_allocation",
+      "legend_title": "Scenariofördelning i etableringshex",
+      "legend_items": [
+        {"label": "Vind", "color": "#2563eb"},
+        {"label": "Sol", "color": "#facc15"},
+        {"label": "Vind och sol", "color": "#15803d"}
+      ],
+      "tooltip_fields": ["tooltip_title", "tooltip_body"],
+      "popup_fields": ["popup"],
+      "z_index": 540,
+      "group": "result",
+      "technology_id": "combined",
+      "parameter_id": "energy_scenario_allocation",
+      "distance_m": null,
+      "user_visible_fields": ["label", "legend_title", "legend_items", "tooltip_fields", "popup_fields"],
+      "internal_fields": ["layer_id", "geometry_kind", "feature_collection", "style", "z_index", "technology_id", "parameter_id"]
+    },
+    {
+      "layer_id": "source:solar:protected:protected_areas",
+      "label": "Sol källa: Skyddad natur",
+      "layer_kind": "source",
+      "geometry_kind": "vector",
+      "is_base_layer": false,
+      "is_overlay": true,
+      "default_visible": true,
+      "source_layer_id": "solar:protected:protected_areas",
+      "feature_collection": {
+        "type": "FeatureCollection",
+        "features": []
+      },
+      "style": {
+        "fill_property": "fill",
+        "stroke_color": "#16a34a",
+        "fill_color": "#16a34a",
+        "stroke_opacity": 0.82,
+        "fill_opacity": 0.22,
+        "weight": 1.4,
+        "point_radius": 4,
+        "use_global_opacity": false
+      },
+      "legend_id": "solar_protected_source",
+      "legend_title": "",
+      "legend_items": [
+        {"label": "Skyddad natur", "color": "#16a34a"}
+      ],
+      "tooltip_fields": ["tooltip_title", "tooltip_body"],
+      "popup_fields": ["popup"],
+      "z_index": 456,
+      "group": "source",
+      "technology_id": "solar",
+      "parameter_id": "protected",
+      "distance_m": null,
+      "user_visible_fields": ["label", "legend_items", "tooltip_fields", "popup_fields"],
+      "internal_fields": ["layer_id", "source_layer_id", "geometry_kind", "feature_collection", "style", "z_index", "technology_id", "parameter_id"]
+    },
+    {
+      "layer_id": "buffer:solar:protected:250:protected_areas",
+      "label": "Solbuffert: Skyddad natur",
+      "layer_kind": "buffer",
+      "geometry_kind": "vector",
+      "is_base_layer": false,
+      "is_overlay": true,
+      "default_visible": true,
+      "source_layer_id": "solar:protected:protected_areas",
+      "buffer_layer_id": "solar:protected:buffer:250:protected_areas",
+      "distance_m": 250,
+      "feature_collection": {
+        "type": "FeatureCollection",
+        "features": []
+      },
+      "style": {
+        "fill_property": "fill",
+        "stroke_color": "#16a34a",
+        "fill_color": "#16a34a",
+        "stroke_opacity": 0.56,
+        "fill_opacity": 0.18,
+        "weight": 0.75,
+        "point_radius": 4,
+        "use_global_opacity": false
+      },
+      "legend_id": "solar_protected_buffer",
+      "legend_title": "",
+      "legend_items": [
+        {"label": "250 m buffert", "color": "#16a34a"}
+      ],
+      "tooltip_fields": ["tooltip_title", "tooltip_body"],
+      "popup_fields": ["popup"],
+      "z_index": 458,
+      "group": "buffer",
+      "technology_id": "solar",
+      "parameter_id": "protected_buffer_m",
+      "user_visible_fields": ["label", "legend_items", "tooltip_fields", "popup_fields"],
+      "internal_fields": ["layer_id", "source_layer_id", "buffer_layer_id", "distance_m", "geometry_kind", "feature_collection", "style", "z_index", "technology_id", "parameter_id"]
+    }
+  ]
+}

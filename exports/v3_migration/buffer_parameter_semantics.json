@@ -1,0 +1,122 @@
+[
+  {
+    "parameter_id": "settlement_population",
+    "layer_role": "conflict_source_and_buffer",
+    "default_operation": "distance_conflict",
+    "buffer_required": true,
+    "crs": "Bornholm EPSG:25833; Trøndelag EPSG:25832",
+    "notes": "Too close is bad. Trøndelag default source is 250 m population-grid/centroid proxy; show dissolved polygon buffer, not H3 overlay."
+  },
+  {
+    "parameter_id": "settlement_built_environment",
+    "layer_role": "conflict_source_and_buffer",
+    "default_operation": "distance_conflict",
+    "buffer_required": true,
+    "crs": "Bornholm EPSG:25833; Trøndelag EPSG:25832",
+    "notes": "Optional built-centre/building/holiday-house proxies. Multi-layer group should use min distance and any intersection, not additive scoring."
+  },
+  {
+    "parameter_id": "transport_roads",
+    "layer_role": "conflict_source_and_buffer",
+    "default_operation": "distance_conflict",
+    "buffer_required": true,
+    "crs": "Bornholm EPSG:25833; Trøndelag EPSG:25832",
+    "notes": "Road classes split into sublayers. For wind, distance conflict; for solar, exclusion-style area subtraction around selected road layers."
+  },
+  {
+    "parameter_id": "electrical_grid",
+    "layer_role": "feasibility_source_and_buffer",
+    "default_operation": "proximity_feasibility",
+    "buffer_required": true,
+    "crs": "Bornholm EPSG:25833; Trøndelag EPSG:25832",
+    "notes": "Near grid is a positive mask: potential only within max distance to selected grid objects. This is not a no-go buffer."
+  },
+  {
+    "parameter_id": "protected_nature",
+    "layer_role": "conflict_source_and_buffer",
+    "default_operation": "hard_exclusion",
+    "buffer_required": false,
+    "crs": "Bornholm EPSG:25833; Trøndelag EPSG:25832",
+    "notes": "Intersection blocks; optional buffer expands blocked area. Keep protected nature separate from land-use/forest."
+  },
+  {
+    "parameter_id": "culture",
+    "layer_role": "conflict_source_and_buffer",
+    "default_operation": "hard_exclusion",
+    "buffer_required": false,
+    "crs": "Bornholm EPSG:25833; Trøndelag EPSG:25832",
+    "notes": "Culture layers are hard exclusion in V2 first prototype; later V3 scenarios may relax this but must document deviation."
+  },
+  {
+    "parameter_id": "reindeer",
+    "layer_role": "conflict_source_and_buffer",
+    "default_operation": "hard_exclusion",
+    "buffer_required": false,
+    "crs": "Trøndelag EPSG:25832",
+    "notes": "Trøndelag-specific reindeer husbandry controller; no Bornholm equivalent. Optional buffer expands exclusion."
+  },
+  {
+    "parameter_id": "land_use_forest",
+    "layer_role": "conflict_source_and_buffer",
+    "default_operation": "hard_exclusion",
+    "buffer_required": false,
+    "crs": "Trøndelag EPSG:25832; Bornholm if mapped EPSG:25833",
+    "notes": "V2 treats forest/markdekke as solar exclusion/area subtraction, not generic inclusion. Keep separate from protected nature."
+  },
+  {
+    "parameter_id": "coastal",
+    "layer_role": "conflict_source_and_buffer",
+    "default_operation": "hard_exclusion",
+    "buffer_required": false,
+    "crs": "Bornholm EPSG:25833; Trøndelag EPSG:25832 if mapped",
+    "notes": "Coastal/strand protection is hard exclusion with optional buffer; Trøndelag layer not fully wired in prototype."
+  },
+  {
+    "parameter_id": "aviation_approach",
+    "layer_role": "conflict_source_and_buffer",
+    "default_operation": "hard_exclusion",
+    "buffer_required": false,
+    "crs": "Bornholm EPSG:25833; Trøndelag EPSG:25832 if mapped",
+    "notes": "Approach zones are hard exclusion. R-runtime has an exception where aviation_approach display buffer is not clipped at coastline."
+  },
+  {
+    "parameter_id": "aviation_bird",
+    "layer_role": "conflict_source_and_buffer",
+    "default_operation": "distance_conflict",
+    "buffer_required": true,
+    "crs": "Bornholm EPSG:25833; Trøndelag EPSG:25832 if mapped",
+    "notes": "Distance-based conflict, not generic aviation hard-stop."
+  },
+  {
+    "parameter_id": "military",
+    "layer_role": "conflict_source_and_buffer",
+    "default_operation": "hard_exclusion",
+    "buffer_required": false,
+    "crs": "Bornholm EPSG:25833; Trøndelag EPSG:25832 if mapped",
+    "notes": "Military areas are clean hard masks with optional buffer."
+  },
+  {
+    "parameter_id": "combined_result",
+    "layer_role": "result_layer",
+    "default_operation": "combined_acceptance",
+    "buffer_required": false,
+    "crs": "Export/render EPSG:4326",
+    "notes": "If feasibility groups exist: intersection(feasible) minus union(conflict). Otherwise landmask minus union(conflict)."
+  },
+  {
+    "parameter_id": "source_layer",
+    "layer_role": "map_overlay",
+    "default_operation": "display_only",
+    "buffer_required": false,
+    "crs": "Source CRS transformed to render EPSG:4326",
+    "notes": "Selected_for_analysis and source_visible are separate. Source may be hidden while still active in analysis."
+  },
+  {
+    "parameter_id": "buffer_layer",
+    "layer_role": "map_overlay",
+    "default_operation": "display_from_applied_buffer",
+    "buffer_required": true,
+    "crs": "Computed in native CRS, exported EPSG:4326",
+    "notes": "Buffer visibility should be applied-state driven in V3. Draft buffer changes must not update this layer before apply."
+  }
+]

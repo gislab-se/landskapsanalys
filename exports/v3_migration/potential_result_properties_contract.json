@@ -1,0 +1,470 @@
+{
+  "schema_version": "v3_potential_result_properties_v0",
+  "status": "proposal_from_v2_inventory",
+  "coordinate_policy": {
+    "analysis_native_crs_by_region": {
+      "bornholm": "EPSG:25833",
+      "trondelag": "EPSG:25832",
+      "vara": "TBD"
+    },
+    "render_crs": "EPSG:4326",
+    "geometry_id": "h3 cell id in hex_id unless explicitly marked schematic or child",
+    "notes": [
+      "Distance, buffer and area operations should run in the region native CRS.",
+      "GeoJSON delivered to rendered_snapshot.layers should be lon/lat EPSG:4326.",
+      "Display resolution may differ from analysis resolution; include both when relevant."
+    ]
+  },
+  "class_definitions": {
+    "establishment_class": {
+      "wind_and_solar": {
+        "label": "Vind och sol",
+        "color": "#15803d",
+        "meaning": "Both wind and solar are suitable in the establishment hex after applied filters."
+      },
+      "wind_only": {
+        "label": "Endast vind",
+        "color": "#2563eb",
+        "meaning": "Wind is suitable and solar is not suitable in the establishment hex."
+      },
+      "solar_only": {
+        "label": "Endast sol",
+        "color": "#facc15",
+        "meaning": "Solar is suitable and wind is not suitable in the establishment hex."
+      },
+      "not_suitable": {
+        "label": "Inte lämplig",
+        "color": "#991b1b",
+        "meaning": "Neither wind nor solar is suitable after applied filters."
+      }
+    },
+    "scenario_allocation_class": {
+      "both": {
+        "label": "Vind och sol",
+        "color": "#166534",
+        "meaning": "Both technologies are allocated in the parent establishment hex."
+      },
+      "wind": {
+        "label": "Vind",
+        "color": "#1d4ed8",
+        "meaning": "Wind scenario area dominates or is the only allocation in the parent establishment hex."
+      },
+      "solar": {
+        "label": "Sol",
+        "color": "#f59e0b",
+        "meaning": "Solar scenario area dominates or is the only allocation in the parent establishment hex."
+      }
+    },
+    "outside_lp_schematic_technology": {
+      "wind": {
+        "label": "Vind",
+        "meaning": "Schematic remaining wind area demand outside landscape potential."
+      },
+      "solar": {
+        "label": "Sol",
+        "meaning": "Schematic remaining solar area demand outside landscape potential."
+      }
+    }
+  },
+  "common_layer_spec_fields": {
+    "id": "stable rendered layer id",
+    "label": "user-facing layer label",
+    "layer_kind": "result",
+    "result_kind": "potential_establishment_area | scenario_allocation | outside_lp_need",
+    "technology_scope": "wind | solar | combined",
+    "visible": "default visibility in rendered snapshot",
+    "legend_group": "Establishment potential | Scenario allocation | Outside landscape potential",
+    "source": {
+      "analysis_snapshot_id": "applied/rendered analysis snapshot id",
+      "input_fingerprint": "hash of applied inputs and data versions",
+      "region_id": "region id",
+      "analysis_h3_resolution": "integer",
+      "display_h3_resolution": "integer",
+      "native_crs": "region native CRS",
+      "render_crs": "EPSG:4326"
+    },
+    "cache_key": "stable cache key for this result layer",
+    "style": {
+      "fill_property": "fill",
+      "stroke_property": "stroke",
+      "fill_opacity_property": "fill_opacity",
+      "stroke_weight_property": "stroke_weight"
+    }
+  },
+  "result_layers": {
+    "potential_establishment_area": {
+      "v2_label": "Potentiell etableringsyta",
+      "v2_builder_refs": [
+        "potential_app.py:9676 _combined_potential_establishment_frame",
+        "potential_app.py:10486 _combined_establishment_feature_collection",
+        "potential_app.py:10652 _combined_potential_establishment_family_layers"
+      ],
+      "feature_geometry": {
+        "type": "H3 display polygon",
+        "id_field": "hex_id",
+        "render_crs": "EPSG:4326"
+      },
+      "v2_observed_properties": {
+        "required": [
+          "hex_id",
+          "establishment_class",
+          "establishment_label",
+          "outside_lp_shortage",
+          "outside_lp_reason",
+          "wind_outside_lp_area_km2",
+          "solar_outside_lp_area_km2",
+          "wind_suitable",
+          "solar_suitable",
+          "fill",
+          "stroke",
+          "stroke_weight",
+          "fill_opacity",
+          "tooltip_title",
+          "tooltip_body",
+          "popup"
+        ],
+        "optional": [
+          "social_acceptance_impact_pct",
+          "social_acceptance_value",
+          "social_acceptance_weight",
+          "social_acceptance_source_hex_count"
+        ]
+      },
+      "v3_recommended_properties": {
+        "identity": [
+          "hex_id",
+          "analysis_h3_resolution",
+          "display_h3_resolution"
+        ],
+        "classification": [
+          "establishment_class",
+          "establishment_label",
+          "wind_suitable",
+          "solar_suitable"
+        ],
+        "wind_metrics": [
+          "wind_potential_score_pct",
+          "wind_potential_area_km2",
+          "wind_allocated_area_km2",
+          "wind_allocated_gwh",
+          "wind_allocated_hex_share_pct",
+          "wind_rank",
+          "wind_outside_lp_area_km2",
+          "wind_outside_lp"
+        ],
+        "solar_metrics": [
+          "solar_potential_score_pct",
+          "solar_potential_area_km2",
+          "solar_allocated_area_km2",
+          "solar_allocated_gwh",
+          "solar_allocated_hex_share_pct",
+          "solar_rank",
+          "solar_outside_lp_area_km2",
+          "solar_outside_lp"
+        ],
+        "shortage": [
+          "outside_lp_shortage",
+          "outside_lp_reason"
+        ],
+        "debug_optional": [
+          "wind_allocation_priority_score",
+          "solar_allocation_priority_score",
+          "wind_landscape_priority_score",
+          "solar_landscape_priority_score",
+          "wind_social_acceptance_value",
+          "solar_social_acceptance_value",
+          "data_status"
+        ],
+        "presentation": [
+          "fill",
+          "stroke",
+          "stroke_weight",
+          "fill_opacity",
+          "tooltip_title",
+          "tooltip_body",
+          "popup"
+        ]
+      }
+    },
+    "scenario_allocation": {
+      "v2_label": "Scenariofördelning i etableringshex",
+      "v2_builder_refs": [
+        "potential_app.py:10325 _scenario_allocation_marker_feature_collection",
+        "potential_app.py:10418 _scenario_allocation_marker_layer",
+        "potential_app.py:10454 _scenario_allocation_marker_family_layers"
+      ],
+      "feature_geometry": {
+        "type": "H3 child display polygon",
+        "id_field": "hex_id",
+        "parent_field": "parent_hex_id",
+        "render_crs": "EPSG:4326"
+      },
+      "v2_observed_properties": {
+        "required": [
+          "hex_id",
+          "parent_hex_id",
+          "allocation_class",
+          "allocation_label",
+          "wind_allocated_area_km2",
+          "solar_allocated_area_km2",
+          "fill",
+          "stroke",
+          "stroke_weight",
+          "fill_opacity",
+          "tooltip_title",
+          "tooltip_body",
+          "popup"
+        ]
+      },
+      "v3_recommended_properties": {
+        "identity": [
+          "hex_id",
+          "parent_hex_id",
+          "analysis_h3_resolution",
+          "display_h3_resolution",
+          "marker_h3_resolution"
+        ],
+        "classification": [
+          "allocation_class",
+          "allocation_label"
+        ],
+        "allocation": [
+          "wind_allocated_area_km2",
+          "solar_allocated_area_km2",
+          "wind_allocated_gwh",
+          "solar_allocated_gwh",
+          "wind_rank",
+          "solar_rank",
+          "wind_phase",
+          "solar_phase"
+        ],
+        "priority_optional": [
+          "wind_allocation_priority_score",
+          "solar_allocation_priority_score",
+          "wind_allocation_priority_reason",
+          "solar_allocation_priority_reason"
+        ],
+        "presentation": [
+          "fill",
+          "stroke",
+          "stroke_weight",
+          "fill_opacity",
+          "tooltip_title",
+          "tooltip_body",
+          "popup"
+        ]
+      }
+    },
+    "outside_lp_need": {
+      "v2_label": "Ytbehov utanför landskapets potential",
+      "v2_builder_refs": [
+        "potential_app.py:10069 _outside_lp_need_feature_collection",
+        "potential_app.py:10188 _outside_lp_need_layer",
+        "potential_app.py:10225 _outside_lp_need_family_layers"
+      ],
+      "feature_geometry": {
+        "type": "schematic H3 display polygon",
+        "id_field": "hex_id",
+        "render_crs": "EPSG:4326",
+        "placement_note": "Schematic, not a real proposed location."
+      },
+      "v2_observed_properties": {
+        "required": [
+          "hex_id",
+          "schematic_technology",
+          "schematic_label",
+          "represented_area_km2",
+          "represented_base_hex_count",
+          "display_resolution",
+          "fill",
+          "stroke",
+          "stroke_weight",
+          "fill_opacity",
+          "tooltip_title",
+          "tooltip_body",
+          "popup"
+        ]
+      },
+      "v3_recommended_properties": {
+        "identity": [
+          "hex_id",
+          "analysis_h3_resolution",
+          "display_h3_resolution"
+        ],
+        "classification": [
+          "schematic_technology",
+          "schematic_label",
+          "is_schematic",
+          "is_real_location"
+        ],
+        "area": [
+          "represented_area_km2",
+          "represented_base_hex_count",
+          "remaining_area_need_km2"
+        ],
+        "presentation": [
+          "fill",
+          "stroke",
+          "stroke_weight",
+          "fill_opacity",
+          "tooltip_title",
+          "tooltip_body",
+          "popup"
+        ]
+      }
+    }
+  },
+  "analysis_frame_contracts": {
+    "technology_potential_frame": {
+      "description": "Normalized per-technology potential before scenario allocation.",
+      "required_fields": [
+        "hex_id",
+        "technology_id",
+        "suitable",
+        "potential_score_pct",
+        "potential_area_km2"
+      ],
+      "recommended_fields": [
+        "potential_area_share_pct",
+        "landscape_type",
+        "class_km",
+        "filter_buffer_share_pct",
+        "feasibility_share_pct",
+        "core_score",
+        "zone_size",
+        "data_status"
+      ]
+    },
+    "technology_allocation_frame": {
+      "description": "Normalized per-technology selected area for a scenario.",
+      "required_fields": [
+        "hex_id",
+        "technology_id",
+        "allocated_area_km2",
+        "allocated_hex_share_pct",
+        "allocated_gwh",
+        "selected_rank",
+        "outside_lp"
+      ],
+      "recommended_fields": [
+        "potential_score_pct",
+        "potential_area_km2",
+        "allocation_phase",
+        "remaining_area_after_km2",
+        "allocation_priority_score",
+        "allocation_priority_reason",
+        "landscape_priority_score",
+        "social_acceptance_priority_score",
+        "social_acceptance_value",
+        "expansion_ring"
+      ]
+    }
+  },
+  "applied_input_contract": {
+    "must_come_from_applied_state": [
+      "region_id",
+      "analysis_h3_resolution",
+      "display_h3_resolution",
+      "energy_planning_scenario_id",
+      "area_demand_scenario_id",
+      "energy_mix_solar_share_pct",
+      "solar_applied_config",
+      "wind_selected_group_layers",
+      "wind_group_parameters_m",
+      "social_acceptance_scenario_id",
+      "social_acceptance_impact_pct",
+      "social_acceptance_allocation_priority_pct",
+      "data_manifest_versions"
+    ],
+    "must_not_come_from": [
+      "draft widget keys",
+      "Leaflet overlay visibility",
+      "Leaflet base layer selection",
+      "map center",
+      "map zoom"
+    ]
+  },
+  "data_status_values": {
+    "ok": "Real or accepted analysis data for the region.",
+    "proxy": "Proxy input, e.g. Trondelag population 250 m grid/centroid proxy.",
+    "synthetic": "Synthetic test data, e.g. current social acceptance manifests.",
+    "experimental": "Experimental layer, e.g. PDF-derived landscape-type extraction not yet reviewed as final.",
+    "placeholder": "Placeholder scenario/data flow, e.g. Trondelag energy scenarios using Bornholm placeholder files.",
+    "missing": "Required source is missing.",
+    "empty": "Source exists but produces no features for the current applied state."
+  },
+  "example_layers": [
+    {
+      "id": "result:combined_establishment:r7",
+      "label": "Potentiell etableringsyta",
+      "layer_kind": "result",
+      "result_kind": "potential_establishment_area",
+      "technology_scope": "combined",
+      "visible": true,
+      "legend_group": "Etableringspotential",
+      "source": {
+        "region_id": "trondelag",
+        "analysis_h3_resolution": 7,
+        "display_h3_resolution": 7,
+        "native_crs": "EPSG:25832",
+        "render_crs": "EPSG:4326",
+        "input_fingerprint": "sha256:..."
+      },
+      "cache_key": "trondelag:combined_establishment:r7:sha256:...",
+      "style": {
+        "fill_property": "fill",
+        "stroke_property": "stroke",
+        "stroke_weight_property": "stroke_weight",
+        "fill_opacity_property": "fill_opacity"
+      }
+    },
+    {
+      "id": "result:scenario_allocation:r7",
+      "label": "Scenariofördelning i etableringshex",
+      "layer_kind": "result",
+      "result_kind": "scenario_allocation",
+      "technology_scope": "combined",
+      "visible": false,
+      "legend_group": "Scenariofördelning",
+      "source": {
+        "region_id": "trondelag",
+        "analysis_h3_resolution": 7,
+        "display_h3_resolution": 7,
+        "native_crs": "EPSG:25832",
+        "render_crs": "EPSG:4326",
+        "input_fingerprint": "sha256:..."
+      },
+      "cache_key": "trondelag:scenario_allocation:r7:sha256:...",
+      "style": {
+        "fill_property": "fill",
+        "stroke_property": "stroke",
+        "stroke_weight_property": "stroke_weight",
+        "fill_opacity_property": "fill_opacity"
+      }
+    },
+    {
+      "id": "result:outside_lp_need:r7",
+      "label": "Ytbehov utanför landskapets potential",
+      "layer_kind": "result",
+      "result_kind": "outside_lp_need",
+      "technology_scope": "combined",
+      "visible": true,
+      "legend_group": "Scenariofördelning",
+      "source": {
+        "region_id": "trondelag",
+        "analysis_h3_resolution": 7,
+        "display_h3_resolution": 7,
+        "native_crs": "EPSG:25832",
+        "render_crs": "EPSG:4326",
+        "input_fingerprint": "sha256:..."
+      },
+      "cache_key": "trondelag:outside_lp_need:r7:sha256:...",
+      "style": {
+        "fill_property": "fill",
+        "stroke_property": "stroke",
+        "stroke_weight_property": "stroke_weight",
+        "fill_opacity_property": "fill_opacity"
+      }
+    }
+  ]
+}
