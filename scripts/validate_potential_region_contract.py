@@ -7,7 +7,6 @@ import json
 import logging
 import math
 import os
-import re
 import sys
 import importlib.util
 from functools import lru_cache
@@ -22,7 +21,9 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from apps.potential_model.manifests import (  # noqa: E402
+    default_region_id,
     list_regions,
+    load_region_index,
     load_linked_manifest,
     load_region,
     resolve_repo_path,
@@ -147,24 +148,34 @@ def _path_looks_pdf_or_raw(path_value: str | None, path: Path | None) -> bool:
 
 
 def check_default_region(report: ContractReport) -> None:
+    import potential_app as app  # noqa: WPS433
+
+    index_default = str(load_region_index().get("default_region_id") or "").strip().lower()
+    helper_default = default_region_id()
+    app_default = str(getattr(app, "DEFAULT_REGION_ID", "") or "").strip().lower()
     source_path = ROOT / "potential_app.py"
     source = source_path.read_text(encoding="utf-8")
-    match = re.search(r"DEFAULT_REGION_ID\s*=\s*['\"]([^'\"]+)['\"]", source)
-    if not match:
-        report.fail("potential_app.py has no DEFAULT_REGION_ID constant.")
-        return
-    default_region = match.group(1)
     report.check(
-        default_region == "trondelag",
-        'DEFAULT_REGION_ID is "trondelag".',
-        f'DEFAULT_REGION_ID is "{default_region}", expected "trondelag".',
+        index_default == "trondelag",
+        'regions/index.json default_region_id is "trondelag".',
+        f'regions/index.json default_region_id is "{index_default}", expected "trondelag".',
+    )
+    report.check(
+        app_default == helper_default == index_default,
+        "DEFAULT_REGION_ID is read from the region index.",
+        f'DEFAULT_REGION_ID/helper/index mismatch: app="{app_default}", helper="{helper_default}", index="{index_default}".',
+    )
+    report.check(
+        "DEFAULT_REGION_ID = default_region_id()" in source,
+        "potential_app.py delegates default region selection to the manifest helper.",
+        "potential_app.py should set DEFAULT_REGION_ID from default_region_id().",
     )
     report.check(
         "_active_region" in source
         and "_render_region_landing" in source
         and "_select_region" in source
         and "list_regions" in source,
-        "The app has a manifest-driven region landing path and keeps Trondelag as fallback default.",
+        "The app has a manifest-driven region landing path and catalog-driven fallback default.",
         "Region landing/selection code is missing from potential_app.py.",
     )
 

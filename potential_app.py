@@ -31,6 +31,7 @@ if str(APPS_DIR) not in sys.path:
 from potential_model.geometry import geometry_for_hex, load_h3_display_geometries  # noqa: E402
 import potential_model.landscape as landscape_model  # noqa: E402
 from potential_model.manifests import (  # noqa: E402
+    default_region_id,
     load_linked_manifest,
     load_region,
     list_regions,
@@ -174,7 +175,7 @@ TUTORIAL_STORAGE_KEY = "potential_tutorial_trondelag_v2_dismissed"
 # Kept only so shared registry helpers can resolve the Trondelag layer registry.
 REGION_SELECT_KEY = "potential_selected_region_id"
 REGION_LANDING_VIEW = "landing"
-DEFAULT_REGION_ID = "trondelag"
+DEFAULT_REGION_ID = default_region_id()
 WIND_LAYER_SELECTION_KEY = "wind_builder_selected_layers"
 WIND_RUNTIME_OVERLAY_KEY = "wind_builder_runtime_overlay_enabled"
 SOLAR_APPLIED_CONFIG_KEY = "solar_applied_config"

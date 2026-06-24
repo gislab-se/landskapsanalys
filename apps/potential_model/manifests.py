@@ -27,6 +27,10 @@ def regions_root() -> Path:
     return repo_root() / "regions"
 
 
+def region_index_path() -> Path:
+    return regions_root() / "index.json"
+
+
 def _regional_landscape_pipeline_root() -> Path:
     return Path(
         os.environ.get(
@@ -80,11 +84,27 @@ def _region_manifest_path_from_index(region_id: str) -> Path:
     return regions_root() / region_id / "region.json"
 
 
-def _indexed_region_manifest_paths() -> list[Path]:
-    index_path = regions_root() / "index.json"
+@lru_cache(maxsize=8)
+def load_region_index() -> dict[str, Any]:
+    index_path = region_index_path()
     if not index_path.exists():
-        return []
-    index = read_manifest(str(index_path))
+        return {"regions": []}
+    return _read_json(index_path).copy()
+
+
+def default_region_id() -> str:
+    index = load_region_index()
+    value = str(index.get("default_region_id") or "").strip()
+    if value:
+        return value.lower()
+    regions = index.get("regions") or []
+    if regions:
+        return str(regions[0]).strip().lower()
+    return "trondelag"
+
+
+def _indexed_region_manifest_paths() -> list[Path]:
+    index = load_region_index()
     region_ids = index.get("regions") or []
     paths: list[Path] = []
     for region_id in region_ids:
