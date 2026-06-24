@@ -4700,11 +4700,7 @@ def _map_panel_controls(region: dict[str, Any], key_prefix: str, panel: Any | No
 
     if panel is not None:
         panel.markdown(f"**{_t('H3-upplösning')}**")
-        display_mode_index = (
-            None
-            if display_mode_key in st.session_state
-            else display_modes_for_resolution.index(current_display_mode)
-        )
+        display_mode_index = display_modes_for_resolution.index(current_display_mode)
         display_mode = panel.radio(
             _t("Hexvisning"),
             options=display_modes_for_resolution,
@@ -4724,7 +4720,7 @@ def _map_panel_controls(region: dict[str, Any], key_prefix: str, panel: Any | No
             if st.session_state.get(state_key) != int(h3_resolution):
                 st.session_state[state_key] = int(h3_resolution)
         else:
-            h3_index = None if state_key in st.session_state else available.index(current_value)
+            h3_index = available.index(current_value)
             h3_resolution = panel.radio(
                 _t("H3-rollup"),
                 options=available,
