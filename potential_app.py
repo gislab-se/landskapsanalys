@@ -4916,17 +4916,21 @@ def _solar_v1_legend_items() -> list[dict[str, str]]:
 
 
 @st.cache_data(show_spinner=False)
-def _population_count_frame_for_resolution(path_str: str, target_resolution: int) -> pd.DataFrame:
+def _population_count_frame_for_resolution(
+    path_str: str,
+    target_resolution: int,
+    count_column: str = SOLAR_V1_POPULATION_COUNT_COLUMN,
+) -> pd.DataFrame:
     path = Path(path_str)
     if not path.exists():
         return pd.DataFrame(columns=["hex_id", "population"])
     raw = pd.read_csv(path)
-    if "hex_id" not in raw.columns or SOLAR_V1_POPULATION_COUNT_COLUMN not in raw.columns:
+    if "hex_id" not in raw.columns or count_column not in raw.columns:
         return pd.DataFrame(columns=["hex_id", "population"])
 
-    work = raw[["hex_id", SOLAR_V1_POPULATION_COUNT_COLUMN]].copy()
+    work = raw[["hex_id", count_column]].copy()
     work["hex_id"] = work["hex_id"].astype(str)
-    work["population"] = pd.to_numeric(work[SOLAR_V1_POPULATION_COUNT_COLUMN], errors="coerce").fillna(0.0).clip(lower=0.0)
+    work["population"] = pd.to_numeric(work[count_column], errors="coerce").fillna(0.0).clip(lower=0.0)
     work = work[["hex_id", "population"]]
     source_resolutions: list[int] = []
     for value in work["hex_id"].dropna().astype(str).head(250):
@@ -4994,55 +4998,16 @@ def _trondelag_population_proxy_resolution_m(region: dict[str, Any]) -> float:
 
 
 def _trondelag_population_proxy_count_frame(region: dict[str, Any], target_resolution: int) -> pd.DataFrame:
-    _, _, registry_meta = load_acceptance_registry()
-    distance = distance_table_for_layer(registry_meta, WIND_POPULATION_SOURCE_LAYER_ID)
-    if distance.empty or "hex_id" not in distance.columns or "distance_m" not in distance.columns:
+    catalog = load_linked_manifest(region, "parameter_buffer_catalog") or load_linked_manifest(region, "parameter_buffers") or {}
+    runtime = catalog.get("runtime_rendering") if isinstance(catalog, dict) else {}
+    population = runtime.get("population_buffer") if isinstance(runtime, dict) else {}
+    if not isinstance(population, dict):
         return pd.DataFrame(columns=["hex_id", "population"])
-
-    proxy_resolution_m = _trondelag_population_proxy_resolution_m(region)
-    work = distance[["hex_id", "distance_m", "intersects"]].copy()
-    work["hex_id"] = work["hex_id"].astype(str)
-    work["distance_m"] = pd.to_numeric(work["distance_m"], errors="coerce")
-    intersects = work["intersects"].fillna(False).astype(bool) if "intersects" in work.columns else pd.Series(False, index=work.index)
-    work = work.loc[intersects | work["distance_m"].le(proxy_resolution_m)].copy()
-    if work.empty:
+    path = resolve_region_path(region, population.get("population_h3_counts_csv"))
+    if path is None or not path.exists():
         return pd.DataFrame(columns=["hex_id", "population"])
-
-    source_resolutions: list[int] = []
-    for value in work["hex_id"].dropna().astype(str).head(250):
-        try:
-            source_resolutions.append(int(h3.get_resolution(value)))
-        except Exception:
-            continue
-    if not source_resolutions:
-        return pd.DataFrame(columns=["hex_id", "population"])
-
-    source_resolution = int(pd.Series(source_resolutions).mode().iloc[0])
-    target_resolution = int(target_resolution)
-    if target_resolution < source_resolution:
-        work["hex_id"] = work["hex_id"].map(lambda value: h3.cell_to_parent(str(value), target_resolution))
-    elif target_resolution > source_resolution:
-        rows: list[dict[str, Any]] = []
-        for row in work.itertuples(index=False):
-            try:
-                children = sorted(h3.cell_to_children(str(row.hex_id), target_resolution))
-            except Exception:
-                children = []
-            if not children:
-                continue
-            share = 1.0 / float(len(children))
-            rows.extend({"hex_id": str(child), "population": share} for child in children)
-        if not rows:
-            return pd.DataFrame(columns=["hex_id", "population"])
-        return pd.DataFrame(rows).groupby("hex_id", as_index=False)["population"].sum()
-
-    work["population"] = 1.0
-    grouped = work.groupby("hex_id", as_index=False)["population"].sum()
-    source_count = _trondelag_population_proxy_unit_count(registry_meta)
-    current_count = float(grouped["population"].sum()) if not grouped.empty else 0.0
-    if source_count is not None and current_count > 0:
-        grouped["population"] = grouped["population"] * (float(source_count) / current_count)
-    return grouped
+    count_column = str(population.get("population_count_column") or "population")
+    return _population_count_frame_for_resolution(str(path), int(target_resolution), count_column)
 
 
 def _solar_v1_population_count_frame(region: dict[str, Any], target_resolution: int) -> pd.DataFrame:
@@ -5061,7 +5026,7 @@ def _solar_v1_population_source_status(region: dict[str, Any]) -> str:
     if str(region.get("region_id", "")).lower() == "trondelag":
         return (
             "Befolkningsunderlag: Trondelag 250 m befolkningsrute-/centroidproxy. "
-            "Småskalig sol använder proxyenheter, inte individuella personer."
+            "Småskalig sol använder personantalet i rutorna, inte individuella personpunkter."
         )
     if SOLAR_V1_POPULATION_LAYER_PATH.exists():
         return (
@@ -5075,16 +5040,14 @@ def _solar_v1_population_source_status(region: dict[str, Any]) -> str:
 
 
 def _solar_v1_panel_area_label(region: dict[str, Any]) -> str:
-    if str(region.get("region_id", "")).lower() == "trondelag":
-        return "Panelyta per 250 m-proxyenhet"
     return _t("Panelyta per person")
 
 
 def _solar_v1_formula_text(region: dict[str, Any], panel_area_m2_per_person: float) -> str:
     if str(region.get("region_id", "")).lower() == "trondelag":
         return (
-            "Småskalig solyta beräknas som 250 m befolkningsrute-proxyenheter per hex "
-            f"× {float(panel_area_m2_per_person or 0.0):.0f} m2/proxyenhet."
+            "Småskalig solyta beräknas som befolkning i 250 m-rutor per hex "
+            f"× {float(panel_area_m2_per_person or 0.0):.0f} m2/person."
         )
     return (
         "Småskalig solyta beräknas som befolkning per hex "
@@ -5132,7 +5095,7 @@ def _solar_v1_frame(
     frame["solar_v1_class_label"] = [item["label"] for item in classes]
     frame["solar_v1_color"] = [item["color"] for item in classes]
     frame["solar_v1_population_label"] = (
-        "250 m-proxyenheter" if str(region.get("region_id", "")).lower() == "trondelag" else "personer"
+        "personer (250 m-rutor)" if str(region.get("region_id", "")).lower() == "trondelag" else "personer"
     )
     return _filter_frame_to_display_geometries(frame, display_geometry_path).reindex(columns=columns)
 
@@ -12876,7 +12839,7 @@ def _unified_workspace_tab(
                         if draft_small_population_active:
                             if str(region.get("region_id", "")).lower() == "trondelag":
                                 st.info(
-                                    "Småskalig sol är en schablon från Trondelags 250 m befolkningsrute-proxy per hex. "
+                                    "Småskalig sol är en schablon från befolkning i Trondelags 250 m-rutor per hex. "
                                     "Den visas som små gula schablonhexar, inte som faktisk takpotential eller sammanhängande markyta."
                                 )
                             else:

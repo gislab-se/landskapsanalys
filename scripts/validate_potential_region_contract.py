@@ -869,7 +869,13 @@ def check_trondelag_small_scale_solar_proxy(report: ContractReport, region: dict
             report.fail("Trondelag landscape manifest could not be loaded for small-scale solar proxy check.")
             return
         resolution = app._analysis_h3_resolution(region)
+        frame_10 = app._solar_v1_frame(region, landscape, resolution, 10.0)
         frame = app._solar_v1_frame(region, landscape, resolution, 25.0)
+        total_area_10_km2 = (
+            float(pd.to_numeric(frame_10.get("solar_v1_area_km2", pd.Series(dtype=float)), errors="coerce").fillna(0.0).sum())
+            if not frame_10.empty
+            else 0.0
+        )
         total_area_km2 = (
             float(pd.to_numeric(frame.get("solar_v1_area_km2", pd.Series(dtype=float)), errors="coerce").fillna(0.0).sum())
             if not frame.empty
@@ -886,9 +892,47 @@ def check_trondelag_small_scale_solar_proxy(report: ContractReport, region: dict
             f"Trondelag small-scale solar proxy produces {total_area_km2:.3f} km2 at R{resolution}.",
             "Trondelag small-scale solar proxy produces no area.",
         )
+        _, proposal_10 = app._solar_establishment_frame(
+            region,
+            frame_10,
+            pd.DataFrame(),
+            999999.0,
+            0.0,
+            1.0,
+            app.h3_hex_area_km2(resolution),
+            resolution,
+        )
+        _, proposal_25 = app._solar_establishment_frame(
+            region,
+            frame,
+            pd.DataFrame(),
+            999999.0,
+            0.0,
+            1.0,
+            app.h3_hex_area_km2(resolution),
+            resolution,
+        )
+        proposal_area_10 = float(proposal_10.get("available_candidate_area_km2", 0.0) or 0.0)
+        proposal_area_25 = float(proposal_25.get("available_candidate_area_km2", 0.0) or 0.0)
         report.check(
-            any("proxy" in label.lower() for label in labels) and "inte individuella personer" in status_text,
-            "Trondelag small-scale solar is labelled as a 250 m population proxy, not individual persons.",
+            total_area_10_km2 > 0.0
+            and total_area_km2 > total_area_10_km2 * 2.4
+            and proposal_area_25 > proposal_area_10 * 2.4,
+            (
+                "Trondelag small-scale solar area and right-panel candidate area follow "
+                f"m2/person changes ({total_area_10_km2:.3f} -> {total_area_km2:.3f} km2)."
+            ),
+            (
+                "Trondelag small-scale solar did not propagate panel-area changes to proposal stats: "
+                f"solar={total_area_10_km2:.3f}->{total_area_km2:.3f} km2, "
+                f"proposal={proposal_area_10:.3f}->{proposal_area_25:.3f} km2."
+            ),
+        )
+        report.check(
+            any("250 m" in label.lower() or "rutor" in label.lower() for label in labels)
+            and "personantalet" in status_text
+            and "inte individuella" in status_text,
+            "Trondelag small-scale solar is labelled as population from 250 m cells, not individual person points.",
             f"Trondelag small-scale solar proxy labelling is unclear: labels={sorted(labels)}, status={status_text!r}.",
         )
     finally:
