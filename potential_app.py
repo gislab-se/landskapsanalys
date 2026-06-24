@@ -211,6 +211,7 @@ WIND_CULTURE_GROUP_ID = "culture"
 WIND_CULTURE_GROUP_LABEL = "kulturmiljöer"
 WIND_REINDEER_GROUP_ID = "reindeer"
 WIND_REINDEER_GROUP_LABEL = "rennäring / reindrift"
+WIND_REFERENCE_POLYGON_VISUAL_KEY = "wind_reference_polygon"
 SOLAR_PROTECTED_GROUP_ID = "protected"
 SOLAR_PROTECTED_LAYER_IDS = tuple(WIND_GROUP_LAYER_DEFAULTS.get(SOLAR_PROTECTED_GROUP_ID, []))
 SOLAR_ROAD_GROUP_ID = "transport"
@@ -8246,10 +8247,11 @@ def _wind_control_key(prefix: str, item_id: str) -> str:
     return f"wind_control__{prefix}__{item_id}"
 
 
-def _wind_visual_options_from_state(layer_selection: dict[str, list[str]] | None = None) -> dict[str, list[str]]:
+def _wind_visual_options_from_state(layer_selection: dict[str, list[str]] | None = None) -> dict[str, Any]:
     selected = normalize_group_layer_map(layer_selection or _selected_wind_layers())
     active_group_ids = [group_id for group_id, layer_ids in selected.items() if layer_ids]
     return {
+        "reference_polygon": bool(st.session_state.get(_wind_control_key(WIND_REFERENCE_POLYGON_VISUAL_KEY, "combined"), False)),
         "source_group_ids": [
             group_id
             for group_id in active_group_ids
@@ -8263,17 +8265,22 @@ def _wind_visual_options_from_state(layer_selection: dict[str, list[str]] | None
     }
 
 
-def _normalize_wind_visual_options(visual_options: dict[str, Any] | None) -> dict[str, set[str]]:
+def _normalize_wind_visual_options(visual_options: dict[str, Any] | None) -> dict[str, Any]:
     source_raw = (visual_options or {}).get("source_group_ids", [])
     buffer_raw = (visual_options or {}).get("buffer_group_ids", [])
     source_group_ids = {str(group_id) for group_id in source_raw} if isinstance(source_raw, (list, tuple, set)) else set()
     buffer_group_ids = {str(group_id) for group_id in buffer_raw} if isinstance(buffer_raw, (list, tuple, set)) else set()
-    return {"source_group_ids": source_group_ids, "buffer_group_ids": buffer_group_ids}
+    return {
+        "reference_polygon": bool((visual_options or {}).get("reference_polygon", False)),
+        "source_group_ids": source_group_ids,
+        "buffer_group_ids": buffer_group_ids,
+    }
 
 
 def _init_wind_control_state() -> None:
     groups, layers, _ = load_acceptance_registry()
     st.session_state[WIND_RUNTIME_OVERLAY_KEY] = True
+    st.session_state.setdefault(_wind_control_key(WIND_REFERENCE_POLYGON_VISUAL_KEY, "combined"), False)
     for group in groups.values():
         st.session_state.setdefault(_wind_control_key("analysis", group.id), int(group.analysis_default_m))
         st.session_state.setdefault(_wind_control_key("blend", group.id), int(group.blend_default))
@@ -8376,6 +8383,12 @@ def _wind_group_controls(
 
     st.header(ui_text("groups_header", language))
     with st.form(f"{widget_prefix}_group_controls", clear_on_submit=False):
+        with st.expander("Avancerade kartlager", expanded=False):
+            st.checkbox(
+                "Visa vindpolygon (referens)",
+                key=_wind_control_key(WIND_REFERENCE_POLYGON_VISUAL_KEY, "combined"),
+                help=f"Visar {WIND_POTENTIAL_POLYGON_LABEL} som avstängt referenslager i kartans lagerkontroll.",
+            )
         for group in ordered_groups():
             is_protected_group = group.id == SOLAR_PROTECTED_GROUP_ID
             is_settlement_group = group.id == WIND_SETTLEMENT_GROUP_ID
@@ -8788,6 +8801,7 @@ def _wind_polygon_combined_layer(runtime_result: dict[str, Any]) -> dict[str, An
         return None
     return {
         "name": WIND_POTENTIAL_POLYGON_LABEL,
+        "layer_role": WIND_REFERENCE_POLYGON_VISUAL_KEY,
         "feature_collection": combined["geojson"],
         "fill_property": "fill",
         "legend_items": [],
@@ -11181,6 +11195,7 @@ def _wind_polygon_preview_state(
     runtime_error: str | None = None
     selected = normalize_group_layer_map(layer_selection)
     normalized_visual_options = _normalize_wind_visual_options(visual_options)
+    show_reference_polygon = bool(normalized_visual_options.get("reference_polygon", False))
     source_group_ids = normalized_visual_options["source_group_ids"]
     buffer_group_ids = normalized_visual_options["buffer_group_ids"]
     if _wind_empty_selection_is_active(selected):
@@ -11220,7 +11235,7 @@ def _wind_polygon_preview_state(
         )
         layers.extend(hex_layers)
     else:
-        combined_layer = None if runtime_error else _wind_polygon_combined_layer(runtime_result)
+        combined_layer = None if runtime_error or not show_reference_polygon else _wind_polygon_combined_layer(runtime_result)
         if combined_layer is not None:
             layers.append(combined_layer)
     if source_group_ids:
@@ -11289,6 +11304,22 @@ def _wind_polygon_preview_state(
         "hex_layer_available": bool(hex_layers),
         "unfiltered_land": bool(runtime_result.get("unfiltered_land")),
     }
+
+
+def _wind_preview_layers_for_map(
+    region: dict[str, Any],
+    energy_model_state: dict[str, Any] | None,
+    preview_layers: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if str(region.get("region_id", "")).lower() != "trondelag" or not (energy_model_state or {}).get("available"):
+        return list(preview_layers)
+    return [
+        layer
+        for layer in preview_layers
+        if str(layer.get("source_layer_id", "") or "").startswith("wind:")
+        or str(layer.get("buffer_layer_id", "") or "").startswith("wind:")
+        or str(layer.get("layer_role", "") or "") == WIND_REFERENCE_POLYGON_VISUAL_KEY
+    ]
 
 
 def _unfiltered_wind_summary_frame(
@@ -13376,14 +13407,11 @@ def _unified_workspace_tab(
             control_name=WIND_POTENTIAL_POLYGON_LABEL,
             visual_options=wind_visual_options,
         )
-        wind_preview_layers = list(custom_wind_preview_state["layers"])
-        if str(region.get("region_id", "")).lower() == "trondelag" and energy_model_state.get("available"):
-            wind_preview_layers = [
-                layer
-                for layer in wind_preview_layers
-                if str(layer.get("source_layer_id", "") or "").startswith("wind:")
-                or str(layer.get("buffer_layer_id", "") or "").startswith("wind:")
-            ]
+        wind_preview_layers = _wind_preview_layers_for_map(
+            region,
+            energy_model_state,
+            list(custom_wind_preview_state["layers"]),
+        )
         layers.extend(wind_preview_layers)
         if custom_wind_preview_state["runtime_error"]:
             unified_notes.append(f"Vindruntime kunde inte köras: {custom_wind_preview_state['runtime_error']}")

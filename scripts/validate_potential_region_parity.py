@@ -356,6 +356,10 @@ def _region_workspace_contract(region_id: str) -> dict[str, Any]:
     electrical_param_key = app.GROUP_PARAM_MAP.get(app.SOLAR_ELECTRICAL_GROUP_ID)
     if electrical_param_key:
         wind_params[electrical_param_key] = ELECTRICAL_MAX_DISTANCE_M
+    wind_visual_options = {
+        "source_group_ids": [app.SOLAR_ROAD_GROUP_ID],
+        "buffer_group_ids": [app.SOLAR_ROAD_GROUP_ID],
+    }
     wind_preview = app._wind_polygon_preview_state(
         region,
         wind_params,
@@ -364,21 +368,27 @@ def _region_workspace_contract(region_id: str) -> dict[str, Any]:
         False,
         family_key=f"parity_{region_id}_wind",
         control_name=app.WIND_POTENTIAL_HEX_LABEL,
-        visual_options={
-            "source_group_ids": [app.SOLAR_ROAD_GROUP_ID],
-            "buffer_group_ids": [app.SOLAR_ROAD_GROUP_ID],
-        },
+        visual_options=wind_visual_options,
     )
     if wind_preview["runtime_error"]:
         raise RuntimeError(f"{region_id} wind runtime failed: {wind_preview['runtime_error']}")
-    wind_preview_layers = list(wind_preview["layers"])
-    if region_id == "trondelag" and energy_state.get("available"):
-        wind_preview_layers = [
-            layer
-            for layer in wind_preview_layers
-            if str(layer.get("source_layer_id", "") or "").startswith("wind:")
-            or str(layer.get("buffer_layer_id", "") or "").startswith("wind:")
-        ]
+    wind_preview_layers = app._wind_preview_layers_for_map(region, energy_state, list(wind_preview["layers"]))
+    wind_reference_preview = app._wind_polygon_preview_state(
+        region,
+        wind_params,
+        wind_selection,
+        display_resolution,
+        False,
+        family_key=f"parity_{region_id}_wind_reference",
+        control_name=app.WIND_POTENTIAL_HEX_LABEL,
+        visual_options={**wind_visual_options, "reference_polygon": True},
+    )
+    if wind_reference_preview["runtime_error"]:
+        raise RuntimeError(f"{region_id} wind reference runtime failed: {wind_reference_preview['runtime_error']}")
+    wind_reference_layer_names = [
+        str(layer.get("name"))
+        for layer in app._wind_preview_layers_for_map(region, energy_state, list(wind_reference_preview["layers"]))
+    ]
     wind_potential = app._wind_polygon_summary_frame(
         region,
         landscape_manifest,
@@ -880,6 +890,7 @@ def _region_workspace_contract(region_id: str) -> dict[str, Any]:
         "establishment_layer": establishment_layer,
         "establishment_features": len(((establishment_layer or {}).get("feature_collection") or {}).get("features") or []),
         "wind_preview_layers": [str(layer.get("name")) for layer in wind_preview_layers],
+        "wind_reference_layer_names": wind_reference_layer_names,
         "display_geometry_path": display_geometry_path,
         "trondelag_rollup_checks": rollup_checks,
     }
@@ -1074,6 +1085,17 @@ def _check_region_contract(report: ParityReport, result: dict[str, Any], referen
         f"{region_id}: establishment layer has renderable features.",
         f"{region_id}: establishment layer has no renderable features.",
     )
+    report.check(
+        app.WIND_POTENTIAL_POLYGON_LABEL not in result["layer_names"],
+        f"{region_id}: wind polygon reference layer stays hidden unless advanced map layers enable it.",
+        f"{region_id}: wind polygon reference layer is present by default; layers={result['layer_names']}.",
+    )
+    if region_id == "bornholm":
+        report.check(
+            app.WIND_POTENTIAL_POLYGON_LABEL in result.get("wind_reference_layer_names", []),
+            "bornholm: wind polygon reference layer can be enabled from advanced map layers.",
+            f"bornholm: wind polygon reference layer is unavailable after opt-in; layers={result.get('wind_reference_layer_names')}.",
+        )
     if reference is not None:
         reference_has_establishment = any(name.startswith(app.COMBINED_ESTABLISHMENT_LAYER_LABEL) for name in reference["layer_names"])
         current_has_establishment = any(name.startswith(app.COMBINED_ESTABLISHMENT_LAYER_LABEL) for name in result["layer_names"])
