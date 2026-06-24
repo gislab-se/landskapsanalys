@@ -13340,13 +13340,6 @@ def _unified_workspace_tab(
                 user_solar_analysis_frame if show_user_solar else pd.DataFrame(),
             )
         )
-        solar_establishment_potential_frame = _combined_solar_hex_frame(
-            region,
-            landscape_manifest,
-            analysis_h3_resolution,
-            pd.DataFrame(),
-            user_solar_analysis_frame if show_user_solar else pd.DataFrame(),
-        )
         _append_unique_layer(
             layers,
             _solar_potential_polygon_layer(
@@ -13361,7 +13354,7 @@ def _unified_workspace_tab(
                 solar_large_polygon_geojson,
             ),
         )
-        combined_solar_potential_frame = solar_establishment_potential_frame.copy()
+        combined_solar_potential_frame = combined_solar_analysis_frame.copy()
         potential_frames.append(
             {
                 "label": SOLAR_LANDSCAPE_POTENTIAL_LABEL,

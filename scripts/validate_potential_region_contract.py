@@ -914,6 +914,41 @@ def check_trondelag_small_scale_solar_proxy(report: ContractReport, region: dict
         )
         proposal_area_10 = float(proposal_10.get("available_candidate_area_km2", 0.0) or 0.0)
         proposal_area_25 = float(proposal_25.get("available_candidate_area_km2", 0.0) or 0.0)
+        combined_10 = app._combined_solar_hex_frame(region, landscape, resolution, frame_10, pd.DataFrame())
+        combined_25 = app._combined_solar_hex_frame(region, landscape, resolution, frame, pd.DataFrame())
+        establishment_10 = app._combined_potential_establishment_frame(
+            region,
+            pd.DataFrame(),
+            combined_10,
+            pd.DataFrame(),
+            pd.DataFrame(),
+            resolution,
+            resolution,
+        )
+        establishment_25 = app._combined_potential_establishment_frame(
+            region,
+            pd.DataFrame(),
+            combined_25,
+            pd.DataFrame(),
+            pd.DataFrame(),
+            resolution,
+            resolution,
+        )
+        establishment_area_10 = (
+            float(pd.to_numeric(establishment_10.get("solar_potential_area_km2", pd.Series(dtype=float)), errors="coerce").fillna(0.0).sum())
+            if not establishment_10.empty
+            else 0.0
+        )
+        establishment_area_25 = (
+            float(pd.to_numeric(establishment_25.get("solar_potential_area_km2", pd.Series(dtype=float)), errors="coerce").fillna(0.0).sum())
+            if not establishment_25.empty
+            else 0.0
+        )
+        establishment_solar_hexes = (
+            int(establishment_25.get("solar_suitable", pd.Series(dtype=bool)).fillna(False).astype(bool).sum())
+            if not establishment_25.empty
+            else 0
+        )
         report.check(
             total_area_10_km2 > 0.0
             and total_area_km2 > total_area_10_km2 * 2.4
@@ -929,6 +964,20 @@ def check_trondelag_small_scale_solar_proxy(report: ContractReport, region: dict
             ),
         )
         report.check(
+            establishment_area_10 > 0.0
+            and establishment_area_25 > establishment_area_10 * 2.4
+            and establishment_solar_hexes > 0,
+            (
+                "Trondelag small-scale solar propagates into the shared establishment area "
+                f"({establishment_area_10:.3f} -> {establishment_area_25:.3f} km2)."
+            ),
+            (
+                "Trondelag small-scale solar did not propagate into the shared establishment area: "
+                f"establishment={establishment_area_10:.3f}->{establishment_area_25:.3f} km2, "
+                f"solar_hexes={establishment_solar_hexes}."
+            ),
+        )
+        report.check(
             any("250 m" in label.lower() or "rutor" in label.lower() for label in labels)
             and "personantalet" in status_text
             and "inte individuella" in status_text,
@@ -940,6 +989,65 @@ def check_trondelag_small_scale_solar_proxy(report: ContractReport, region: dict
             st.session_state.pop(app.REGION_SELECT_KEY, None)
         else:
             st.session_state[app.REGION_SELECT_KEY] = original_region
+
+
+def check_bornholm_small_scale_solar_shared_contract(report: ContractReport, region: dict[str, Any]) -> None:
+    import pandas as pd  # noqa: WPS433
+    import potential_app as app  # noqa: WPS433
+
+    if not app._solar_v1_population_source_available(region):
+        report.pass_("Bornholm small-scale solar source is unavailable in this environment; shared-contract check skipped.")
+        return
+    landscape = load_linked_manifest(region, "landscape_manifest")
+    if not isinstance(landscape, dict):
+        report.fail("Bornholm landscape manifest could not be loaded for small-scale solar shared-contract check.")
+        return
+    resolution = app._analysis_h3_resolution(region)
+    frame_10 = app._solar_v1_frame(region, landscape, resolution, 10.0)
+    frame_25 = app._solar_v1_frame(region, landscape, resolution, 25.0)
+    combined_10 = app._combined_solar_hex_frame(region, landscape, resolution, frame_10, pd.DataFrame())
+    combined_25 = app._combined_solar_hex_frame(region, landscape, resolution, frame_25, pd.DataFrame())
+    establishment_10 = app._combined_potential_establishment_frame(
+        region,
+        pd.DataFrame(),
+        combined_10,
+        pd.DataFrame(),
+        pd.DataFrame(),
+        resolution,
+        resolution,
+    )
+    establishment_25 = app._combined_potential_establishment_frame(
+        region,
+        pd.DataFrame(),
+        combined_25,
+        pd.DataFrame(),
+        pd.DataFrame(),
+        resolution,
+        resolution,
+    )
+    total_area_10 = float(pd.to_numeric(frame_10.get("solar_v1_area_km2", pd.Series(dtype=float)), errors="coerce").fillna(0.0).sum())
+    total_area_25 = float(pd.to_numeric(frame_25.get("solar_v1_area_km2", pd.Series(dtype=float)), errors="coerce").fillna(0.0).sum())
+    establishment_area_10 = float(
+        pd.to_numeric(establishment_10.get("solar_potential_area_km2", pd.Series(dtype=float)), errors="coerce").fillna(0.0).sum()
+    )
+    establishment_area_25 = float(
+        pd.to_numeric(establishment_25.get("solar_potential_area_km2", pd.Series(dtype=float)), errors="coerce").fillna(0.0).sum()
+    )
+    report.check(
+        total_area_10 > 0.0
+        and total_area_25 > total_area_10 * 2.4
+        and establishment_area_10 > 0.0
+        and establishment_area_25 > establishment_area_10 * 2.4,
+        (
+            "Bornholm small-scale solar uses the shared per-person establishment contract "
+            f"({total_area_10:.3f}->{total_area_25:.3f} km2)."
+        ),
+        (
+            "Bornholm small-scale solar did not follow the shared per-person establishment contract: "
+            f"solar={total_area_10:.3f}->{total_area_25:.3f} km2, "
+            f"establishment={establishment_area_10:.3f}->{establishment_area_25:.3f} km2."
+        ),
+    )
 
 
 def check_landscape_manifest(report: ContractReport, manifest: dict[str, Any] | None) -> None:
@@ -1120,6 +1228,7 @@ def main() -> int:
         check_region_analysis_resolution_contract(report)
 
         trondelag = load_region("trondelag")
+        bornholm = load_region("bornholm")
         landscape = load_linked_manifest(trondelag, "landscape_manifest")
         scenario = load_linked_manifest(trondelag, "scenario_manifest")
 
@@ -1137,6 +1246,7 @@ def main() -> int:
         check_trondelag_region(report, trondelag)
         check_trondelag_population_buffer_catalog(report, trondelag)
         check_trondelag_small_scale_solar_proxy(report, trondelag)
+        check_bornholm_small_scale_solar_shared_contract(report, bornholm)
         check_map_auto_resolution(report)
         check_landscape_manifest(report, landscape)
         check_scenario_placeholder(report, scenario)
