@@ -4961,7 +4961,108 @@ def _population_count_frame_for_resolution(path_str: str, target_resolution: int
     return pd.DataFrame(rows).groupby("hex_id", as_index=False)["population"].sum()
 
 
-def _solar_v1_population_source_status() -> str:
+def _trondelag_population_proxy_unit_count(registry_meta: dict[str, Any]) -> float | None:
+    try:
+        geojson = source_geojson_for_layer(registry_meta, WIND_POPULATION_SOURCE_LAYER_ID)
+    except Exception:
+        geojson = None
+    features = geojson.get("features") if isinstance(geojson, dict) else []
+    if not features:
+        return None
+    for feature in features:
+        props = feature.get("properties") if isinstance(feature, dict) else {}
+        if not isinstance(props, dict):
+            continue
+        value = props.get("source_feature_count")
+        try:
+            count = float(value)
+        except Exception:
+            continue
+        if count > 0:
+            return count
+    return None
+
+
+def _trondelag_population_proxy_resolution_m(region: dict[str, Any]) -> float:
+    catalog = load_linked_manifest(region, "parameter_buffer_catalog") or load_linked_manifest(region, "parameter_buffers") or {}
+    runtime = catalog.get("runtime_rendering") if isinstance(catalog, dict) else {}
+    population = runtime.get("population_buffer") if isinstance(runtime, dict) else {}
+    try:
+        return float(population.get("proxy_resolution_m") or 250.0) if isinstance(population, dict) else 250.0
+    except Exception:
+        return 250.0
+
+
+def _trondelag_population_proxy_count_frame(region: dict[str, Any], target_resolution: int) -> pd.DataFrame:
+    _, _, registry_meta = load_acceptance_registry()
+    distance = distance_table_for_layer(registry_meta, WIND_POPULATION_SOURCE_LAYER_ID)
+    if distance.empty or "hex_id" not in distance.columns or "distance_m" not in distance.columns:
+        return pd.DataFrame(columns=["hex_id", "population"])
+
+    proxy_resolution_m = _trondelag_population_proxy_resolution_m(region)
+    work = distance[["hex_id", "distance_m", "intersects"]].copy()
+    work["hex_id"] = work["hex_id"].astype(str)
+    work["distance_m"] = pd.to_numeric(work["distance_m"], errors="coerce")
+    intersects = work["intersects"].fillna(False).astype(bool) if "intersects" in work.columns else pd.Series(False, index=work.index)
+    work = work.loc[intersects | work["distance_m"].le(proxy_resolution_m)].copy()
+    if work.empty:
+        return pd.DataFrame(columns=["hex_id", "population"])
+
+    source_resolutions: list[int] = []
+    for value in work["hex_id"].dropna().astype(str).head(250):
+        try:
+            source_resolutions.append(int(h3.get_resolution(value)))
+        except Exception:
+            continue
+    if not source_resolutions:
+        return pd.DataFrame(columns=["hex_id", "population"])
+
+    source_resolution = int(pd.Series(source_resolutions).mode().iloc[0])
+    target_resolution = int(target_resolution)
+    if target_resolution < source_resolution:
+        work["hex_id"] = work["hex_id"].map(lambda value: h3.cell_to_parent(str(value), target_resolution))
+    elif target_resolution > source_resolution:
+        rows: list[dict[str, Any]] = []
+        for row in work.itertuples(index=False):
+            try:
+                children = sorted(h3.cell_to_children(str(row.hex_id), target_resolution))
+            except Exception:
+                children = []
+            if not children:
+                continue
+            share = 1.0 / float(len(children))
+            rows.extend({"hex_id": str(child), "population": share} for child in children)
+        if not rows:
+            return pd.DataFrame(columns=["hex_id", "population"])
+        return pd.DataFrame(rows).groupby("hex_id", as_index=False)["population"].sum()
+
+    work["population"] = 1.0
+    grouped = work.groupby("hex_id", as_index=False)["population"].sum()
+    source_count = _trondelag_population_proxy_unit_count(registry_meta)
+    current_count = float(grouped["population"].sum()) if not grouped.empty else 0.0
+    if source_count is not None and current_count > 0:
+        grouped["population"] = grouped["population"] * (float(source_count) / current_count)
+    return grouped
+
+
+def _solar_v1_population_count_frame(region: dict[str, Any], target_resolution: int) -> pd.DataFrame:
+    if str(region.get("region_id", "")).lower() == "trondelag":
+        return _trondelag_population_proxy_count_frame(region, int(target_resolution))
+    return _population_count_frame_for_resolution(str(SOLAR_V1_POPULATION_LAYER_PATH), int(target_resolution))
+
+
+def _solar_v1_population_source_available(region: dict[str, Any]) -> bool:
+    if str(region.get("region_id", "")).lower() == "trondelag":
+        return not _trondelag_population_proxy_count_frame(region, int(region.get("default_h3_resolution") or 7)).empty
+    return SOLAR_V1_POPULATION_LAYER_PATH.exists()
+
+
+def _solar_v1_population_source_status(region: dict[str, Any]) -> str:
+    if str(region.get("region_id", "")).lower() == "trondelag":
+        return (
+            "Befolkningsunderlag: Trondelag 250 m befolkningsrute-/centroidproxy. "
+            "Småskalig sol använder proxyenheter, inte individuella personer."
+        )
     if SOLAR_V1_POPULATION_LAYER_PATH.exists():
         return (
             f"Befolkningsunderlag: {SOLAR_V1_POPULATION_LAYER_PATH} "
@@ -4970,6 +5071,24 @@ def _solar_v1_population_source_status() -> str:
     return (
         f"Befolkningsunderlag saknas: {SOLAR_V1_POPULATION_LAYER_PATH}. "
         "Sätt REGIONAL_LANDSCAPE_PIPELINE_ROOT om regional-landscape-pipeline ligger på annan plats."
+    )
+
+
+def _solar_v1_panel_area_label(region: dict[str, Any]) -> str:
+    if str(region.get("region_id", "")).lower() == "trondelag":
+        return "Panelyta per 250 m-proxyenhet"
+    return _t("Panelyta per person")
+
+
+def _solar_v1_formula_text(region: dict[str, Any], panel_area_m2_per_person: float) -> str:
+    if str(region.get("region_id", "")).lower() == "trondelag":
+        return (
+            "Småskalig solyta beräknas som 250 m befolkningsrute-proxyenheter per hex "
+            f"× {float(panel_area_m2_per_person or 0.0):.0f} m2/proxyenhet."
+        )
+    return (
+        "Småskalig solyta beräknas som befolkning per hex "
+        f"× {float(panel_area_m2_per_person or 0.0):.0f} m2/person."
     )
 
 
@@ -4990,13 +5109,14 @@ def _solar_v1_frame(
         "solar_v1_class",
         "solar_v1_class_label",
         "solar_v1_color",
+        "solar_v1_population_label",
     ]
     resolution = int(resolution)
     display_geometry_path = _h3_display_geometry_path(region, resolution)
     landscape = _landscape_frame(region, landscape_manifest, resolution)
     if landscape.empty:
         return pd.DataFrame(columns=columns)
-    population = _population_count_frame_for_resolution(str(SOLAR_V1_POPULATION_LAYER_PATH), resolution)
+    population = _solar_v1_population_count_frame(region, resolution)
     frame = landscape[["hex_id", "class_km", "landscape_type"]].copy()
     frame = frame.merge(population, on="hex_id", how="left")
     frame["population"] = pd.to_numeric(frame["population"], errors="coerce").fillna(0.0).clip(lower=0.0)
@@ -5011,6 +5131,9 @@ def _solar_v1_frame(
     frame["solar_v1_class"] = [item["id"] for item in classes]
     frame["solar_v1_class_label"] = [item["label"] for item in classes]
     frame["solar_v1_color"] = [item["color"] for item in classes]
+    frame["solar_v1_population_label"] = (
+        "250 m-proxyenheter" if str(region.get("region_id", "")).lower() == "trondelag" else "personer"
+    )
     return _filter_frame_to_display_geometries(frame, display_geometry_path).reindex(columns=columns)
 
 
@@ -5025,6 +5148,7 @@ def _solar_v1_feature_collection(frame_json: str, target_resolution: int) -> dic
         area_m2 = float(getattr(row, "solar_v1_area_m2", 0.0) or 0.0)
         if area_m2 <= 0:
             continue
+        population_label = str(getattr(row, "solar_v1_population_label", "personer") or "personer")
         try:
             source_resolution = int(h3.get_resolution(hex_id))
         except Exception:
@@ -5041,7 +5165,7 @@ def _solar_v1_feature_collection(frame_json: str, target_resolution: int) -> dic
         popup = (
             f"<strong>{hex_id}</strong><br>"
             f"{SOLAR_SMALL_SCALE_LABEL}: {area_m2:.0f} m2<br>"
-            f"Befolkning i hex: {population:.1f}<br>"
+            f"{population_label}: {population:.1f}<br>"
             f"Landskapstyp: {int(row.class_km)} - {row.landscape_type}<br>"
             "Visas som liten schablonhex, inte som faktisk takpolygon."
         )
@@ -5060,7 +5184,7 @@ def _solar_v1_feature_collection(frame_json: str, target_resolution: int) -> dic
                     "stroke_weight": 0.55,
                     "fill_opacity": 0.9,
                     "tooltip_title": f"{SOLAR_SMALL_SCALE_LABEL}: {area_m2:.0f} m2",
-                    "tooltip_body": "Schablon från befolkning per hex",
+                    "tooltip_body": f"Schablon från {population_label} per hex",
                     "popup": popup,
                 },
             }
@@ -5085,6 +5209,7 @@ def _solar_v1_layer(
                 "solar_v1_class",
                 "solar_v1_class_label",
                 "solar_v1_color",
+                "solar_v1_population_label",
             ]
         )
     else:
@@ -5099,6 +5224,7 @@ def _solar_v1_layer(
                 "solar_v1_class",
                 "solar_v1_class_label",
                 "solar_v1_color",
+                "solar_v1_population_label",
             ]
         ].copy()
     return {
@@ -12688,6 +12814,8 @@ def _unified_workspace_tab(
         WIND_CONTROL_LANGUAGE,
         acceptance_layers_for_labels[WIND_POPULATION_SOURCE_LAYER_ID].label,
     ) if WIND_POPULATION_SOURCE_LAYER_ID in acceptance_layers_for_labels else _t("Befolkningspunkter")
+    if str(region.get("region_id", "")).lower() == "trondelag":
+        population_layer_label = "Befolkningsrutor 250 m (proxy)"
 
     wind_selected_layers = _selected_wind_layers()
     wind_ui_params = _default_wind_params()
@@ -12743,20 +12871,26 @@ def _unified_workspace_tab(
                             key="solar_draft_small_population_active",
                             help="Trøndelag-källan visas som 250 m befolkningsrutor från centroider, inte som individpunkter.",
                         )
-                        if draft_small_population_active and not SOLAR_V1_POPULATION_LAYER_PATH.exists():
-                            st.warning(_solar_v1_population_source_status())
+                        if draft_small_population_active and not _solar_v1_population_source_available(region):
+                            st.warning(_solar_v1_population_source_status(region))
                         if draft_small_population_active:
-                            st.info(
-                                "Småskalig sol är en schablon från befolkning per hex. "
-                                "Den visas som små gula schablonhexar, inte som faktiska takpolygoner eller sammanhängande markyta."
-                            )
+                            if str(region.get("region_id", "")).lower() == "trondelag":
+                                st.info(
+                                    "Småskalig sol är en schablon från Trondelags 250 m befolkningsrute-proxy per hex. "
+                                    "Den visas som små gula schablonhexar, inte som faktisk takpotential eller sammanhängande markyta."
+                                )
+                            else:
+                                st.info(
+                                    "Småskalig sol är en schablon från befolkning per hex. "
+                                    "Den visas som små gula schablonhexar, inte som faktiska takpolygoner eller sammanhängande markyta."
+                                )
                         st.slider(
-                            _t("Panelyta per person"),
+                            _solar_v1_panel_area_label(region),
                             min_value=0.0,
                             max_value=25.0,
                             step=1.0,
                             key="solar_draft_area_m2_per_person",
-                            help="Schablon för småskalig anläggning: befolkning per hex multipliceras med m2 panelyta per person.",
+                            help=_solar_v1_formula_text(region, float(st.session_state.get("solar_draft_area_m2_per_person", 10.0) or 10.0)),
                         )
                         with st.expander("Avancerade inställningar", expanded=False):
                             st.caption("Kartvisning: befolkningsunderlaget används i analysen även när källa och buffert är dolda på kartan.")
@@ -13157,13 +13291,11 @@ def _unified_workspace_tab(
             )
         )
         energy_model_state["solar_v1_stats"] = _solar_v1_stats(solar_v1_analysis_frame, energy_model_state)
-        unified_notes.append(
-            f"{SOLAR_SMALL_SCALE_LABEL} bygger i första versionen på befolkning per hex och {solar_v1_area_m2_per_person:.0f} m2 panelyta per person."
-        )
+        unified_notes.append(_solar_v1_formula_text(region, solar_v1_area_m2_per_person))
         unified_notes.append(
             f"{SOLAR_SMALL_SCALE_LABEL} visas som separata gula schablonhexar för att inte läsas som sammanhängande markyta."
         )
-        unified_notes.append(_solar_v1_population_source_status())
+        unified_notes.append(_solar_v1_population_source_status(region))
         _add_perf_timing(
             performance_log,
             "Sol småskalig",
@@ -13838,10 +13970,8 @@ def _unified_workspace_tab(
             if show_solar_v1:
                 stats = energy_model_state.get("solar_v1_stats") if isinstance(energy_model_state, dict) else None
                 st.metric(f"Aktiv {_t(SOLAR_SMALL_SCALE_LABEL)}", _t("På"))
-                st.caption(
-                    f"Småskalig solyta beräknas som befolkning per hex × {solar_v1_area_m2_per_person:.0f} m2/person."
-                )
-                st.caption(_solar_v1_population_source_status())
+                st.caption(_solar_v1_formula_text(region, solar_v1_area_m2_per_person))
+                st.caption(_solar_v1_population_source_status(region))
                 if isinstance(stats, dict):
                     st.caption(
                         f"Total småskalig solyta: {float(stats.get('total_area_km2', 0.0) or 0.0):.2f} km²; "

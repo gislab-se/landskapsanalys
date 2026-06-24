@@ -39,6 +39,11 @@ Det här är medvetet uppskjutna städåtgärder som vi tar först när landning
   - var publicerade rapporter finns
   - vad som är arbetsyta kontra officiella outputs
 
+### 7. Rensa inaktuella H3-upplösningar efter audit
+- Bornholm: identifiera och radera eller arkivera aktiva/legacy-artefakter som är R10 eller högre, när vi har bekräftat att R10 bara finns kvar som V1-provenance och inte som V2-beroende.
+- Trøndelag: identifiera och radera eller arkivera aktiva/legacy-artefakter som är R8/R9 eller högre, när vi har bekräftat att de bara är experiment/provenance och inte appberoenden.
+- Gör detta som en separat audit/cleanup-commit, inte tillsammans med beteendefixar.
+
 ## Redan gjort som riskfri första städning
 - `.gitignore` uppdaterad för:
   - `.venv/`

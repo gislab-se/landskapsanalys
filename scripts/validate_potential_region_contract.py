@@ -856,6 +856,48 @@ def check_trondelag_population_buffer_catalog(report: ContractReport, region: di
     )
 
 
+def check_trondelag_small_scale_solar_proxy(report: ContractReport, region: dict[str, Any]) -> None:
+    import pandas as pd  # noqa: WPS433
+    import streamlit as st  # noqa: WPS433
+    import potential_app as app  # noqa: WPS433
+
+    original_region = st.session_state.get(app.REGION_SELECT_KEY)
+    try:
+        st.session_state[app.REGION_SELECT_KEY] = "trondelag"
+        landscape = load_linked_manifest(region, "landscape_manifest")
+        if not isinstance(landscape, dict):
+            report.fail("Trondelag landscape manifest could not be loaded for small-scale solar proxy check.")
+            return
+        resolution = app._analysis_h3_resolution(region)
+        frame = app._solar_v1_frame(region, landscape, resolution, 25.0)
+        total_area_km2 = (
+            float(pd.to_numeric(frame.get("solar_v1_area_km2", pd.Series(dtype=float)), errors="coerce").fillna(0.0).sum())
+            if not frame.empty
+            else 0.0
+        )
+        labels = (
+            set(frame.get("solar_v1_population_label", pd.Series(dtype=str)).astype(str).dropna().tolist())
+            if not frame.empty
+            else set()
+        )
+        status_text = app._solar_v1_population_source_status(region).lower()
+        report.check(
+            total_area_km2 > 0.0,
+            f"Trondelag small-scale solar proxy produces {total_area_km2:.3f} km2 at R{resolution}.",
+            "Trondelag small-scale solar proxy produces no area.",
+        )
+        report.check(
+            any("proxy" in label.lower() for label in labels) and "inte individuella personer" in status_text,
+            "Trondelag small-scale solar is labelled as a 250 m population proxy, not individual persons.",
+            f"Trondelag small-scale solar proxy labelling is unclear: labels={sorted(labels)}, status={status_text!r}.",
+        )
+    finally:
+        if original_region is None:
+            st.session_state.pop(app.REGION_SELECT_KEY, None)
+        else:
+            st.session_state[app.REGION_SELECT_KEY] = original_region
+
+
 def check_landscape_manifest(report: ContractReport, manifest: dict[str, Any] | None) -> None:
     if not isinstance(manifest, dict):
         report.fail("Trondelag landscape manifest could not be loaded.")
@@ -1050,6 +1092,7 @@ def main() -> int:
         check_social_acceptance_allocation_priority(report, trondelag)
         check_trondelag_region(report, trondelag)
         check_trondelag_population_buffer_catalog(report, trondelag)
+        check_trondelag_small_scale_solar_proxy(report, trondelag)
         check_map_auto_resolution(report)
         check_landscape_manifest(report, landscape)
         check_scenario_placeholder(report, scenario)
