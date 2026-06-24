@@ -76,7 +76,8 @@ The source-asset GeoJSON folder is not independent evidence for landmask correct
 Decision after review:
 
 - `DAGI_Landsdel_Scale10000_BOL_33.shp` was selected as the Bornholm app landmask candidate.
-- Runtime handoff: `docs/BORNHOLM_DAGI_LANDSDEL_RUNTIME_HANDOFF_2026-06-23.md`
+- Runtime handoff:
+  `docs/archive/bornholm_dagi_transition_2026-06-24/BORNHOLM_DAGI_LANDSDEL_RUNTIME_HANDOFF_2026-06-23.md`
 
 The QGIS comparison package remains the audit trail for the choice between the two DAGI candidates.
 
