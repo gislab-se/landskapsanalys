@@ -219,6 +219,7 @@ SOLAR_ELECTRICAL_GROUP_ID = "electrical"
 SOLAR_CULTURE_GROUP_ID = "culture"
 SOLAR_REINDEER_GROUP_ID = "reindeer"
 SOLAR_COASTAL_GROUP_ID = "coastal"
+WIND_ESTABLISHMENT_INTERSECTION_BLOCK_GROUP_IDS = {SOLAR_COASTAL_GROUP_ID}
 SOLAR_LAND_USE_GROUP_ID = "land_use"
 SOLAR_FOREST_LAYER_ID = "forest_land_cover"
 SOLAR_FILTER_GROUP_SPECS: dict[str, dict[str, Any]] = {
@@ -8485,7 +8486,9 @@ def _wind_group_controls(
                         st.caption(f"Välj vilka del-lager som ingår i {PROTECTED_NATURE_LABEL}.")
                     for layer in advanced_layers:
                         render_layer_checkbox(layer)
-                    if not advanced_layers:
+                    if not advanced_layers and main_layers:
+                        st.caption("Del-lagren väljs ovanför. Avancerade inställningar styr bara kartvisningen.")
+                    elif not advanced_layers:
                         st.caption("Inga del-lager är kopplade ännu.")
                     st.caption("Kartvisning: valda lager används i analysen även när källa och buffert är dolda på kartan.")
                     st.checkbox(
@@ -9061,6 +9064,42 @@ def _target_resolution_distance_frame(
     return work[["hex_id", "distance_m", "intersects"]].copy()
 
 
+def _wind_establishment_intersection_block_frame(
+    region: dict[str, Any],
+    runtime_result: dict[str, Any],
+    target_resolution: int,
+) -> pd.DataFrame:
+    display_geometry_path = _h3_display_geometry_path(region, int(target_resolution))
+    if not display_geometry_path:
+        return pd.DataFrame(columns=["hex_id", "wind_hard_exclusion_intersects"])
+    groups_meta = runtime_result.get("groups") if isinstance(runtime_result, dict) else None
+    if not isinstance(groups_meta, dict):
+        return pd.DataFrame(columns=["hex_id", "wind_hard_exclusion_intersects"])
+    _, _, registry_meta = load_acceptance_registry()
+    frames: list[pd.DataFrame] = []
+    for group_id in WIND_ESTABLISHMENT_INTERSECTION_BLOCK_GROUP_IDS:
+        group_meta = groups_meta.get(group_id)
+        if not isinstance(group_meta, dict):
+            continue
+        layer_ids = [str(layer_id) for layer_id in (group_meta.get("active_layer_ids") or [])]
+        for layer_id in _solar_available_filter_layer_ids(group_id, layer_ids):
+            distance_frame = _target_resolution_distance_frame(
+                distance_table_for_layer(registry_meta, layer_id),
+                int(target_resolution),
+                display_geometry_path,
+            )
+            if distance_frame.empty:
+                continue
+            blocked = distance_frame.loc[distance_frame["intersects"].astype(bool), ["hex_id"]].copy()
+            if not blocked.empty:
+                frames.append(blocked)
+    if not frames:
+        return pd.DataFrame(columns=["hex_id", "wind_hard_exclusion_intersects"])
+    combined = pd.concat(frames, ignore_index=True).drop_duplicates(subset=["hex_id"])
+    combined["wind_hard_exclusion_intersects"] = True
+    return combined[["hex_id", "wind_hard_exclusion_intersects"]]
+
+
 def _allocation_priority_distance_cap_m(group: Any) -> float:
     candidates = [
         float(getattr(group, "analysis_max_m", 0.0) or 0.0),
@@ -9408,6 +9447,7 @@ def _wind_fast_distance_runtime_result(
             "label": group.label,
             "analysis_kind": group.analysis_kind,
             "role": role,
+            "active_layer_ids": list(layer_ids),
             "selected_sources": selected_labels,
             "analysis_value_m": float(threshold_m),
             "land_share_pct": float(share_series.fillna(0.0).mean()),
@@ -9729,6 +9769,9 @@ def _potential_establishment_source_frame(
         else:
             work["potential_score"] = pd.to_numeric(work.get(score_col), errors="coerce").fillna(0.0).clip(lower=0.0, upper=100.0)
             work["potential_area_km2"] = work["potential_score"] / 100.0 * source_hex_area
+        if "wind_hard_exclusion_intersects" not in work.columns:
+            work["wind_hard_exclusion_intersects"] = False
+        work["wind_hard_exclusion_intersects"] = work["wind_hard_exclusion_intersects"].fillna(False).astype(bool)
     else:
         if "potential_area_km2" in work.columns:
             area = pd.to_numeric(work["potential_area_km2"], errors="coerce").fillna(0.0)
@@ -9763,6 +9806,8 @@ def _potential_establishment_source_frame(
     if int(target_resolution) < int(source_resolution):
         work["hex_id"] = work["hex_id"].map(lambda value: str(h3.cell_to_parent(str(value), int(target_resolution))))
         agg_spec: dict[str, Any] = {"potential_area_km2": ("potential_area_km2", "sum")}
+        if technology == "wind":
+            agg_spec["wind_hard_exclusion_intersects"] = ("wind_hard_exclusion_intersects", "max")
         if technology == "solar":
             agg_spec["_solar_filter_intersection_share_pct"] = ("_solar_filter_intersection_share_pct", "max")
             agg_spec["_solar_small_area_km2"] = ("_solar_small_area_km2", "sum")
@@ -9780,6 +9825,11 @@ def _potential_establishment_source_frame(
 
     out = work[["hex_id", "potential_score", "potential_area_km2"]].copy()
     suitable = out["potential_area_km2"].gt(1e-9)
+    if technology == "wind":
+        wind_hard_blocked = pd.Series(False, index=work.index)
+        if "wind_hard_exclusion_intersects" in work.columns:
+            wind_hard_blocked = work["wind_hard_exclusion_intersects"].fillna(False).astype(bool)
+        suitable = suitable & ~wind_hard_blocked
     if technology == "solar" and bool(coarse_filter_intersection_blocks):
         filter_share = pd.to_numeric(work.get("_solar_filter_intersection_share_pct"), errors="coerce").fillna(0.0)
         small_area = pd.to_numeric(work.get("_solar_small_area_km2"), errors="coerce").fillna(0.0)
@@ -11396,6 +11446,7 @@ def _wind_polygon_summary_frame(
                 "center_mass_rank",
                 "class_km",
                 "landscape_type",
+                "wind_hard_exclusion_intersects",
             ]
         )
 
@@ -11430,6 +11481,12 @@ def _wind_polygon_summary_frame(
         frame["landscape_type"] = ""
     else:
         frame["landscape_type"] = frame["landscape_type"].fillna("").astype(str)
+    block_frame = _wind_establishment_intersection_block_frame(region, runtime_result, int(target_resolution))
+    if not block_frame.empty:
+        frame = frame.merge(block_frame, on="hex_id", how="left")
+    if "wind_hard_exclusion_intersects" not in frame.columns:
+        frame["wind_hard_exclusion_intersects"] = False
+    frame["wind_hard_exclusion_intersects"] = frame["wind_hard_exclusion_intersects"].fillna(False).astype(bool)
 
     return frame.sort_values("hex_id").reset_index(drop=True)
 
@@ -11510,8 +11567,15 @@ def _wind_runtime_result(
     ui_params: dict[str, float],
     layer_selection: dict[str, list[str]] | None = None,
 ) -> dict[str, Any]:
+    selected = normalize_group_layer_map(layer_selection or _selected_wind_layers())
     runtime_cfg = _wind_runtime_config_json(ui_params, layer_selection=layer_selection)
-    return run_geometry_runtime(runtime_cfg)
+    result = run_geometry_runtime(runtime_cfg)
+    groups = result.get("groups") if isinstance(result, dict) else None
+    if isinstance(groups, dict):
+        for group_id, group_meta in groups.items():
+            if isinstance(group_meta, dict):
+                group_meta.setdefault("active_layer_ids", list(selected.get(str(group_id), [])))
+    return result
 
 
 def _landscape_layer(

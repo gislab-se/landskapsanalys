@@ -272,12 +272,16 @@ def _dominant_rollup_mismatch_count(source_frame: pd.DataFrame, rolled_frame: pd
     return int((merged["establishment_class"].astype(str) != merged["expected_establishment_class"].astype(str)).sum())
 
 
-def _solar_area_km2(frame: pd.DataFrame) -> float:
+def _potential_area_km2(frame: pd.DataFrame) -> float:
     return float(
         pd.to_numeric(frame.get("potential_area_km2", pd.Series(dtype=float)), errors="coerce")
         .fillna(0.0)
         .sum()
     )
+
+
+def _solar_area_km2(frame: pd.DataFrame) -> float:
+    return _potential_area_km2(frame)
 
 
 def _road_ui_layer_contract(layers: list[dict[str, Any]]) -> dict[str, Any]:
@@ -681,6 +685,70 @@ def _region_workspace_contract(region_id: str) -> dict[str, Any]:
             wind_proposal["allocated_twh"] = 0.0
         wind_proposal["allocated_gwh"] = wind_proposal["allocated_twh"].astype(float) * 1000.0
 
+    wind_coastal_area_reduction_km2 = 0.0
+    wind_coastal_establishment_class_changes = 0
+    wind_coastal_intersection_hexes = 0
+    if region_id == "bornholm":
+        wind_coastal_selection = {group_id: list(layer_ids) for group_id, layer_ids in wind_selection.items()}
+        wind_coastal_selection[app.SOLAR_COASTAL_GROUP_ID] = [BORNHOLM_COASTAL_TEST_LAYER_ID]
+        wind_coastal_runtime = app._wind_runtime_result(wind_params, wind_coastal_selection)
+        wind_coastal_potential = app._wind_polygon_summary_frame(
+            region,
+            landscape_manifest,
+            wind_coastal_runtime,
+            analysis_resolution,
+        )
+        wind_coastal_area_reduction_km2 = max(
+            0.0,
+            _potential_area_km2(wind_potential) - _potential_area_km2(wind_coastal_potential),
+        )
+        wind_coastal_intersection_hexes = int(
+            wind_coastal_potential.get("wind_hard_exclusion_intersects", pd.Series(dtype=bool)).fillna(False).astype(bool).sum()
+        )
+        wind_coastal_proposal, wind_coastal_stats = app.allocate_wind_area_from_core_hexes(
+            wind_coastal_potential,
+            float(energy_state.get("wind_area_need_km2", 0.0) or 0.0),
+            analysis_hex_area_km2,
+            float(energy_state.get("auto_min_potential_share_pct", 65.0) or 65.0),
+        )
+        wind_coastal_proposal, wind_coastal_stats = app._expand_wind_area_outside_et(
+            wind_coastal_potential,
+            wind_coastal_proposal,
+            wind_coastal_stats,
+            analysis_display_geometry_path,
+            analysis_hex_area_km2,
+        )
+        if not wind_coastal_proposal.empty:
+            if wind_factor > 0 and math.isfinite(wind_factor):
+                wind_coastal_proposal["allocated_twh"] = wind_coastal_proposal["allocated_area_km2"].astype(float) / wind_factor
+            elif wind_area_need > 0:
+                wind_coastal_proposal["allocated_twh"] = wind_twh_need * wind_coastal_proposal["allocated_area_km2"].astype(float) / wind_area_need
+            else:
+                wind_coastal_proposal["allocated_twh"] = 0.0
+            wind_coastal_proposal["allocated_gwh"] = wind_coastal_proposal["allocated_twh"].astype(float) * 1000.0
+        establishment_with_wind_coastal = app._combined_potential_establishment_frame(
+            region,
+            wind_coastal_potential,
+            solar_potential,
+            wind_coastal_proposal,
+            solar_proposal,
+            analysis_resolution,
+            analysis_resolution,
+        )
+        establishment_without_wind_coastal = app._combined_potential_establishment_frame(
+            region,
+            wind_potential,
+            solar_potential,
+            wind_proposal,
+            solar_proposal,
+            analysis_resolution,
+            analysis_resolution,
+        )
+        wind_coastal_establishment_class_changes = _establishment_class_change_count(
+            establishment_without_wind_coastal,
+            establishment_with_wind_coastal,
+        )
+
     solar_potential_without_road = app._combined_solar_hex_frame(
         region,
         landscape_manifest,
@@ -855,6 +923,9 @@ def _region_workspace_contract(region_id: str) -> dict[str, Any]:
         "wind_has_culture_rule": bool(wind_has_culture_rule),
         "wind_has_reindeer_rule": bool(wind_has_reindeer_rule),
         "wind_has_electrical_rule": bool(wind_has_electrical_rule),
+        "wind_coastal_area_reduction_km2": float(wind_coastal_area_reduction_km2),
+        "wind_coastal_establishment_class_changes": int(wind_coastal_establishment_class_changes),
+        "wind_coastal_intersection_hexes": int(wind_coastal_intersection_hexes),
         "solar_potential_rows": len(solar_potential),
         "solar_has_road_filter_effect": bool(solar_has_road_filter_effect),
         "solar_road_establishment_class_changes": int(solar_road_establishment_class_changes),
@@ -1012,6 +1083,24 @@ def _check_region_contract(report: ParityReport, result: dict[str, Any], referen
         f"{region_id}: solar UI cannot render the near-grid feasibility layer.",
     )
     if region_id == "bornholm":
+        report.check(
+            float(result.get("wind_coastal_area_reduction_km2", 0.0) or 0.0) > 0.0,
+            "bornholm: strand-protection coastal filter reduces wind potential area.",
+            "bornholm: strand-protection coastal filter did not reduce wind potential area.",
+        )
+        report.check(
+            int(result.get("wind_coastal_intersection_hexes", 0) or 0) > 0,
+            "bornholm: strand-protection coastal filter marks intersecting wind establishment hexes.",
+            "bornholm: strand-protection coastal filter did not mark any wind establishment hexes.",
+        )
+        report.check(
+            int(result.get("wind_coastal_establishment_class_changes", 0) or 0) > 0,
+            "bornholm: strand-protection coastal filter changes the shared establishment area for wind.",
+            (
+                "bornholm: strand-protection coastal filter did not change shared establishment classes; "
+                f"area reduction={result.get('wind_coastal_area_reduction_km2')}."
+            ),
+        )
         report.check(
             float(result.get("solar_coastal_area_reduction_km2", 0.0) or 0.0) > 0.0,
             "bornholm: strand-protection coastal filter reduces right-panel solar candidate area.",
