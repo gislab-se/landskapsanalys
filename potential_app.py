@@ -6057,6 +6057,8 @@ def _solar_large_scale_frame(
         return work.reindex(columns=columns)
 
     source_resolution = target_resolution if str(region.get("region_id", "")).lower() == "trondelag" else max(target_resolution, WIND_RUNTIME_BASE_RESOLUTION)
+    if source_resolution != target_resolution and not _h3_display_geometry_path(region, source_resolution):
+        source_resolution = target_resolution
     source_landscape = _landscape_frame(region, landscape_manifest, source_resolution)
     if source_landscape.empty and source_resolution != target_resolution:
         source_resolution = target_resolution

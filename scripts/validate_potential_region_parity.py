@@ -363,6 +363,10 @@ def _region_workspace_contract(region_id: str) -> dict[str, Any]:
         False,
         family_key=f"parity_{region_id}_wind",
         control_name=app.WIND_POTENTIAL_HEX_LABEL,
+        visual_options={
+            "source_group_ids": [app.SOLAR_ROAD_GROUP_ID],
+            "buffer_group_ids": [app.SOLAR_ROAD_GROUP_ID],
+        },
     )
     if wind_preview["runtime_error"]:
         raise RuntimeError(f"{region_id} wind runtime failed: {wind_preview['runtime_error']}")
@@ -586,12 +590,14 @@ def _region_workspace_contract(region_id: str) -> dict[str, Any]:
         solar_large,
     )
     solar_proposal, solar_stats = app._solar_establishment_frame(
+        region,
         pd.DataFrame(),
         solar_large,
         float(energy_state.get("solar_area_need_km2", 0.0) or 0.0),
         float(energy_state.get("solar_twh", 0.0) or 0.0),
         float(energy_state.get("solar_km2_per_twh", math.nan) or math.nan),
         analysis_hex_area_km2,
+        analysis_resolution,
     )
     solar_proposal, solar_stats = app._expand_solar_area_outside_lp(
         solar_potential,
@@ -637,12 +643,14 @@ def _region_workspace_contract(region_id: str) -> dict[str, Any]:
         solar_large_without_road,
     )
     solar_proposal_without_road, solar_stats_without_road = app._solar_establishment_frame(
+        region,
         pd.DataFrame(),
         solar_large_without_road,
         float(energy_state.get("solar_area_need_km2", 0.0) or 0.0),
         float(energy_state.get("solar_twh", 0.0) or 0.0),
         float(energy_state.get("solar_km2_per_twh", math.nan) or math.nan),
         analysis_hex_area_km2,
+        analysis_resolution,
     )
     solar_proposal_without_road, solar_stats_without_road = app._expand_solar_area_outside_lp(
         solar_potential_without_road,

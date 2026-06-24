@@ -4,7 +4,7 @@
   "display_name": "Bornholm",
   "country": "Denmark",
   "status": "active",
-  "data_status": "r9_dagi_landsdel_landmask_review",
+  "data_status": "r9_dagi_landsdel_landmask_baseline",
   "landing_card": {
     "title": "Bornholm",
     "subtitle": "R9 island pilot",
@@ -36,7 +36,7 @@
     "display_geojson": "exports/v2_multiregion/bornholm/landmask/bornholm_dagi_landsdel_landmask_wgs84.geojson",
     "outline_geojson": "exports/v2_multiregion/bornholm/landmask/bornholm_dagi_landsdel_landmask_outline_wgs84.geojson",
     "source_crs": "EPSG:25833",
-    "note": "DAGI Landsdel Bornholm selected 2026-06-23 after QGIS comparison against the previous Prekvart-derived helper mask. The old mask had poor coastline alignment and 99 interior rings; DAGI Landsdel has no interior rings and is used for app display clipping."
+    "note": "DAGI Landsdel Bornholm selected 2026-06-23 after QGIS comparison against the previous Prekvart-derived helper mask. The old mask had poor coastline alignment and 99 interior rings; DAGI Landsdel has no interior rings and is used for app display clipping. Coastal QA for strand_protection and coastal_zone_3km was accepted on 2026-06-24, so this is the active Bornholm R9 DAGI baseline."
   },
   "h3_display_geometries": {
     "6": "exports/v2_multiregion/bornholm/h3_display_geometries/bornholm_h3_res_6_dagi_landsdel_land_clipped.geojson",
@@ -99,5 +99,5 @@
     "export_root": "exports/v2_multiregion/bornholm",
     "handoff": "docs/BORNHOLM_R9_EXPORT_FOR_V2_HANDOFF_2026-06-15.md"
   },
-  "package_note": "Bornholm V2 package now advertises R6-R9 only. R10 remains only as source/provenance in the imported R9 export manifests and v1 runtime. Active display clipping uses the DAGI Landsdel Bornholm mask selected on 2026-06-23."
+  "package_note": "Bornholm V2 package now advertises R6-R9 only. R10 remains only as source/provenance in the imported R9 export manifests and v1 runtime. Active display clipping uses the DAGI Landsdel Bornholm mask selected on 2026-06-23 and accepted as the coastal QA baseline on 2026-06-24."
 }
