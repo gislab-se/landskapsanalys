@@ -34,6 +34,7 @@ from apps.potential_model.region_status import load_region_context  # noqa: E402
 
 EXPECTED_TRONDELAG_RESOLUTIONS = [7, 6, 5]
 EXPECTED_TRONDELAG_COUNTS = {7: 13735, 6: 2163, 5: 365}
+EXPECTED_REGION_ANALYSIS_RESOLUTIONS = {"trondelag": 7, "bornholm": 9}
 EXPECTED_SYNTHETIC_ACCEPTANCE_RESOLUTIONS = {"bornholm": 10, "trondelag": 7}
 EXPECTED_SYNTHETIC_ACCEPTANCE_ROLLUP_RESOLUTIONS = {"bornholm": [8], "trondelag": [6, 5]}
 SYNTHETIC_ACCEPTANCE_COLUMNS = ["acceptance_low", "acceptance_medium", "acceptance_high"]
@@ -202,6 +203,25 @@ def check_region_package_index(report: ContractReport) -> None:
         "Skara/Skaraborg is visible as a planned disabled landing card.",
         "Skara/Skaraborg should be planned and disabled until runtime data exists.",
     )
+
+
+def check_region_analysis_resolution_contract(report: ContractReport) -> None:
+    import potential_app as app  # noqa: WPS433
+
+    for region_id, expected_resolution in EXPECTED_REGION_ANALYSIS_RESOLUTIONS.items():
+        region = load_region(region_id)
+        default_resolution = int(region.get("default_h3_resolution") or -1)
+        app_resolution = app._analysis_h3_resolution(region)
+        report.check(
+            default_resolution == expected_resolution,
+            f"{region_id}: catalog default_h3_resolution is R{expected_resolution}.",
+            f"{region_id}: catalog default_h3_resolution is R{default_resolution}, expected R{expected_resolution}.",
+        )
+        report.check(
+            app_resolution == expected_resolution,
+            f"{region_id}: app analysis resolution resolves to catalog R{expected_resolution}.",
+            f"{region_id}: app analysis resolution resolves to R{app_resolution}, expected catalog R{expected_resolution}.",
+        )
 
 
 def check_h3_session_state_sanitizer(report: ContractReport, region: dict[str, Any]) -> None:
@@ -1011,6 +1031,7 @@ def main() -> int:
     with contextlib.redirect_stderr(StringIO()):
         check_default_region(report)
         check_region_package_index(report)
+        check_region_analysis_resolution_contract(report)
 
         trondelag = load_region("trondelag")
         landscape = load_linked_manifest(trondelag, "landscape_manifest")

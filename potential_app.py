@@ -3701,13 +3701,17 @@ def _session_h3_resolution(region: dict[str, Any], state_key: str, preferred_hin
     return int(preferred)
 
 
-def _analysis_h3_resolution(region: dict[str, Any], preferred: int = WIND_RUNTIME_BASE_RESOLUTION) -> int:
+def _analysis_h3_resolution(region: dict[str, Any], preferred: int | None = None) -> int:
     available = _available_h3_resolutions(region)
     try:
         default_resolution = int(region.get("default_h3_resolution") or 9)
     except Exception:
         default_resolution = 9
-    return int(preferred) if int(preferred) in available else _preferred_h3_resolution(region, default_resolution)
+    if default_resolution in available:
+        return int(default_resolution)
+    if preferred is not None and int(preferred) in available:
+        return int(preferred)
+    return _preferred_h3_resolution(region, default_resolution)
 
 
 def _h3_display_geometry_path(region: dict[str, Any], resolution: int) -> str | None:
@@ -13287,19 +13291,30 @@ def _unified_workspace_tab(
         if custom_wind_preview_state["runtime_error"]:
             unified_notes.append(f"Vindruntime kunde inte köras: {custom_wind_preview_state['runtime_error']}")
         else:
+            custom_wind_runtime_result = custom_wind_preview_state["runtime_result"]
             custom_wind_summary = _wind_polygon_summary_frame(
                 region,
                 landscape_manifest,
-                custom_wind_preview_state["runtime_result"],
+                custom_wind_runtime_result,
                 h3_resolution,
             )
+            custom_wind_analysis_runtime_result = custom_wind_runtime_result
+            if int(h3_resolution) != int(analysis_h3_resolution) and bool(custom_wind_runtime_result.get("fast_distance")):
+                analysis_runtime_result = _wind_fast_distance_runtime_result(
+                    region,
+                    wind_ui_params,
+                    wind_selected_layers,
+                    analysis_h3_resolution,
+                )
+                if analysis_runtime_result is not None:
+                    custom_wind_analysis_runtime_result = analysis_runtime_result
             custom_wind_analysis_frame = (
                 custom_wind_summary.copy()
                 if int(h3_resolution) == int(analysis_h3_resolution)
                 else _wind_polygon_summary_frame(
                     region,
                     landscape_manifest,
-                    custom_wind_preview_state["runtime_result"],
+                    custom_wind_analysis_runtime_result,
                     analysis_h3_resolution,
                 )
             )
@@ -13314,11 +13329,11 @@ def _unified_workspace_tab(
             )
             if zoom_family_enabled:
                 unified_notes.append(
-                    f"{WIND_LANDSCAPE_POTENTIAL_LABEL} beräknas i R{WIND_RUNTIME_BASE_RESOLUTION}. Hexvisningen är zoomanpassad för granskning."
+                    f"{WIND_LANDSCAPE_POTENTIAL_LABEL} beräknas i R{analysis_h3_resolution}. Hexvisningen är zoomanpassad för granskning."
                 )
             else:
                 unified_notes.append(
-                    f"{WIND_LANDSCAPE_POTENTIAL_LABEL} beräknas i R{WIND_RUNTIME_BASE_RESOLUTION}. Kartan visar snabb vald upplösning."
+                    f"{WIND_LANDSCAPE_POTENTIAL_LABEL} beräknas i R{analysis_h3_resolution}. Kartan visar vald H3-upplösning."
                 )
             if str(region.get("region_id", "")).lower() == "trondelag" and energy_model_state.get("available"):
                 unified_notes.append(
