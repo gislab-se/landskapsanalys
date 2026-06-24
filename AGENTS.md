@@ -6,12 +6,45 @@ Bornholm and Trondelag now share the app shell, but their data paths can differ.
 
 When changing regional app behavior:
 
+- Start from the shared app behavior. A bugfix should apply to every region with
+  compatible data unless there is a documented regional reason not to.
 - Prefer the simplest region-specific implementation that matches the available data.
 - Keep user-facing labels and controls consistent where that does not hide real data differences.
 - Validate Bornholm and Trondelag behavior independently instead of forcing one region to mirror the other.
 - Document meaningful regional deviations in code, manifests, tests, or a handoff note.
 
 Do not add a Bornholm or Trondelag workaround just to satisfy parity. Fix the actual regional data flow.
+
+## Shared Fixes And Regional Exceptions
+
+Most app fixes should be region-independent. When a behavior is conceptually the
+same for all regions, implement it in the shared flow and let region manifests,
+parameter catalogs, registries, and source data decide what is available.
+
+Only add region-specific behavior when the available data, CRS, H3 resolution,
+legal/planning source, or reviewed regional contract truly differs. Do not hide a
+shared bug behind a regional branch.
+
+When a regional exception is necessary, document it close to that region's
+package before or in the same commit:
+
+- `regions/<region>/REGIONAL_NOTES.md` for human-readable behavior notes.
+- `regions/<region>/region.json` for stable region constraints and status.
+- `regions/<region>/parameter_buffers.json` for layer, buffer, source, proxy, and
+  readiness differences.
+- A test or validator when the exception affects app behavior.
+
+Each regional exception note should say:
+
+- what differs from the shared behavior
+- why the exception exists
+- which source, proxy, legal/planning rule, or data limitation causes it
+- what would let us remove or generalize the exception later
+
+Examples of regional exceptions that must be documented near the region package:
+Bornholm coastal/strand-protection establishment semantics, Trondelag 250 m
+population-grid proxy behavior, Trondelag R7/R6/R5-only display, and placeholder
+energy/scenario data.
 
 ## Regional CRS
 
