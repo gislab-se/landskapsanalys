@@ -6373,6 +6373,17 @@ def _combined_solar_hex_frame(
     return _filter_frame_to_display_geometries(base, _h3_display_geometry_path(region, int(resolution)))
 
 
+def _solar_establishment_potential_source_frame(
+    region: dict[str, Any],
+    landscape_manifest: dict[str, Any],
+    resolution: int,
+    large_frame: pd.DataFrame,
+) -> pd.DataFrame:
+    # Small-scale rooftop solar is a schematic demand/pedagogy layer, not a
+    # contiguous land-establishment surface.
+    return _combined_solar_hex_frame(region, landscape_manifest, int(resolution), pd.DataFrame(), large_frame)
+
+
 def _combined_solar_hex_layer(
     name: str,
     frame: pd.DataFrame,
@@ -13340,6 +13351,12 @@ def _unified_workspace_tab(
                 user_solar_analysis_frame if show_user_solar else pd.DataFrame(),
             )
         )
+        solar_establishment_potential_frame = _solar_establishment_potential_source_frame(
+            region,
+            landscape_manifest,
+            analysis_h3_resolution,
+            user_solar_analysis_frame if show_user_solar else pd.DataFrame(),
+        )
         _append_unique_layer(
             layers,
             _solar_potential_polygon_layer(
@@ -13354,7 +13371,7 @@ def _unified_workspace_tab(
                 solar_large_polygon_geojson,
             ),
         )
-        combined_solar_potential_frame = combined_solar_analysis_frame.copy()
+        combined_solar_potential_frame = solar_establishment_potential_frame.copy()
         potential_frames.append(
             {
                 "label": SOLAR_LANDSCAPE_POTENTIAL_LABEL,
