@@ -3,8 +3,8 @@ suppressPackageStartupMessages({
 })
 
 args <- commandArgs(trailingOnly = TRUE)
-if (length(args) < 3) {
-  stop("Usage: Rscript render_trondelag_population_buffer.R <repo_root> <buffer_m> <output_geojson>")
+if (length(args) < 4) {
+  stop("Usage: Rscript render_trondelag_population_buffer.R <repo_root> <buffer_m> <output_geojson> <population_proxy_rds>")
 }
 
 repo_root <- normalizePath(args[[1]], winslash = "/", mustWork = TRUE)
@@ -14,10 +14,10 @@ if (is.na(buffer_m) || buffer_m < 0) {
   stop("buffer_m must be a non-negative number.")
 }
 
-rds_path <- file.path(
-  repo_root,
-  "docs/geocontext/acceptance_framework/data/trondelag_prototype_assets/analysis_rds/population_points.rds"
-)
+rds_path <- args[[4]]
+if (!file.exists(rds_path)) {
+  rds_path <- file.path(repo_root, rds_path)
+}
 if (!file.exists(rds_path)) {
   stop("Missing Trondelag population proxy RDS: ", rds_path)
 }

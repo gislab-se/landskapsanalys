@@ -26,6 +26,7 @@ from apps.potential_model.manifests import (  # noqa: E402
     load_region_index,
     load_linked_manifest,
     load_region,
+    resolve_region_path,
     resolve_repo_path,
 )
 from apps.potential_model.region_status import load_region_context  # noqa: E402
@@ -780,6 +781,61 @@ def check_trondelag_region(report: ContractReport, region: dict[str, Any]) -> No
             )
 
 
+def check_trondelag_population_buffer_catalog(report: ContractReport, region: dict[str, Any]) -> None:
+    catalog = load_linked_manifest(region, "parameter_buffer_catalog") or load_linked_manifest(region, "parameter_buffers")
+    if not isinstance(catalog, dict):
+        report.fail("Trondelag parameter buffer catalog could not be loaded.")
+        return
+    runtime = catalog.get("runtime_rendering") or {}
+    population = runtime.get("population_buffer") if isinstance(runtime, dict) else {}
+    if not isinstance(population, dict):
+        report.fail("Trondelag parameter buffer catalog is missing runtime_rendering.population_buffer.")
+        return
+    report.check(
+        population.get("render_mode") == "dissolved_polygon_proxy",
+        "Trondelag population buffer render mode is dissolved_polygon_proxy.",
+        f"Trondelag population buffer render_mode is {population.get('render_mode')!r}, expected dissolved_polygon_proxy.",
+    )
+    report.check(
+        int(population.get("proxy_resolution_m") or -1) == 250,
+        "Trondelag population buffer catalog documents the 250 m grid proxy.",
+        f"Trondelag population proxy_resolution_m is {population.get('proxy_resolution_m')!r}, expected 250.",
+    )
+    note = str(population.get("user_facing_note") or "").lower()
+    report.check(
+        "not individual" in note and "250" in note,
+        "Trondelag population buffer note says the source is not individual population points.",
+        "Trondelag population buffer note must explicitly distinguish the 250 m proxy from individual points.",
+    )
+    for key in ["source_rds", "render_script", "cache_dir"]:
+        path = resolve_region_path(region, population.get(key))
+        if key == "cache_dir":
+            report.check(
+                bool(path),
+                f"Trondelag population buffer catalog resolves {key}: {path}.",
+                f"Trondelag population buffer catalog could not resolve {key}: {population.get(key)!r}.",
+            )
+        else:
+            report.check(
+                bool(path and path.exists()),
+                f"Trondelag population buffer catalog {key} exists: {path}.",
+                f"Trondelag population buffer catalog {key} is missing: {population.get(key)!r} -> {path}.",
+            )
+    source = (ROOT / "potential_app.py").read_text(encoding="utf-8")
+    report.check(
+        "load_linked_manifest(region, \"parameter_buffer_catalog\")" in source
+        and "_trondelag_population_buffer_config" in source,
+        "Trondelag population buffer paths are selected through the parameter buffer catalog.",
+        "Trondelag population buffer paths are not wired through parameter_buffers.json.",
+    )
+    report.check(
+        "trondelag_prototype_assets/analysis_rds/population_points.rds" not in source
+        and "trondelag_prototype_assets/runtime_buffers" not in source,
+        "Trondelag population proxy/cache paths are not hardcoded in potential_app.py.",
+        "Trondelag population proxy/cache paths should live in regions/trondelag/parameter_buffers.json.",
+    )
+
+
 def check_landscape_manifest(report: ContractReport, manifest: dict[str, Any] | None) -> None:
     if not isinstance(manifest, dict):
         report.fail("Trondelag landscape manifest could not be loaded.")
@@ -972,6 +1028,7 @@ def main() -> int:
         check_social_acceptance_adjusted_capacity(report)
         check_social_acceptance_allocation_priority(report, trondelag)
         check_trondelag_region(report, trondelag)
+        check_trondelag_population_buffer_catalog(report, trondelag)
         check_map_auto_resolution(report)
         check_landscape_manifest(report, landscape)
         check_scenario_placeholder(report, scenario)

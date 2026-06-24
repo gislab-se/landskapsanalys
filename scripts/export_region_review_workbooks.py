@@ -193,6 +193,26 @@ def region_notes(region_id: str) -> list[str]:
     ]
 
 
+def runtime_rendering(region_id: str) -> dict[str, Any]:
+    if region_id != "trondelag":
+        return {}
+    return {
+        "population_buffer": {
+            "render_mode": "dissolved_polygon_proxy",
+            "source_layer_id": "population_points",
+            "proxy_resolution_m": 250,
+            "source_rds": "docs/geocontext/acceptance_framework/data/trondelag_prototype_assets/analysis_rds/population_points.rds",
+            "render_script": "script/acceptance/render_trondelag_population_buffer.R",
+            "cache_dir": "docs/geocontext/acceptance_framework/data/trondelag_prototype_assets/runtime_buffers",
+            "cache_filename_template": "population_points_buffer_{buffer_m}m.geojson",
+            "native_crs": "EPSG:25832",
+            "web_crs": "EPSG:4326",
+            "runtime_status": "proxy_250m_grid_dissolved_polygon",
+            "user_facing_note": "Trondelag population uses dissolved 250 m grid-cell proxy polygons derived from centroids, not individual population points.",
+        }
+    }
+
+
 def build_group_records(contexts: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     for region_id, ctx in contexts.items():
@@ -464,6 +484,7 @@ def build_region_catalogs(contexts: dict[str, dict[str, Any]]) -> dict[str, Path
     output_paths: dict[str, Path] = {}
     for region_id, ctx in contexts.items():
         region = ctx["region"]
+        runtime_rendering_config = runtime_rendering(region_id)
         catalog = {
             "schema_version": SCHEMA_VERSION,
             "created_at": REPORT_DATE,
@@ -489,6 +510,27 @@ def build_region_catalogs(contexts: dict[str, dict[str, Any]]) -> dict[str, Path
                 "For Trondelag, keep population buffers as dissolved polygon buffers from the 250 m proxy.",
             ],
         }
+        if runtime_rendering_config:
+            catalog = {**catalog, "runtime_rendering": runtime_rendering_config}
+            catalog = {
+                key: catalog[key]
+                for key in [
+                    "schema_version",
+                    "created_at",
+                    "status",
+                    "region_id",
+                    "display_name",
+                    "native_crs",
+                    "web_crs",
+                    "source_region_package",
+                    "source_registry",
+                    "notes",
+                    "runtime_rendering",
+                    "groups",
+                    "app_defaults",
+                    "review_checklist",
+                ]
+            }
         path = ROOT / "regions" / region_id / "parameter_buffers.json"
         save_json(path, catalog)
         output_paths[region_id] = path

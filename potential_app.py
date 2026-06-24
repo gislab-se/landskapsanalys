@@ -36,6 +36,7 @@ from potential_model.manifests import (  # noqa: E402
     load_region,
     list_regions,
     read_manifest,
+    resolve_region_path,
     resolve_repo_path,
 )
 from potential_model.region_status import (  # noqa: E402
@@ -5261,33 +5262,81 @@ def _solar_population_buffer_geojson(buffer_m: float) -> dict[str, Any] | None:
     return geojson if isinstance(geojson, dict) else None
 
 
-def _trondelag_population_proxy_rds_path() -> Path:
-    return ROOT / "docs/geocontext/acceptance_framework/data/trondelag_prototype_assets/analysis_rds/population_points.rds"
+TRONDELAG_POPULATION_BUFFER_DEFAULTS = {
+    "render_mode": "dissolved_polygon_proxy",
+    "source_layer_id": WIND_POPULATION_SOURCE_LAYER_ID,
+    "proxy_resolution_m": 250,
+    "cache_filename_template": "population_points_buffer_{buffer_m}m.geojson",
+    "user_facing_note": "Trondelag population uses dissolved 250 m grid-cell proxy polygons derived from centroids, not individual population points.",
+}
 
 
-def _trondelag_population_buffer_script_path() -> Path:
-    return ROOT / "script/acceptance/render_trondelag_population_buffer.R"
+def _trondelag_population_buffer_config(region: dict[str, Any]) -> dict[str, Any]:
+    manifest = load_linked_manifest(region, "parameter_buffer_catalog") or load_linked_manifest(region, "parameter_buffers") or {}
+    runtime_rendering = manifest.get("runtime_rendering") if isinstance(manifest, dict) else {}
+    config = (runtime_rendering or {}).get("population_buffer") if isinstance(runtime_rendering, dict) else {}
+    merged = dict(TRONDELAG_POPULATION_BUFFER_DEFAULTS)
+    if isinstance(config, dict):
+        merged.update(config)
+    return merged
 
 
-def _trondelag_population_buffer_cache_path(buffer_m: float) -> Path:
+def _trondelag_population_buffer_config_path(region: dict[str, Any], config: dict[str, Any], key: str) -> Path | None:
+    path_value = config.get(key)
+    path = resolve_region_path(region, str(path_value)) if path_value else None
+    if path is not None:
+        return path
+    return None
+
+
+def _trondelag_population_proxy_rds_path(region: dict[str, Any]) -> Path | None:
+    config = _trondelag_population_buffer_config(region)
+    return _trondelag_population_buffer_config_path(region, config, "source_rds")
+
+
+def _trondelag_population_buffer_script_path(region: dict[str, Any]) -> Path | None:
+    config = _trondelag_population_buffer_config(region)
+    return _trondelag_population_buffer_config_path(region, config, "render_script")
+
+
+def _trondelag_population_buffer_cache_path(region: dict[str, Any], buffer_m: float) -> Path | None:
+    config = _trondelag_population_buffer_config(region)
+    cache_dir = _trondelag_population_buffer_config_path(region, config, "cache_dir")
+    if cache_dir is None:
+        return None
     buffer_value = int(round(max(0.0, float(buffer_m or 0.0))))
-    return (
-        ROOT
-        / "docs/geocontext/acceptance_framework/data/trondelag_prototype_assets/runtime_buffers"
-        / f"population_points_buffer_{buffer_value}m.geojson"
-    )
+    template = str(config.get("cache_filename_template") or TRONDELAG_POPULATION_BUFFER_DEFAULTS["cache_filename_template"])
+    try:
+        filename = template.format(
+            buffer_m=buffer_value,
+            source_layer_id=str(config.get("source_layer_id") or WIND_POPULATION_SOURCE_LAYER_ID),
+        )
+    except Exception:
+        filename = f"population_points_buffer_{buffer_value}m.geojson"
+    return cache_dir / filename
+
+
+def _trondelag_population_proxy_resolution_m(region: dict[str, Any]) -> int:
+    config = _trondelag_population_buffer_config(region)
+    try:
+        return int(config.get("proxy_resolution_m") or 250)
+    except Exception:
+        return 250
 
 
 @st.cache_data(show_spinner=False)
 def _load_trondelag_population_buffer_geojson(
     buffer_value_m: int,
+    source_path_str: str,
     source_mtime_ns: int,
+    script_path_str: str,
     script_mtime_ns: int,
+    output_path_str: str,
 ) -> dict[str, Any] | None:
     _ = source_mtime_ns, script_mtime_ns
-    output_path = _trondelag_population_buffer_cache_path(float(buffer_value_m))
-    source_path = _trondelag_population_proxy_rds_path()
-    script_path = _trondelag_population_buffer_script_path()
+    output_path = Path(output_path_str)
+    source_path = Path(source_path_str)
+    script_path = Path(script_path_str)
     newest_source_mtime = max(source_path.stat().st_mtime, script_path.stat().st_mtime)
     if not output_path.exists() or output_path.stat().st_mtime < newest_source_mtime:
         try:
@@ -5298,6 +5347,7 @@ def _load_trondelag_population_buffer_geojson(
                     str(ROOT),
                     str(int(buffer_value_m)),
                     str(output_path),
+                    str(source_path),
                 ],
                 check=True,
                 capture_output=True,
@@ -5312,20 +5362,27 @@ def _load_trondelag_population_buffer_geojson(
         return None
 
 
-def _trondelag_population_buffer_geojson(buffer_m: float) -> dict[str, Any] | None:
-    source_path = _trondelag_population_proxy_rds_path()
-    script_path = _trondelag_population_buffer_script_path()
-    if not source_path.exists() or not script_path.exists():
+def _trondelag_population_buffer_geojson(region: dict[str, Any], buffer_m: float) -> dict[str, Any] | None:
+    source_path = _trondelag_population_proxy_rds_path(region)
+    script_path = _trondelag_population_buffer_script_path(region)
+    if not source_path or not script_path or not source_path.exists() or not script_path.exists():
         return None
     buffer_value = int(round(max(0.0, float(buffer_m or 0.0))))
+    output_path = _trondelag_population_buffer_cache_path(region, float(buffer_value))
+    if output_path is None:
+        return None
     return _load_trondelag_population_buffer_geojson(
         buffer_value,
+        str(source_path),
         int(source_path.stat().st_mtime_ns),
+        str(script_path),
         int(script_path.stat().st_mtime_ns),
+        str(output_path),
     )
 
 
 def _trondelag_population_buffer_polygon_layer(
+    region: dict[str, Any],
     buffer_m: float,
     prefix: str = "Buffert",
     context_key: str = "shared",
@@ -5334,23 +5391,24 @@ def _trondelag_population_buffer_polygon_layer(
     layer_spec = layers.get(WIND_POPULATION_SOURCE_LAYER_ID)
     if layer_spec is None:
         return None
-    geojson = _trondelag_population_buffer_geojson(float(buffer_m or 0.0))
+    geojson = _trondelag_population_buffer_geojson(region, float(buffer_m or 0.0))
     features = geojson.get("features") if isinstance(geojson, dict) else None
     if not isinstance(features, list) or not features:
         return None
     label = layer_label(layer_spec, WIND_CONTROL_LANGUAGE, layer_spec.label)
     buffer_value = float(buffer_m or 0.0)
+    proxy_resolution_m = _trondelag_population_proxy_resolution_m(region)
     for feature in features:
         props = feature.setdefault("properties", {})
         props["fill"] = "#14b8a6"
         props["stroke"] = "#0f766e"
         props["fill_opacity"] = 0.22
         props["tooltip_title"] = f"{prefix}: {label}"
-        props["tooltip_body"] = f"{buffer_value:.0f} m från upplöst 250 m befolkningsrutproxy"
+        props["tooltip_body"] = f"{buffer_value:.0f} m från upplöst {proxy_resolution_m} m befolkningsrutproxy"
         props["popup"] = (
             f"<strong>{prefix}: {label}</strong><br>"
             f"Buffert: {buffer_value:.0f} m<br>"
-            "Källa: 250 m befolkningsrutor härledda från centroider. "
+            f"Källa: {proxy_resolution_m} m befolkningsrutor härledda från centroider. "
             "Bufferten är en dissolvad polygon, inte individuella befolkningspunkter."
         )
     return {
@@ -5360,7 +5418,7 @@ def _trondelag_population_buffer_polygon_layer(
         "fill_property": "fill",
         "fill_opacity_property": "fill_opacity",
         "stroke_property": "stroke",
-        "legend_items": [{"label": f"{buffer_value:.0f} m från 250 m befolkningsrutor", "color": "#14b8a6"}],
+        "legend_items": [{"label": f"{buffer_value:.0f} m från {proxy_resolution_m} m befolkningsrutor", "color": "#14b8a6"}],
         "legend_id": f"population_polygon_buffer_{int(round(buffer_value))}",
         "legend_title": "",
         "default_visible": True,
@@ -5421,6 +5479,7 @@ def _solar_population_buffer_layer(
     if str(region.get("region_id", "")).lower() == "trondelag":
         _ = target_resolution
         return _trondelag_population_buffer_polygon_layer(
+            region,
             float(buffer_m or 0.0),
             prefix="Solbuffert",
             context_key="solar",
@@ -11118,6 +11177,7 @@ def _wind_polygon_preview_state(
             else 0.0
         )
         population_buffer_layer = _trondelag_population_buffer_polygon_layer(
+            region,
             threshold_m,
             prefix="Vindbuffert",
             context_key="wind",

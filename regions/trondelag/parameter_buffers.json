@@ -14,6 +14,21 @@
     "Do not expose Trondelag R8/R9 in the interactive app.",
     "Aviation, military and coastal groups are registry placeholders until Trondelag sources are wired."
   ],
+  "runtime_rendering": {
+    "population_buffer": {
+      "render_mode": "dissolved_polygon_proxy",
+      "source_layer_id": "population_points",
+      "proxy_resolution_m": 250,
+      "source_rds": "docs/geocontext/acceptance_framework/data/trondelag_prototype_assets/analysis_rds/population_points.rds",
+      "render_script": "script/acceptance/render_trondelag_population_buffer.R",
+      "cache_dir": "docs/geocontext/acceptance_framework/data/trondelag_prototype_assets/runtime_buffers",
+      "cache_filename_template": "population_points_buffer_{buffer_m}m.geojson",
+      "native_crs": "EPSG:25832",
+      "web_crs": "EPSG:4326",
+      "runtime_status": "proxy_250m_grid_dissolved_polygon",
+      "user_facing_note": "Trondelag population uses dissolved 250 m grid-cell proxy polygons derived from centroids, not individual population points."
+    }
+  },
   "groups": [
     {
       "region_id": "trondelag",
