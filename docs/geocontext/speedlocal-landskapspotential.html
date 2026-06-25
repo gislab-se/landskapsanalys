@@ -200,7 +200,7 @@
 
       .cards {
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 16px;
       }
 
@@ -565,8 +565,8 @@
           <p class="eyebrow">Projektöversikt</p>
           <h1>SpeedLocal landskapspotential</h1>
           <p class="lead">
-            En samlad ingång till regionala potentialappar, metodspår och kommande versioner.
-            V2 är numera en ren Tröndelag-version, V3 planeras för Skaraborg/Vara och en gemensam app för flera regioner hålls som ett senare vägval.
+            En samlad ingång till regionala potentialappar, nuvarande pilot och kommande regioner.
+            Målet är ett gemensamt program där regionväljaren kan växla mellan Bornholm, Tröndelag och Skaraborg/Vara och tillbaka hit.
           </p>
           <div class="hero-actions" aria-label="Snabblänkar">
             <a class="button primary" href="https://landskapsanalys-potential-v2-test.streamlit.app/" target="_blank" rel="noreferrer">Öppna V2 Tröndelag</a>
@@ -587,8 +587,8 @@
         <div class="section-head">
           <h2 id="regionala-versioner-title">Regionala versioner</h2>
           <p>
-            Varje kort pekar på en tydlig del av projektet: färdiga appar när de finns,
-            planerade regioner när de inte ska låtsas vara klara, och metodspåret som binder ihop landskapsanalysen.
+            Varje kort ska på sikt öppna samma program med rätt region vald. Tills dess skiljer sidan på
+            aktiva regionala piloter och planerade regioner så inget ser mer färdigt ut än det är.
           </p>
         </div>
 
@@ -616,8 +616,9 @@
             </div>
             <h3>Tröndelag</h3>
             <p>
-              V2 är en egen Tröndelag-version. Den ska läsas som regional anpassning av Bornholm-upplägget,
-              med Tröndelags data, skala och etableringsförutsättningar.
+              V2 är Tröndelags regionala pilot i det gemensamma appskalet. Den använder Tröndelags
+              data, skala och dokumenterade proxyer där slutliga regionala underlag ännu saknas.
+              På sikt ska kortet öppna samma program med Tröndelag vald i regionväljaren.
             </p>
             <div class="button-row">
               <a class="button" href="https://landskapsanalys-potential-v2-test.streamlit.app/" target="_blank" rel="noreferrer">Öppna V2</a>
@@ -636,22 +637,6 @@
             </p>
             <div class="button-row">
               <a class="button disabled" href="#" aria-disabled="true">Kommer senare</a>
-            </div>
-          </article>
-
-          <article class="card report">
-            <div class="tag-row">
-              <span class="tag live">Metod</span>
-              <span class="tag">Landskapsanalys</span>
-            </div>
-            <h3>Rapport och metod</h3>
-            <p>
-              Metodspåret beskriver hur landskapskaraktär, scenarier, etableringsytor och regionala data
-              översätts till planeringsstöd. Bornholm är första referens, men texten ska kunna växa till en generell projektrapport.
-            </p>
-            <div class="button-row">
-              <a class="button" href="model_comparisons/bornholm_v10_landscape_types/report/bornholm_v10_landscape_types_report.html">Öppna rapport</a>
-              <a class="button alt" href="index.html">Bornholm-sidan</a>
             </div>
           </article>
         </div>
@@ -766,8 +751,8 @@
         <div>
           <h2 id="status-title">Versionslogik just nu</h2>
           <p>
-            Den här sidan är projektets nya nav tills vidare. Den lovar inte en gemensam app för flera regioner innan det faktiskt finns,
-            men lämnar plats för att en framtida V4 antingen blir en sådan app eller en större publik projektsida.
+            Den här sidan är projektets nya nav tills vidare. De tre regionkorten ska på sikt hänga ihop med
+            ett och samma program, där regionväljaren växlar mellan regionala lägen och kan länka tillbaka hit.
           </p>
         </div>
         <div class="note-list" aria-label="Kort status">
