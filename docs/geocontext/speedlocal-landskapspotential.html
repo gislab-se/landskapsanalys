@@ -204,14 +204,6 @@
         gap: 16px;
       }
 
-      .cards.related {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-
-      .cards.related .card {
-        min-height: auto;
-      }
-
       .card {
         display: flex;
         flex-direction: column;
@@ -581,7 +573,6 @@
             <a class="button secondary" href="#regionala-versioner">Se versioner</a>
             <a class="button secondary" href="#matematiken">Se modellen</a>
             <a class="button secondary" href="#rapportunderlag">Se metod</a>
-            <a class="button secondary" href="#relaterade-tjanster">Relaterade tjänster</a>
           </div>
         </div>
 
@@ -753,50 +744,6 @@
             </ol>
             <a class="source-link" href="https://gislab-se.github.io/landskapsanalys/sol-vindpotential/">Ursprungligt rapportunderlag</a>
           </aside>
-        </div>
-      </section>
-
-      <section id="relaterade-tjanster" aria-labelledby="relaterade-tjanster-title">
-        <div class="section-head">
-          <h2 id="relaterade-tjanster-title">Relaterade tjänster</h2>
-          <p>
-            Fristående GISLab-tjänster med koppling till regional utveckling, tillgänglighet och
-            gemensam geografisk orientering. De ingår inte i landskapspotentialens versionsserie.
-          </p>
-        </div>
-
-        <div class="cards related">
-          <article class="card report">
-            <div class="tag-row">
-              <span class="tag live">Publicerad</span>
-              <span class="tag">Paketlogistik och service</span>
-            </div>
-            <h3>Paketleveranser i Dalarna</h3>
-            <p>
-              Interaktiv dashboard om paketleveranser, servicenät och geografisk tillgänglighet i Dalarna.
-              Tjänsten kan användas som underlag för regional lägesbild och fortsatt analys.
-            </p>
-            <div class="button-row">
-              <a class="button" href="https://paketleveranser-dalarna.streamlit.app/" target="_blank" rel="noreferrer">Öppna tjänsten</a>
-              <a class="button alt" href="https://github.com/gislab-se/sistamilen" target="_blank" rel="noreferrer">GitHub-repo</a>
-            </div>
-          </article>
-
-          <article class="card trondelag">
-            <div class="tag-row">
-              <span class="tag live">Publicerad</span>
-              <span class="tag">Omställningslabbet Sälenfjällen</span>
-            </div>
-            <h3>Sälenfjällen i 3D</h3>
-            <p>
-              Interaktiv 3D-webbsida som ger Omställningslabbet en gemensam geografisk orientering
-              kring terräng, höjdkurvor, skidanläggningar, vägar och flygplats.
-            </p>
-            <div class="button-row">
-              <a class="button" href="https://gislab.se/lab/salenfjallen-3d/" target="_blank" rel="noreferrer">Öppna webbsidan</a>
-              <a class="button alt" href="https://github.com/gislab-se/gislab_hemsida" target="_blank" rel="noreferrer">GitHub-repo</a>
-            </div>
-          </article>
         </div>
       </section>
 
