@@ -1,770 +1,441 @@
 <!doctype html>
 <html lang="sv">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="robots" content="noindex, nofollow, noarchive">
-    <title>SpeedLocal landskapspotential</title>
-    <style>
-      :root {
-        --bg: #f7f4ed;
-        --surface: #fffdf8;
-        --surface-soft: #ece6da;
-        --ink: #151915;
-        --muted: #5f665f;
-        --line: rgba(21, 25, 21, 0.16);
-        --green: #2f6b4f;
-        --green-dark: #1f4938;
-        --rust: #b45e3c;
-        --blue: #315f7d;
-        --gold: #c49a3c;
-        --shadow: 0 18px 42px rgba(21, 25, 21, 0.14);
-      }
-
-      * {
-        box-sizing: border-box;
-      }
-
-      html {
-        scroll-behavior: smooth;
-      }
-
-      body {
-        margin: 0;
-        min-height: 100vh;
-        color: var(--ink);
-        background: var(--bg);
-        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      }
-
-      a {
-        color: inherit;
-      }
-
-      .hero {
-        position: relative;
-        display: flex;
-        min-height: 64vh;
-        padding: 34px 28px 42px;
-        overflow: hidden;
-        color: #fffdf8;
-        background:
-          linear-gradient(90deg, rgba(14, 23, 18, 0.88) 0%, rgba(14, 23, 18, 0.64) 48%, rgba(14, 23, 18, 0.18) 100%),
-          url("snygg_karta.png") center right / contain no-repeat,
-          #24342b;
-      }
-
-      .hero::after {
-        content: "";
-        position: absolute;
-        inset: auto 0 0;
-        height: 10px;
-        background: linear-gradient(90deg, var(--green), var(--gold), var(--rust), var(--blue));
-      }
-
-      .hero-inner {
-        position: relative;
-        z-index: 1;
-        width: min(100%, 1120px);
-        margin: 0 auto;
-        display: flex;
-        flex-direction: column;
-        justify-content: space-between;
-        gap: 54px;
-      }
-
-      .topline {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 18px;
-        font-size: 0.88rem;
-        color: rgba(255, 253, 248, 0.78);
-      }
-
-      .mark {
-        font-weight: 800;
-        color: #fffdf8;
-      }
-
-      .hero-copy {
-        max-width: 730px;
-      }
-
-      .eyebrow {
-        margin: 0 0 14px;
-        color: rgba(255, 253, 248, 0.78);
-        font-size: 0.82rem;
-        font-weight: 800;
-        text-transform: uppercase;
-      }
-
-      h1 {
-        margin: 0;
-        max-width: 12ch;
-        font-size: clamp(3rem, 8vw, 6.9rem);
-        line-height: 0.92;
-        font-weight: 880;
-      }
-
-      .lead {
-        max-width: 660px;
-        margin: 20px 0 0;
-        color: rgba(255, 253, 248, 0.84);
-        font-size: clamp(1rem, 2vw, 1.28rem);
-        line-height: 1.62;
-      }
-
-      .hero-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-        margin-top: 28px;
-      }
-
-      .button {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-height: 44px;
-        padding: 11px 16px;
-        border-radius: 6px;
-        border: 1px solid transparent;
-        text-decoration: none;
-        font-weight: 800;
-        transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
-      }
-
-      .button:hover {
-        transform: translateY(-1px);
-      }
-
-      .button.primary {
-        background: #fffdf8;
-        color: var(--green-dark);
-      }
-
-      .button.secondary {
-        border-color: rgba(255, 253, 248, 0.42);
-        background: rgba(255, 253, 248, 0.08);
-        color: #fffdf8;
-      }
-
-      .button.disabled {
-        border-color: rgba(21, 25, 21, 0.16);
-        background: rgba(21, 25, 21, 0.04);
-        color: var(--muted);
-        cursor: default;
-        pointer-events: none;
-      }
-
-      .hero-status {
-        max-width: 780px;
-        margin: 0;
-        padding-top: 2px;
-        color: rgba(255, 253, 248, 0.74);
-        font-size: 0.95rem;
-        line-height: 1.58;
-      }
-
-      .hero-status strong {
-        color: #fffdf8;
-      }
-
-      main {
-        width: min(100%, 1180px);
-        margin: 0 auto;
-        padding: 30px 24px 74px;
-      }
-
-      .section-head {
-        display: flex;
-        justify-content: space-between;
-        align-items: end;
-        gap: 24px;
-        margin: 14px 0 22px;
-      }
-
-      .section-head h2 {
-        margin: 0;
-        font-size: clamp(1.8rem, 3vw, 2.6rem);
-        line-height: 1.02;
-      }
-
-      .section-head p {
-        max-width: 540px;
-        margin: 0;
-        color: var(--muted);
-        line-height: 1.58;
-      }
-
-      .cards {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 16px;
-      }
-
-      .card {
-        display: flex;
-        flex-direction: column;
-        gap: 14px;
-        min-height: 378px;
-        padding: 20px;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        background: var(--surface);
-        box-shadow: 0 10px 24px rgba(21, 25, 21, 0.08);
-      }
-
-      .card.bornholm {
-        border-top: 6px solid var(--green);
-      }
-
-      .card.trondelag {
-        border-top: 6px solid var(--blue);
-      }
-
-      .card.skaraborg {
-        border-top: 6px solid var(--rust);
-      }
-
-      .card.report {
-        border-top: 6px solid var(--gold);
-      }
-
-      .tag-row {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-      }
-
-      .tag {
-        display: inline-flex;
-        align-items: center;
-        min-height: 28px;
-        padding: 5px 9px;
-        border-radius: 6px;
-        background: var(--surface-soft);
-        color: var(--muted);
-        font-size: 0.78rem;
-        font-weight: 800;
-      }
-
-      .tag.live {
-        background: rgba(47, 107, 79, 0.12);
-        color: var(--green-dark);
-      }
-
-      .tag.next {
-        background: rgba(180, 94, 60, 0.13);
-        color: #7a3923;
-      }
-
-      .card h3 {
-        margin: 0;
-        font-size: 1.5rem;
-        line-height: 1.1;
-      }
-
-      .card p {
-        margin: 0;
-        color: var(--muted);
-        line-height: 1.62;
-      }
-
-      .card .button-row {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        margin-top: auto;
-        padding-top: 8px;
-      }
-
-      .card .button {
-        min-height: 40px;
-        padding: 9px 12px;
-        border-color: var(--line);
-        background: var(--ink);
-        color: #fffdf8;
-        font-size: 0.92rem;
-      }
-
-      .card .button.alt {
-        background: transparent;
-        color: var(--ink);
-      }
-
-      .note {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(260px, 0.42fr);
-        gap: 18px;
-        margin-top: 18px;
-        padding: 18px;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        background: #ebe8df;
-      }
-
-      .note h2 {
-        margin: 0 0 8px;
-        font-size: 1.2rem;
-      }
-
-      .note p {
-        margin: 0;
-        color: var(--muted);
-        line-height: 1.6;
-      }
-
-      .note-list {
-        display: grid;
-        gap: 8px;
-      }
-
-      .note-list div {
-        padding: 10px 12px;
-        border: 1px solid rgba(21, 25, 21, 0.12);
-        border-radius: 6px;
-        background: rgba(255, 253, 248, 0.54);
-        font-size: 0.93rem;
-        font-weight: 760;
-      }
-
-      .math-section {
-        margin-top: 34px;
-        padding: 38px 0 8px;
-        border-top: 1px solid var(--line);
-      }
-
-      .math-layout {
-        display: grid;
-        grid-template-columns: minmax(0, 1.42fr) minmax(280px, 0.58fr);
-        gap: 34px;
-        align-items: start;
-      }
-
-      .math-copy {
-        max-width: 800px;
-      }
-
-      .math-kicker {
-        margin: 0 0 12px;
-        color: var(--green-dark);
-        font-size: 0.78rem;
-        font-weight: 850;
-        text-transform: uppercase;
-      }
-
-      .math-copy h2 {
-        margin: 0 0 16px;
-        font-size: clamp(2rem, 4vw, 3.35rem);
-        line-height: 0.98;
-      }
-
-      .math-copy p {
-        margin: 0 0 15px;
-        color: var(--muted);
-        font-size: 1.02rem;
-        line-height: 1.74;
-      }
-
-      .math-copy .opening {
-        color: var(--ink);
-        font-size: 1.16rem;
-      }
-
-      .math-panel {
-        position: sticky;
-        top: 18px;
-        display: grid;
-        gap: 12px;
-        padding: 18px;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        background: #eee9de;
-      }
-
-      .math-panel h3 {
-        margin: 0;
-        font-size: 1.05rem;
-      }
-
-      .math-formula {
-        padding: 12px;
-        border: 1px solid rgba(21, 25, 21, 0.12);
-        border-radius: 6px;
-        background: rgba(255, 253, 248, 0.62);
-        color: var(--ink);
-        font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-        font-size: 0.88rem;
-        line-height: 1.55;
-      }
-
-      .math-panel p {
-        margin: 0;
-        color: var(--muted);
-        line-height: 1.58;
-      }
-
-      .research-section {
-        margin-top: 32px;
-        padding: 34px 0 10px;
-        border-top: 1px solid var(--line);
-      }
-
-      .research-layout {
-        display: grid;
-        grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.55fr);
-        gap: 34px;
-        align-items: start;
-      }
-
-      .research-copy {
-        max-width: 760px;
-      }
-
-      .research-kicker {
-        margin: 0 0 12px;
-        color: var(--rust);
-        font-size: 0.78rem;
-        font-weight: 850;
-        text-transform: uppercase;
-      }
-
-      .research-copy h2 {
-        margin: 0 0 14px;
-        font-size: clamp(2rem, 4vw, 3.4rem);
-        line-height: 0.98;
-      }
-
-      .research-copy h3 {
-        margin: 28px 0 8px;
-        font-size: 1.08rem;
-      }
-
-      .research-copy p {
-        margin: 0 0 14px;
-        color: var(--muted);
-        font-size: 1.02rem;
-        line-height: 1.72;
-      }
-
-      .research-copy .opening {
-        color: var(--ink);
-        font-size: 1.14rem;
-      }
-
-      .research-aside {
-        position: sticky;
-        top: 18px;
-        padding: 18px;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        background: #eee9de;
-      }
-
-      .research-aside h3 {
-        margin: 0 0 12px;
-        font-size: 1.05rem;
-      }
-
-      .research-aside ol {
-        margin: 0;
-        padding-left: 1.25rem;
-        color: var(--muted);
-        line-height: 1.58;
-      }
-
-      .research-aside li + li {
-        margin-top: 8px;
-      }
-
-      .source-link {
-        display: inline-flex;
-        margin-top: 14px;
-        color: var(--green-dark);
-        font-weight: 800;
-        text-decoration-thickness: 1px;
-        text-underline-offset: 3px;
-      }
-
-      footer {
-        width: min(100%, 1180px);
-        margin: 0 auto;
-        padding: 0 24px 38px;
-        color: var(--muted);
-        font-size: 0.92rem;
-      }
-
-      @media (max-width: 1080px) {
-        .cards {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-      }
-
-      @media (max-width: 760px) {
-        .hero {
-          min-height: 58vh;
-          padding: 22px 18px 34px;
-          background:
-            linear-gradient(180deg, rgba(14, 23, 18, 0.9) 0%, rgba(14, 23, 18, 0.68) 72%, rgba(14, 23, 18, 0.46) 100%),
-            url("snygg_karta.png") center bottom / 112% auto no-repeat,
-            #24342b;
-        }
-
-        .topline,
-        .section-head,
-        .math-layout,
-        .research-layout,
-        .note {
-          display: block;
-        }
-
-        .topline span:last-child {
-          display: block;
-          margin-top: 8px;
-        }
-
-        .cards {
-          grid-template-columns: 1fr;
-        }
-
-        .card {
-          min-height: auto;
-        }
-
-        .research-aside {
-          position: static;
-          margin-top: 20px;
-        }
-
-        .math-panel {
-          position: static;
-          margin-top: 20px;
-        }
-
-        main {
-          padding: 24px 16px 56px;
-        }
-
-        footer {
-          padding-inline: 16px;
-        }
-      }
-    </style>
-  </head>
-  <body>
-    <header class="hero">
-      <div class="hero-inner">
-        <div class="topline">
-          <span class="mark">SpeedLocal</span>
-          <span>Regional sol- och vindpotential med landskapet som planeringslager</span>
-        </div>
-
-        <div class="hero-copy">
-          <p class="eyebrow">Projektöversikt</p>
-          <h1>SpeedLocal landskapspotential</h1>
-          <p class="lead">
-            En samlad ingång till regionala potentialappar, nuvarande pilot och kommande regioner.
-            Målet är ett gemensamt program där regionväljaren kan växla mellan Bornholm, Tröndelag och Skaraborg/Vara och tillbaka hit.
-          </p>
-          <div class="hero-actions" aria-label="Snabblänkar">
-            <a class="button primary" href="https://landskapsanalys-potential-v2-test.streamlit.app/" target="_blank" rel="noreferrer">Öppna V2 Tröndelag</a>
-            <a class="button secondary" href="#regionala-versioner">Se versioner</a>
-            <a class="button secondary" href="#matematiken">Se modellen</a>
-            <a class="button secondary" href="#rapportunderlag">Se metod</a>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow, noarchive">
+  <meta name="description" content="Utforska SpeedLocals testversion för vind- och solenergi i Bornholm, Trøndelag och Skaraborg. Här finns också de tidigare regionala versionerna.">
+  <title>SpeedLocal landskapspotential</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f4ed;
+      --surface: #fffdf8;
+      --soft: #ece6da;
+      --ink: #151915;
+      --muted: #535d55;
+      --line: #d4d4c9;
+      --green: #2f6b4f;
+      --green-dark: #1f4938;
+      --rust: #a14e31;
+      --blue: #315f7d;
+      --gold: #c49a3c;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 24px; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--bg);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.65;
+    }
+    a { color: var(--green-dark); text-underline-offset: .2em; }
+    button, select { font: inherit; }
+    a, button, select, summary { -webkit-tap-highlight-color: transparent; }
+    :focus-visible { outline: 3px solid #986900; outline-offset: 5px; }
+    .skip-link {
+      position: absolute; top: -100px; left: 20px; z-index: 5;
+      padding: 12px 18px; background: var(--surface);
+    }
+    .skip-link:focus { top: 16px; }
+    .hero {
+      padding: 28px 24px 42px;
+      color: var(--surface);
+      border-bottom: 7px solid var(--gold);
+      background:
+        linear-gradient(90deg, rgba(14, 23, 18, .96), rgba(14, 23, 18, .8) 54%, rgba(14, 23, 18, .35)),
+        url("snygg_karta.png") center right / contain no-repeat,
+        #24342b;
+    }
+    .hero-inner, main, footer { width: min(100%, 1120px); margin-inline: auto; }
+    .topline { display: flex; justify-content: space-between; gap: 20px; align-items: center; }
+    .mark { font-weight: 850; letter-spacing: -.02em; font-size: 1.2rem; }
+    .topline span:last-child { font-size: .87rem; color: #e5e8df; }
+    .hero-copy { max-width: 740px; padding-top: 42px; }
+    .eyebrow, .kicker {
+      margin: 0 0 10px; font-size: .77rem; font-weight: 800;
+      text-transform: uppercase; letter-spacing: .1em;
+    }
+    .eyebrow { color: #d5decf; }
+    h1 { max-width: 16ch; margin: 0; font-size: clamp(2.8rem, 6.2vw, 5.2rem); line-height: 1.04; letter-spacing: -.045em; }
+    .lead { max-width: 64ch; margin: 20px 0 0; font-size: 1.1rem; color: #ecede7; }
+    .hero-actions, .button-row { display: flex; flex-wrap: wrap; gap: 10px; }
+    .hero-actions { margin-top: 24px; }
+    .button {
+      display: inline-flex; justify-content: center; align-items: center;
+      min-height: 46px; padding: 10px 15px;
+      border: 1px solid var(--green-dark); border-radius: 6px;
+      background: var(--green-dark); color: white; text-decoration: none;
+      font-weight: 750; line-height: 1.4; text-align: center;
+    }
+    a.button:hover { background: var(--green); border-color: var(--green); color: white; }
+    .hero .button { background: var(--surface); color: var(--green-dark); border-color: var(--surface); }
+    .hero .button.secondary { background: transparent; color: white; border-color: #a6b3a2; }
+    .hero :focus-visible { outline-color: #f3cf7b; }
+    .button.alt { background: transparent; color: var(--green-dark); border-color: #89998c; }
+    .button:disabled { background: #e4e7df; color: #515c50; border-color: #c6cdc1; cursor: not-allowed; }
+    main { padding: 30px 24px 60px; }
+    section { scroll-margin-top: 24px; }
+    .section-head { max-width: 78ch; margin-bottom: 24px; }
+    h2 { font-size: clamp(1.65rem, 3vw, 2.2rem); line-height: 1.2; margin: 0 0 12px; letter-spacing: -.025em; }
+    h3 { margin: 0 0 10px; font-size: 1.2rem; line-height: 1.3; }
+    p { margin: 0 0 14px; }
+    .muted, .section-head p { color: var(--muted); }
+    .status {
+      padding: 14px 18px; margin: 0 0 28px; border-left: 4px solid var(--gold);
+      background: var(--soft); font-size: .94rem;
+    }
+    .status p { margin: 0; }
+    .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+    .card {
+      display: flex; flex-direction: column; padding: 22px;
+      border: 1px solid var(--line); border-top: 5px solid var(--green);
+      border-radius: 8px; background: var(--surface);
+      box-shadow: 0 6px 20px rgba(21, 25, 21, .04);
+    }
+    .trondelag { border-top-color: var(--blue); }
+    .skaraborg { border-top-color: var(--rust); }
+    .card h3 { font-size: 1.65rem; }
+    .card > p { color: var(--muted); }
+    .country { color: var(--muted); font-size: .78rem; letter-spacing: .09em; text-transform: uppercase; }
+    .card-actions { margin-top: auto; padding-top: 10px; }
+    .card-actions > .button { width: 100%; }
+    .availability { margin: 10px 0 18px; color: var(--muted); font-size: .84rem; }
+    .reference { padding-top: 16px; border-top: 1px solid var(--line); }
+    .reference p { margin: 0 0 8px; font-size: .84rem; color: var(--muted); }
+    .reference .button { min-height: 44px; padding: 8px 12px; font-size: .9rem; }
+    .no-reference { margin-bottom: 0; }
+    .section { margin-top: 42px; padding-top: 34px; border-top: 1px solid var(--line); }
+    .steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 26px; list-style: none; padding: 0; margin: 24px 0; }
+    .steps li { border-top: 2px solid var(--line); padding-top: 14px; }
+    .step-number { display: block; color: var(--green); font-weight: 850; margin-bottom: 8px; }
+    .steps p { color: var(--muted); }
+    .feedback { font-size: .94rem; color: var(--muted); }
+    .limits {
+      padding: 24px; margin-top: 28px; border: 1px solid #d9cfb7; border-radius: 8px;
+      background: #efeade;
+    }
+    .limits h2 { font-size: 1.4rem; }
+    .limits ul { padding-left: 1.2em; margin: 12px 0 0; }
+    .limits li + li { margin-top: 8px; }
+    details { margin-top: 18px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+    summary { cursor: pointer; padding: 18px 22px; font-size: 1.06rem; font-weight: 750; }
+    .details-body { padding: 0 22px 22px; max-width: 85ch; }
+    .details-body ol { padding-left: 1.3em; }
+    .details-body li + li { margin-top: 10px; }
+    .details-body h3 { margin-top: 22px; }
+    .test-panel { padding: 24px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+    label { display: block; font-weight: 750; margin-bottom: 8px; }
+    select {
+      max-width: 100%; min-height: 46px; min-width: 240px; padding: 8px 36px 8px 12px;
+      border: 1px solid #89998c; border-radius: 6px; color: var(--ink); background: white;
+    }
+    .environments { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 24px; }
+    .environment { border-top: 1px solid var(--line); padding-top: 18px; }
+    .environment p { color: var(--muted); font-size: .93rem; }
+    .test-status { margin-top: 18px; margin-bottom: 0; font-size: .9rem; }
+    footer { padding: 0 24px 30px; font-size: .86rem; color: var(--muted); }
+    footer p { margin: 0; }
+    [hidden] { display: none !important; }
+    @media (max-width: 860px) {
+      .cards, .steps { grid-template-columns: 1fr; }
+      .card { padding: 22px; }
+      .card-actions > .button { width: auto; }
+      .hero-copy { padding-top: 30px; }
+      .hero { background-size: auto, cover, auto; }
+    }
+    @media (max-width: 560px) {
+      .hero { padding: 22px 18px 30px; }
+      .topline { display: block; }
+      .topline span:last-child { display: block; margin-top: 4px; }
+      main { padding-inline: 16px; }
+      .environments { grid-template-columns: 1fr; gap: 18px; }
+      .limits, .test-panel { padding: 18px; }
+      .card-actions > .button { width: 100%; }
+      .section { margin-top: 30px; padding-top: 26px; }
+    }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#innehall">Hoppa till innehållet</a>
+  <header class="hero">
+    <div class="hero-inner">
+      <div class="topline">
+        <span class="mark">SpeedLocal</span>
+        <span>Bornholm · Trøndelag · Skaraborg</span>
+      </div>
+      <div class="hero-copy">
+        <p class="eyebrow">Landskapspotential för vind och sol</p>
+        <h1>Utforska energins plats i landskapet.</h1>
+        <p class="lead">Hur påverkar energiscenarier, geografiska begränsningar och olika antaganden
+          den yta som kan användas för vind- och solenergi? SpeedLocal gör sambanden synliga på en karta.</p>
+        <nav class="hero-actions" aria-label="Sidans innehåll">
+          <a class="button" href="#regionala-versioner">Välj region</a>
+          <a class="button secondary" href="#kom-igang">Så testar du</a>
+          <a class="button secondary" href="#driftjamforelse">Jämför drift</a>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <main id="innehall" tabindex="-1">
+    <div class="status" role="status">
+      <p id="deployment-status"><strong>Testmiljön förbereds.</strong> Den senaste appen samlar tre regioner.
+        Tillgång för projektgruppen ordnas med Usable. De tidigare versionerna kan öppnas nedan.</p>
+    </div>
+
+    <section id="regionala-versioner" aria-labelledby="regionala-versioner-title">
+      <div class="section-head">
+        <p class="kicker">En gemensam app, tre regioner</p>
+        <h2 id="regionala-versioner-title">Välj ditt landskap</h2>
+        <p>Testversionens knappar öppnar samma app med rätt region vald.
+          Bornholm V1 och Trøndelag V2 finns kvar som tidigare referenser.
+          Apparna öppnas i en ny flik.</p>
+      </div>
+      <div class="cards">
+        <article class="card bornholm">
+          <p class="country">Danmark</p>
+          <h3>Bornholm</h3>
+          <p>Utforska vind- och solenergi med Bornholms geografiska underlag.
+            LABLAB:s befintliga landskapstyper finns som ett kompletterande kartlager.</p>
+          <div class="card-actions">
+            <button class="button" type="button" disabled data-host="usable" data-region="bornholm" aria-describedby="bornholm-status">Öppna Bornholm – testversion</button>
+            <p class="availability" id="bornholm-status" data-availability>Inväntar testmiljön hos Usable.</p>
+            <div class="reference">
+              <p>Tidigare version</p>
+              <a class="button alt" href="https://landskapsanalys-potential-v1.streamlit.app/" target="_blank" rel="noopener noreferrer">Bornholm V1</a>
+            </div>
+          </div>
+        </article>
+        <article class="card trondelag">
+          <p class="country">Norge</p>
+          <h3>Trøndelag</h3>
+          <p>Undersök hur begränsningar och energimix påverkar återstående yta.
+            Regionens landskapstyper ger ytterligare sammanhang till kartan.</p>
+          <div class="card-actions">
+            <button class="button" type="button" disabled data-host="usable" data-region="trondelag" aria-describedby="trondelag-status">Öppna Trøndelag – testversion</button>
+            <p class="availability" id="trondelag-status" data-availability>Inväntar testmiljön hos Usable.</p>
+            <div class="reference">
+              <p>Tidigare version</p>
+              <a class="button alt" href="https://landskapsanalys-potential-v2-test.streamlit.app/" target="_blank" rel="noopener noreferrer">Trøndelag V2</a>
+            </div>
+          </div>
+        </article>
+        <article class="card skaraborg">
+          <p class="country">Sverige</p>
+          <h3>Skaraborg</h3>
+          <p>Testa vind- och solenergi med Skaraborgs geografiska underlag i den gemensamma appen.
+            Regionen har ännu inget motsvarande lager med landskapstyper.</p>
+          <div class="card-actions">
+            <button class="button" type="button" disabled data-host="usable" data-region="skaraborg" aria-describedby="skaraborg-status">Öppna Skaraborg – testversion</button>
+            <p class="availability" id="skaraborg-status" data-availability>Inväntar testmiljön hos Usable.</p>
+            <div class="reference">
+              <p class="no-reference">Skaraborg ingår i testversionen och har ingen tidigare separat app.</p>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section id="kom-igang" class="section" aria-labelledby="kom-igang-title">
+      <h2 id="kom-igang-title">Prova ett resonemang, följ förändringen</h2>
+      <ol class="steps">
+        <li><span class="step-number">01</span><h3>Börja i en region</h3>
+          <p>Öppna testversionen och bekanta dig med kartan, underlagen och startläget.</p></li>
+        <li><span class="step-number">02</span><h3>Ändra ett antagande</h3>
+          <p>Justera exempelvis ett vägavstånd eller fördelningen mellan vind och sol.
+            Jämför med startläget.</p></li>
+        <li><span class="step-number">03</span><h3>Läs karta och resultat ihop</h3>
+          <p>Se hur möjlig yta och scenariots ytbehov förändras.
+            Kontrollera också vilka antaganden resultatet bygger på.</p></li>
+      </ol>
+      <p class="feedback"><strong>Återkoppling till projektgruppen:</strong> ange region, vad du ändrade,
+        vad du förväntade dig och vad som hände. Vid lång väntan: notera gärna tiden och vilken testmiljö du använde.</p>
+    </section>
+
+    <section class="limits" aria-labelledby="limits-title">
+      <h2 id="limits-title">Det här visar prototypen – och dess begränsningar</h2>
+      <p>Appen är till för utforskning och diskussion. Resultaten är inte validerade lokaliseringsbeslut
+        eller besked om tillstånd.</p>
+      <ul>
+        <li><strong>Energiscenarierna är provisoriska.</strong> De ska inte läsas som färdiggranskade regionala prognoser.</li>
+        <li><strong>Social acceptans visas med syntetiska demonstrationsdata.</strong>
+          De beskriver inte vad invånarna tycker. Saknade observationer betyder inte positiv acceptans.</li>
+        <li><strong>Underlagen skiljer sig mellan regionerna.</strong> Taksoldatan saknas för Bornholm och Skaraborg;
+          där görs inget avdrag för taksol från marksolens energibehov.</li>
+        <li><strong>Beräkningarna kan ta tid.</strong> Både första start och ändrade inställningar behöver fortfarande utvärderas i testmiljön.</li>
+      </ul>
+    </section>
+
+    <details id="matematiken">
+      <summary>Så räknas yta och scenarier</summary>
+      <div class="details-body">
+        <ol>
+          <li><strong>Geografiska underlag:</strong> vägar, befolkning, natur, kulturmiljö och elnät
+            beskriver olika begränsningar. Landskapstyper är ett separat, kompletterande lager där data finns.</li>
+          <li><strong>Återstående yta:</strong> valda restriktioner och buffertar påverkar den möjliga
+            etableringsytan. Delvis tillgängliga analysceller behåller sin återstående yta,
+            och överlappande buffertar räknas inte flera gånger.</li>
+          <li><strong>Scenario och fördelning:</strong> energiantaganden översätts till ytbehov för vind och sol.
+            Appen visar scenarioyta inom potentialen och eventuellt ytbehov utanför potentialen.
+            Demonstrationen av acceptanspåverkan bygger på syntetiska data.</li>
+        </ol>
+        <p>Granska alltid valt scenario, datakällor och antaganden tillsammans med resultatet.
+          Skillnader mot tidigare versioner kan bero på förändrade underlag och betyder inte i sig ett beräkningsfel.</p>
+        <h3 id="rapportunderlag">Bakgrund och tidigare underlag</h3>
+        <p>De här länkarna ger historisk metod- och landskapsbakgrund. De är inte en fullständig
+          beskrivning av den senaste testversionen.</p>
+        <ul>
+          <li><a href="https://gislab-se.github.io/landskapsanalys/sol-vindpotential/">Ursprungligt rapportunderlag</a></li>
+          <li><a href="model_comparisons/bornholm_v10_landscape_types/map/bornholm_v10_landscape_types_rollup_map.html">Bornholms landskapskarta</a></li>
+        </ul>
+      </div>
+    </details>
+
+    <section id="driftjamforelse" class="section" aria-labelledby="drift-title">
+      <div class="section-head">
+        <p class="kicker">För projektgruppens test</p>
+        <h2 id="drift-title">Samma app, två driftmiljöer</h2>
+        <p>Jämför hur appen känns hos Usable och när den körs på Henriks dator.
+          Använd samma region, appversion, underlag och inställningar.
+          V1 och V2 ovan är historiska referenser och ingår inte i den här driftjämförelsen.</p>
+      </div>
+      <div class="test-panel">
+        <label for="test-region">Region att jämföra</label>
+        <select id="test-region">
+          <option value="bornholm">Bornholm</option>
+          <option value="trondelag">Trøndelag</option>
+          <option value="skaraborg">Skaraborg</option>
+        </select>
+        <div class="environments">
+          <div class="environment">
+            <h3>Hos Usable</h3>
+            <p id="usable-test-status">Projektgruppens skyddade testmiljö förbereds.</p>
+            <button class="button" type="button" disabled data-host="usable" data-comparison aria-describedby="usable-test-status">Öppna Bornholm hos Usable</button>
+          </div>
+          <div class="environment">
+            <h3>På Henriks dator</h3>
+            <p id="local-test-status">Tillgänglig vid överenskomna tester, när datorn och en skyddad anslutning är igång.
+              Ingen delbar testadress är klar ännu.</p>
+            <button class="button alt" type="button" disabled data-host="local" data-comparison aria-describedby="local-test-status">Öppna Bornholm på Henriks dator</button>
           </div>
         </div>
-
-        <p class="hero-status" aria-label="Versionsstatus">
-          <strong>Status:</strong> V1 Bornholm är stabil, V2 Tröndelag är aktiv och V3 Skaraborg/Vara är planerad.
-        </p>
+        <p id="comparison-status" class="test-status" role="status">Driftjämförelsen öppnas när båda miljöerna är verifierade.</p>
       </div>
-    </header>
+      <p class="feedback" style="margin-top: 18px">Notera första laddningen separat från upprepade ändringar.
+        Prova samma vägavstånd och energimix i båda miljöerna. Nätverk och samtidiga användare kan också påverka väntetiden.</p>
+      <noscript><p>JavaScript behövs för länkarna till testmiljöerna. Länkarna till Bornholm V1 och Trøndelag V2 fungerar utan JavaScript.</p></noscript>
+    </section>
+  </main>
+  <footer>
+    <p>SpeedLocal landskapspotential · Forskningsprototyp för utforskning och diskussion</p>
+  </footer>
 
-    <main>
-      <section id="regionala-versioner" aria-labelledby="regionala-versioner-title">
-        <div class="section-head">
-          <h2 id="regionala-versioner-title">Regionala versioner</h2>
-          <p>
-            Varje kort ska på sikt öppna samma program med rätt region vald. Tills dess skiljer sidan på
-            aktiva regionala piloter och planerade regioner så inget ser mer färdigt ut än det är.
-          </p>
-        </div>
+  <!-- Activate only after access, all three regional routes and the deployed revision
+       have been verified. Use externally reachable HTTPS origins, never localhost.
+       revision is the full app commit SHA; verified also covers the agreed data pins.
+       Empty/unverified settings deliberately leave the test buttons unavailable. -->
+  <script type="application/json" id="test-deployments">
+    {
+      "usable": { "baseUrl": "", "revision": "", "verified": false },
+      "local": { "baseUrl": "", "revision": "", "verified": false }
+    }
+  </script>
+  <script>
+    (() => {
+      "use strict";
+      const regions = {
+        bornholm: { name: "Bornholm", review: true },
+        trondelag: { name: "Trøndelag", review: false },
+        skaraborg: { name: "Skaraborg", review: true }
+      };
+      let config = {};
+      try { config = JSON.parse(document.getElementById("test-deployments").textContent); }
+      catch { /* Leave unavailable links disabled if configuration is incomplete. */ }
 
-        <div class="cards">
-          <article class="card bornholm">
-            <div class="tag-row">
-              <span class="tag live">Aktiv</span>
-              <span class="tag">Sol- och vindpotential V1</span>
-            </div>
-            <h3>Bornholm</h3>
-            <p>
-              Första stabila versionen av potentialappen. Den fungerar som referens för arbetsflöde,
-              etableringsyta, scenariologik och hur landskapspotentialen presenteras.
-            </p>
-            <div class="button-row">
-              <a class="button" href="https://landskapsanalys-potential-v1.streamlit.app/" target="_blank" rel="noreferrer">Öppna V1</a>
-              <a class="button alt" href="model_comparisons/bornholm_v10_landscape_types/map/bornholm_v10_landscape_types_rollup_map.html">Landskapskarta</a>
-            </div>
-          </article>
+      function deployment(key) {
+        const value = config[key];
+        if (!value || value.verified !== true || !/^[a-f0-9]{40}$/.test(value.revision)) return null;
+        try {
+          const url = new URL(value.baseUrl);
+          if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash ||
+              url.pathname !== "/" || url.hostname === "localhost" || url.hostname.endsWith(".localhost") ||
+              url.hostname === "127.0.0.1" || url.hostname === "[::1]") return null;
+          return { url, revision: value.revision };
+        } catch { return null; }
+      }
 
-          <article class="card trondelag">
-            <div class="tag-row">
-              <span class="tag live">Aktiv</span>
-              <span class="tag">Sol- och vindpotential V2</span>
-            </div>
-            <h3>Tröndelag</h3>
-            <p>
-              V2 är Tröndelags regionala pilot i det gemensamma appskalet. Den använder Tröndelags
-              data, skala och dokumenterade proxyer där slutliga regionala underlag ännu saknas.
-              På sikt ska kortet öppna samma program med Tröndelag vald i regionväljaren.
-            </p>
-            <div class="button-row">
-              <a class="button" href="https://landskapsanalys-potential-v2-test.streamlit.app/" target="_blank" rel="noreferrer">Öppna V2</a>
-            </div>
-          </article>
+      const usable = deployment("usable");
+      const local = deployment("local");
+      const comparable = usable && local && usable.revision === local.revision;
+      const select = document.getElementById("test-region");
 
-          <article class="card skaraborg">
-            <div class="tag-row">
-              <span class="tag next">Planerad</span>
-              <span class="tag">Sol- och vindpotential V3</span>
-            </div>
-            <h3>Skaraborg/Vara</h3>
-            <p>
-              Nästa regionala version. Kortet finns här för att visa riktningen, men appen ska inte presenteras
-              som färdig innan data, metodval och regional logik är på plats.
-            </p>
-            <div class="button-row">
-              <a class="button disabled" href="#" aria-disabled="true">Kommer senare</a>
-            </div>
-          </article>
-        </div>
-      </section>
+      function updateLink(element, host, region) {
+        if (!regions[region]) return;
+        const isComparison = element.hasAttribute("data-comparison");
+        const available = host && (!isComparison || comparable);
+        if (isComparison) {
+          element.textContent = "Öppna " + regions[region].name +
+            (element.dataset.host === "usable" ? " hos Usable" : " på Henriks dator");
+        }
+        if (!available) return;
+        const url = new URL(host.url);
+        url.searchParams.set("region", region);
+        if (regions[region].review) url.searchParams.set("mode", "review");
+        const link = document.createElement("a");
+        for (const attribute of element.attributes) {
+          if (attribute.name !== "disabled" && attribute.name !== "type") link.setAttribute(attribute.name, attribute.value);
+        }
+        link.textContent = element.textContent;
+        link.href = url.href;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        element.replaceWith(link);
+      }
 
-      <section id="matematiken" class="math-section" aria-labelledby="matematiken-title">
-        <div class="math-layout">
-          <article class="math-copy">
-            <p class="math-kicker">Modell</p>
-            <h2 id="matematiken-title">Vad beräknar appen?</h2>
-            <p class="opening">
-              Appen bör inte läsas som en maskin som pekar ut den optimala platsen för sol och vind. Den svarar på en mer villkorad fråga: givet ett landskap, ett rutnät, ett antal faktorer, restriktionslager, buffertar och energiscenarier, vilka delytor framstår som möjliga, hur mycket yta finns kvar och hur kan ett scenario fördelas över de högst rangordnade kandidaterna enligt modellens poängvärde?
-            </p>
-            <p>
-              Matematiskt börjar modellen med en region, &Omega;, som efter projektion behandlas som en avgränsad yta i ett tvådimensionellt koordinatplan, &#x211D;<sup>2</sup>. Det betyder inte att landskapet i sig är platt, utan att area, avstånd och filter beräknas i ett plant kartkoordinatsystem. För att olika regioner ändå ska kunna beräknas med samma logik delas ytan upp med H3, ett rutnätssystem där landskapet representeras av hexagonala analysceller. H3 kan visas i olika upplösningar, ofta kallade R6, R7 eller R8. Det R:et ska inte blandas ihop med &#x211D; i &#x211D;<sup>2</sup>, där &#x211D; betyder de reella talen. Det kontinuerliga landskapet blir då en diskret mängd celler, H = {h<sub>1</sub>, h<sub>2</sub>, ..., h<sub>n</sub>}.
-            </p>
-            <p>
-              Varje cell får ett antal egenskaper: landskapsfaktorer, klustertillhörighet, andel buffert, avstånd till underlagslager, potentiell yta och eventuell social acceptans. Dessa egenskaper omvandlas till funktioner som går från analysceller till tal eller klasser: solpotential, vindpotential, etableringsbar area, landskapstyp och scenarioyta. Det appen visar är alltså inte landskapet självt, utan resultatet av en kedja av transformationer från geometri till beräkningsbara storheter.
-            </p>
-            <p>
-              Potential är därför inte en naturlig egenskap som finns ute i terrängen. Den är en modellvariabel. För sol kan den tolkas som landskapets kapacitet minus känslighet för kust, relief, skyddad natur och bebyggelse, ibland justerad av tekniska villkor som närhet till nät. För vind kombineras landskapsbedömning med avstånd, hårda exkluderingar och sammanhängande kärnzoner. I båda fallen blandas mätbara geometrier med normativa val: vikter, trösklar och tolkningar av vad som ska räknas som robust eller känsligt landskap.
-            </p>
-            <p>
-              Scenarierna lägger till en andra matematisk fråga. Energisystemet anger behov i TWh, medan kartan behöver area. Därför översätts energi till ytbehov genom faktorer som km² per TWh. Appens centrala test blir sedan enkelt men kraftfullt: är summan av möjlig yta större än eller lika med scenariots ytbehov? Om svaret är nej uppstår ett behov utanför den beräknade potentialen. Om svaret är ja kan appen visa hur scenariot ryms inom de modellerade etableringsytorna.
-            </p>
-            <p>
-              När appen placerar scenariohexagoner gör den inte en global optimering. Den löser inte ett problem där alla möjliga kombinationer av platser jämförs mot ett enda optimalt mål. I stället använder den en stegvis urvalslogik: kandidater rangordnas efter modellens poängvärde, de högst rangordnade väljs först och ytbehovet fylls tills scenariot är täckt eller den möjliga ytan tar slut. Det är begripligt, snabbt och stabilt, men det är inte ett bevis för att en viss placering är bäst i absolut mening.
-            </p>
-            <p>
-              Den djupare frågan är därför inte bara var det finns potential, utan hur landskapets kvaliteter översätts till tal. Appen gör politik, ekologi, teknik och rumslig form jämförbara genom samma beräkningsspråk: geometri blir analysceller, analysceller blir faktorer, faktorer blir poängvärden, poängvärden blir klasser, klasser blir area och area jämförs med scenario. Det är en användbar matematisk modell, men alla svar är villkorade av datakvalitet, upplösning och de antaganden som ligger i modellen.
-            </p>
-            <p>
-              Rätt läst säger appen alltså inte: här ska vi bygga. Den säger: om vi accepterar dessa data och dessa regler, så ser den modellerade relationen mellan energi, yta och landskap ut så här.
-            </p>
-          </article>
+      function refreshLinks() {
+        document.querySelectorAll("[data-host]").forEach(element => {
+          const host = element.dataset.host === "usable" ? usable : local;
+          updateLink(element, host, element.dataset.region || select.value);
+        });
+      }
 
-          <aside class="math-panel" aria-label="Matematisk modell i korthet">
-            <h3>Modellen i korthet</h3>
-            <div class="math-formula">
-              &Omega; &subset; &#x211D;<sup>2</sup><br>
-              H = {h<sub>1</sub>, ..., h<sub>n</sub>}<br>
-              C &subseteq; H<br>
-              poäng: C &rarr; [0,100]<br>
-              ytbehov = energimål &times; km<sup>2</sup>/TWh<br>
-              &sum;<sub>h<sub>i</sub> &isin; C</sub> area(h<sub>i</sub>) &ge; ytbehov?
-            </div>
-            <p>
-              &Omega; är regionen i ett plant kartkoordinatsystem. &#x211D; betyder de reella talen, medan R6, R7 och R8 är H3-upplösningar. C är de celler som återstår efter att filter och restriktioner har tillämpats.
-            </p>
-            <p>
-              Det viktigaste resultatet är inte en enskild perfekt plats, utan relationen mellan modellerad potential, ytbehov, filter och osäkerhet.
-            </p>
-          </aside>
-        </div>
-      </section>
+      if (usable) {
+        document.getElementById("deployment-status").textContent =
+          "Testmiljön hos Usable är tillgänglig för inbjudna i projektgruppen. Inloggning krävs.";
+        document.querySelectorAll("[data-availability]").forEach(element => {
+          element.textContent = "Hos Usable · Inloggning för projektgruppen.";
+        });
+        document.getElementById("usable-test-status").textContent =
+          "Skyddad testmiljö för projektgruppen. Appversion: " + usable.revision.slice(0, 7) + ".";
+      }
+      if (local) {
+        document.getElementById("local-test-status").textContent =
+          "Öppna under avtalad testtid, när datorn och den skyddade anslutningen är igång. Appversion: " +
+          local.revision.slice(0, 7) + ".";
+      }
+      if (comparable) {
+        document.getElementById("comparison-status").textContent =
+          "Miljöerna är verifierade med samma appversion. Öppna båda länkarna och jämför samma inställningar.";
+      } else if (usable && local) {
+        document.getElementById("comparison-status").textContent =
+          "Miljöerna har olika appversioner. Driftjämförelsen väntar tills versionerna stämmer överens.";
+      }
+      select.addEventListener("change", refreshLinks);
+      refreshLinks();
 
-      <section id="rapportunderlag" class="research-section" aria-labelledby="rapportunderlag-title">
-        <div class="research-layout">
-          <article class="research-copy">
-            <p class="research-kicker">Metod</p>
-            <h2 id="rapportunderlag-title">Metod i korthet</h2>
-            <p class="opening">
-              Det här avsnittet sammanfattar stegen från energiscenario till karta. Den mer utförliga
-              modellförklaringen finns i avsnittet ovan.
-            </p>
-
-            <h3>Från scenario till karta</h3>
-            <p>
-              Ett energiscenario räknas först om till ytbehov. Landskapet delas sedan in i analysceller,
-              där varje cell får egenskaper som landskapstyp, begränsningar, avstånd, möjlig etableringsyta
-              och poängvärde. Filter och restriktioner tar bort olämpliga ytor. De ytor som återstår kan
-              rangordnas och jämföras med scenariots ytbehov.
-            </p>
-
-            <h3>Så läses resultatet</h3>
-            <p>
-              Resultatet visar relationen mellan scenario och modellerad etableringsyta: ryms valt ytbehov
-              inom de återstående ytorna, finns yta kvar, eller uppstår ett behov utanför den beräknade
-              potentialen? Brist ska läsas som en signal att scenario, energimix, filter eller antaganden
-              behöver granskas, inte som ett färdigt planbesked.
-            </p>
-
-            <h3>Underlag och osäkerhet</h3>
-            <p>
-              Resultaten beror på datakvalitet, upplösning och regionala antaganden. Vissa underlag kan vara
-              preliminära eller förenklade, till exempel social acceptans, småskalig sol eller scenariodata.
-              Därför ska osäkerheter redovisas öppet som en del av resultatet.
-            </p>
-
-            <h3>Vidare underlag</h3>
-            <p>
-              Metoden ska kunna återanvändas i flera regioner, men varje regional version behöver lokala data,
-              lokala avgränsningar och eget koordinatsystem. För mer detaljerad bakgrund finns det ursprungliga
-              rapportunderlaget.
-            </p>
-          </article>
-
-          <aside class="research-aside" aria-label="Resultat i fyra steg">
-            <h3>Resultat i fyra steg</h3>
-            <ol>
-              <li>Börja med energiscenario och ytbehov.</li>
-              <li>Se vilka ytor som återstår efter filter och restriktioner.</li>
-              <li>Jämför ytbehov med möjlig etableringsyta.</li>
-              <li>Läs brist och överskott som modellresultat, inte planbesked.</li>
-            </ol>
-            <a class="source-link" href="https://gislab-se.github.io/landskapsanalys/sol-vindpotential/">Ursprungligt rapportunderlag</a>
-          </aside>
-        </div>
-      </section>
-
-      <section class="note" aria-labelledby="status-title">
-        <div>
-          <h2 id="status-title">Versionslogik just nu</h2>
-          <p>
-            Den här sidan är projektets nya nav tills vidare. De tre regionkorten ska på sikt hänga ihop med
-            ett och samma program, där regionväljaren växlar mellan regionala lägen och kan länka tillbaka hit.
-          </p>
-        </div>
-        <div class="note-list" aria-label="Kort status">
-          <div>V1: Bornholm är referens.</div>
-          <div>V2: Tröndelag är regionalt fokus.</div>
-          <div>V3: Skaraborg/Vara är nästa planerade steg.</div>
-        </div>
-      </section>
-    </main>
-
-    <footer>
-      SpeedLocal landskapspotential · separerad från den befintliga sol- och vindpotential-sidan.
-    </footer>
-  </body>
+      // Keep older links to the method section useful after it became collapsible.
+      function revealMethod() {
+        if (location.hash === "#matematiken" || location.hash === "#rapportunderlag") {
+          document.getElementById("matematiken").open = true;
+          document.querySelector(location.hash).scrollIntoView();
+        }
+      }
+      window.addEventListener("hashchange", revealMethod);
+      revealMethod();
+    })();
+  </script>
+</body>
 </html>
