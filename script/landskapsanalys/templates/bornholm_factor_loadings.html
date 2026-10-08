@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bornholm – faktorladdningar och GIS-indata</title>
+  <style>
+    :root { color-scheme: light; --ink:#17211b; --muted:#5d675f; --forest:#335846; --line:#d8ddd7; --navy:#19394d; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:#f4efe6; color:var(--ink); font-family:system-ui,-apple-system,"Segoe UI",sans-serif; }
+    main { max-width:1600px; margin:auto; padding:28px clamp(12px,3vw,40px) 36px; }
+    a { color:var(--forest); }
+    nav { display:flex; flex-wrap:wrap; gap:16px; font-size:.9rem; }
+    h1 { margin:24px 0 12px; font-family:Georgia,serif; font-size:clamp(1.8rem,4vw,2.8rem); }
+    .intro { max-width:900px; color:var(--muted); line-height:1.6; }
+    .tabs { display:flex; flex-wrap:wrap; gap:8px; margin-top:24px; }
+    button, input, select { font:inherit; }
+    button, select, input { border:1px solid var(--line); border-radius:7px; background:white; color:var(--ink); padding:10px 12px; }
+    button { cursor:pointer; }
+    button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible { outline:3px solid #c8a55b; outline-offset:2px; }
+    button[aria-selected="true"] { background:var(--forest); color:white; border-color:var(--forest); }
+    button:disabled { opacity:.5; cursor:default; }
+    .workspace { padding:20px; border:1px solid var(--line); border-radius:0 12px 12px; background:#fffdf9; margin-top:8px; }
+    .filters { display:flex; flex-wrap:wrap; gap:12px; align-items:end; }
+    label { display:grid; gap:6px; font-weight:600; font-size:.9rem; }
+    .search { flex:1 1 280px; }
+    input { min-width:0; width:100%; }
+    .scale-note { display:flex; flex-wrap:wrap; gap:12px 24px; align-items:center; margin:20px 0 12px; color:var(--muted); font-size:.86rem; line-height:1.5; }
+    .scale-key { width:250px; max-width:100%; flex-shrink:0; }
+    .ramp { height:12px; border:1px solid #bbb; border-radius:3px; background:linear-gradient(90deg,#e64b47,#ffe66d,#39a96b); }
+    .ticks { display:flex; justify-content:space-between; gap:6px; font-variant-numeric:tabular-nums; }
+    #factor-description { color:var(--forest); font-weight:600; margin:12px 0; }
+    .table-scroll { overflow:auto; max-height:70vh; border:1px solid var(--line); border-radius:5px; }
+    table { border-collapse:separate; border-spacing:0; width:100%; font-size:.85rem; }
+    caption { text-align:left; padding:12px; background:#eef2ef; font-weight:600; }
+    thead th { position:sticky; top:0; z-index:1; background:var(--navy); color:white; text-align:left; padding:0; }
+    th button { border:0; background:transparent; color:inherit; width:100%; border-radius:0; font-weight:700; text-align:left; white-space:nowrap; padding:13px 12px; }
+    td { padding:10px 12px; border-right:1px solid #e3e7e1; border-bottom:1px solid #e3e7e1; vertical-align:top; background:white; }
+    tr:nth-child(even) td { background:#f5f7f4; }
+    tr.factor-start td { border-top:3px solid #a6b8b0; }
+    .variable { min-width:280px; max-width:340px; font-family:Consolas,monospace; overflow-wrap:anywhere; font-size:.79rem; }
+    .theme { min-width:145px; }
+    .input { min-width:290px; max-width:470px; white-space:pre-line; overflow-wrap:anywhere; line-height:1.5; }
+    .number { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; min-width:100px; color:#152119; }
+    .footer { display:flex; flex-wrap:wrap; justify-content:space-between; gap:12px; align-items:center; margin-top:14px; }
+    .pager { display:flex; gap:8px; align-items:center; }
+    .downloads { display:flex; flex-wrap:wrap; gap:12px; margin-top:22px; font-size:.9rem; }
+    .source-note { color:var(--muted); font-size:.85rem; line-height:1.6; margin-top:18px; }
+    [hidden] { display:none !important; }
+    @media(max-width:600px) { main { padding:18px 10px; } .workspace { padding:12px; } .filters>label { flex:1 1 130px; } .filters .search { flex-basis:100%; } .tabs button { flex:1; } .pager { flex-wrap:wrap; } }
+    @media print { body { background:white; } .filters,.tabs,.downloads,.pager,nav { display:none; } .table-scroll { max-height:none; overflow:visible; } thead th { position:static; } td { break-inside:avoid; } }
+  </style>
+</head>
+<body>
+<main>
+  <nav aria-label="Tillbaka"><a href="../index.html">← Startsidan</a><a href="bornholm_v10_landscape_types/map/bornholm_v10_landscape_types_rollup_map.html">Landskapskartan</a><a href="bornholm_v9_k8_interactive_layers/map/bornholm_v9_k8_interactive_layers_map.html">v9:s lagerkarta</a></nav>
+  <h1>Faktorladdningar och GIS-indata</h1>
+  <p class="intro">Bornholm v9 och v10 använder samma faktoranalys. Här kan du se vilka GIS-indata och härledda mått som hör till varje variabel och hur de laddar på F1–F5. V10 är en tolkad vidarebearbetning av v9:s kluster.</p>
+  <div class="tabs" role="tablist" aria-label="Tabellvy">
+    <button type="button" id="tab-top" role="tab" aria-selected="true" aria-controls="table-panel" data-view="top">Topp 10 och botten 10</button>
+    <button type="button" id="tab-all" role="tab" aria-selected="false" aria-controls="table-panel" data-view="all" tabindex="-1">Alla faktorladdningar</button>
+  </div>
+  <section class="workspace" id="table-panel" role="tabpanel" aria-labelledby="tab-top">
+    <div class="filters">
+      <label class="search">Sök variabel eller GIS-indata<input id="search" type="search" placeholder="Exempel: skog, höjdkurvor eller gc_relief" autocomplete="off"></label>
+      <label>Faktor<select id="factor"><option value="all">Alla faktorer</option><option>F1</option><option>F2</option><option>F3</option><option>F4</option><option>F5</option></select></label>
+      <label id="selection-filter">Urval<select id="selection"><option value="all">Topp och botten</option><option value="top">10 högsta</option><option value="bottom">10 lägsta</option></select></label>
+      <label>Rader per sida<select id="page-size"><option value="50">50</option><option value="100" selected>100</option><option value="all">Alla</option></select></label>
+    </div>
+    <p id="factor-description"></p>
+    <div class="scale-note">
+      <div class="scale-key" aria-label="Rött: lägsta laddning. Gult: median. Grönt: högsta laddning."><div class="ramp"></div><div class="ticks"><span id="scale-min"></span><span id="scale-mid"></span><span id="scale-max"></span></div></div>
+      <span>Rött = lägsta laddning, gult = median, grönt = högsta laddning.<br>Samma skala för båda vyerna och alla faktorer. Sökning och sortering ändrar inte färgerna.</span>
+    </div>
+    <div class="table-scroll" role="region" aria-label="Faktorladdningstabell, kan rullas horisontellt" tabindex="0"><table id="loadings"><caption></caption><thead></thead><tbody></tbody></table></div>
+    <div class="footer"><span id="row-count" role="status" aria-live="polite"></span><div class="pager"><button id="previous" type="button">← Föregående</button><span id="page-status"></span><button id="next" type="button">Nästa →</button></div></div>
+    <div class="downloads"><button id="download" type="button">Ladda ner aktuell tabell som CSV</button><a href="bornholm_v9_k8_interactive_layers/model/bornholm_v9_k8_interactive_layers_factor_loadings_from_v1.csv" download>Originaldata (CSV)</a></div>
+    <p class="source-note">GIS-namn och härledningar följer den granskade Excel-tabellen och analysens lagerförteckning. ”Rad i originalfil” räknar rubrikraden som rad 1. Topp och botten avser högsta respektive lägsta signerade laddning. Faktorladdningar beskriver samvariation, inte orsakssamband.</p>
+  </section>
+</main>
+<script>
+const factorData = __FACTOR_DATA__;
+const factors = ['F1','F2','F3','F4','F5'];
+const numberFormat = new Intl.NumberFormat('sv-SE', { minimumFractionDigits:4, maximumFractionDigits:6 });
+const collator = new Intl.Collator('sv', { numeric:true });
+const controls = Object.fromEntries(['search','factor','selection','page-size','previous','next','download'].map(id => [id, document.getElementById(id)]));
+let view = 'top', page = 0, sort = null;
+let filteredRows = [], columns = [];
+const rankedRows = factors.flatMap(factor => {
+  const ordered = [...factorData.rows].sort((a,b) => b[factor] - a[factor] || a.sourceRow - b.sourceRow);
+  return [
+    ...ordered.slice(0,10).map((row,index) => ({ ...row, factor, selection:'top', selectionLabel:'10 högsta', rank:index+1, loading:row[factor] })),
+    ...[...factorData.rows].sort((a,b) => a[factor]-b[factor] || a.sourceRow-b.sourceRow).slice(0,10).map((row,index) => ({ ...row, factor, selection:'bottom', selectionLabel:'10 lägsta', rank:index+1, loading:row[factor] }))
+  ];
+});
+function escapeHtml(value) { return String(value).replace(/[&<>"']/g,c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function interpolate(left,right,t) {
+  const a=left.match(/\w\w/g).map(v=>parseInt(v,16)), b=right.match(/\w\w/g).map(v=>parseInt(v,16));
+  return '#' + a.map((v,i)=>Math.round(v+(b[i]-v)*Math.max(0,Math.min(1,t))).toString(16).padStart(2,'0')).join('');
+}
+function loadingColor(value) {
+  const {min,mid,max}=factorData.scale;
+  return value<=mid ? interpolate('e64b47','ffe66d',(value-min)/(mid-min)) : interpolate('ffe66d','39a96b',(value-mid)/(max-mid));
+}
+function getColumns() {
+  const metadata = [{key:'variable',label:'Variabel',kind:'variable'},{key:'theme',label:'Tema',kind:'theme'},{key:'input',label:'GIS-lager eller härlett mått',kind:'input'}];
+  if(view==='top') return [{key:'factor',label:'Faktor'},{key:'selectionLabel',label:'Urval'},{key:'rank',label:'Placering',kind:'number'},...metadata,{key:'loading',label:'Faktorladdning',kind:'loading'},{key:'sourceRow',label:'Rad i originalfil',kind:'number'}];
+  return [...metadata,...(controls.factor.value==='all'?factors:[controls.factor.value]).map(f=>({key:f,label:f,kind:'loading'}))];
+}
+function render() {
+  const query=controls.search.value.trim().toLocaleLowerCase('sv');
+  filteredRows=(view==='top'?rankedRows:factorData.rows).filter(row =>
+    (view!=='top' || controls.factor.value==='all' || row.factor===controls.factor.value) &&
+    (view!=='top' || controls.selection.value==='all' || row.selection===controls.selection.value) &&
+    (!query || [row.variable,row.theme,row.input,row.source,row.factor].join(' ').toLocaleLowerCase('sv').includes(query))
+  );
+  if(sort) filteredRows.sort((a,b)=> {
+    const left=a[sort.key],right=b[sort.key];
+    return (typeof left==='number'?left-right:collator.compare(String(left),String(right)))*sort.direction || a.sourceRow-b.sourceRow;
+  });
+  columns=getColumns();
+  const size=controls['page-size'].value==='all'?Math.max(1,filteredRows.length):Number(controls['page-size'].value);
+  const pages=Math.max(1,Math.ceil(filteredRows.length/size));
+  page=Math.max(0,Math.min(page,pages-1));
+  const shown=filteredRows.slice(page*size,(page+1)*size);
+  const table=document.getElementById('loadings');
+  table.caption.textContent=view==='top'?'Tio högsta och tio lägsta laddningar per faktor':'Alla faktorladdningar – '+factorData.rows.length+' variabler';
+  table.tHead.innerHTML='<tr>'+columns.map(c=>'<th scope="col" aria-sort="'+(sort?.key===c.key?(sort.direction===1?'ascending':'descending'):'none')+'"><button type="button" data-sort="'+c.key+'">'+escapeHtml(c.label)+(sort?.key===c.key?(sort.direction===1?' ↑':' ↓'):' ↕')+'</button></th>').join('')+'</tr>';
+  table.tBodies[0].innerHTML=shown.length?shown.map((row,index)=>'<tr'+(view==='top'&&(!index||row.factor!==shown[index-1].factor)?' class="factor-start"':'')+'>'+columns.map(c=> {
+    const value=row[c.key], numeric=c.kind==='loading'||c.kind==='number';
+    return '<td class="'+(numeric?'number':(c.kind||''))+'"'+(c.kind==='loading'?' style="background:'+loadingColor(value)+'" title="'+value+'"':'')+'>'+escapeHtml(c.kind==='loading'?numberFormat.format(value):value)+'</td>';
+  }).join('')+'</tr>').join(''):'<tr><td colspan="'+columns.length+'">Inga rader matchar sökningen.</td></tr>';
+  document.getElementById('row-count').textContent=filteredRows.length?((page*size+1)+'–'+(page*size+shown.length)+' av '+filteredRows.length+' rader'):'0 rader';
+  document.getElementById('page-status').textContent='Sida '+(page+1)+' av '+pages;
+  controls.previous.disabled=page===0; controls.next.disabled=page===pages-1;
+  controls.download.disabled=!filteredRows.length;
+  document.getElementById('selection-filter').hidden=view!=='top';
+  document.getElementById('factor-description').textContent=controls.factor.value==='all'?'F1–F5: '+Object.entries(factorData.factorLabels).map(([f,label])=>f+' '+label).join(' · '):controls.factor.value+': '+factorData.factorLabels[controls.factor.value];
+}
+function switchView(nextView) {
+  view=nextView; page=0; sort=null;
+  for(const tab of document.querySelectorAll('[role=tab]')) { const selected=tab.dataset.view===view; tab.setAttribute('aria-selected',String(selected)); tab.tabIndex=selected?0:-1; }
+  document.getElementById('table-panel').setAttribute('aria-labelledby',view==='top'?'tab-top':'tab-all');
+  render();
+}
+document.querySelector('.tabs').addEventListener('click',event=>{ const tab=event.target.closest('[data-view]'); if(tab) switchView(tab.dataset.view); });
+document.querySelector('.tabs').addEventListener('keydown',event=> {
+  if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
+  event.preventDefault(); switchView(event.key==='Home'?'top':event.key==='End'?'all':view==='top'?'all':'top');
+  document.querySelector('[role=tab][aria-selected=true]').focus();
+});
+for(const id of ['search','factor','selection','page-size']) controls[id].addEventListener(id==='search'?'input':'change',()=>{page=0;render();});
+document.querySelector('#loadings thead').addEventListener('click',event=> {
+  const button=event.target.closest('[data-sort]'); if(!button) return;
+  sort={key:button.dataset.sort,direction:sort?.key===button.dataset.sort?-sort.direction:1}; page=0;render();
+  document.querySelector('[data-sort="'+sort.key+'"]').focus();
+});
+controls.previous.addEventListener('click',()=>{page--;render();});
+controls.next.addEventListener('click',()=>{page++;render();});
+controls.download.addEventListener('click',()=> {
+  const quote=value=>'"'+String(value).replace(/"/g,'""')+'"';
+  const csv='\uFEFF'+[columns.map(c=>quote(c.label)).join(';'),...filteredRows.map(row=>columns.map(c=>quote(typeof row[c.key]==='number'?String(row[c.key]).replace('.',','):row[c.key])).join(';'))].join('\r\n');
+  const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  const a=document.createElement('a');a.href=url;a.download='bornholm_'+(view==='top'?'topp_botten':'alla_faktorladdningar')+'_gis_indata.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+});
+for(const key of ['min','mid','max']) document.getElementById('scale-'+key).textContent=new Intl.NumberFormat('sv-SE',{maximumFractionDigits:3}).format(factorData.scale[key]);
+render();
+</script>
+</body>
+</html>

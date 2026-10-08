@@ -1,0 +1,145 @@
+﻿"gc_name","theme_sv","description_sv"
+"gc_fastboende_count","Befolkning och bebyggelse","Fastboende befolkning – antal
+Indatamått: fastboendebefolkningmapinfo_count"
+"gc_roads_medium_length_m","Tillgänglighet","Väglängd – kategorin medium
+Indatamått: roads_simplified_gd_v_vej_road_merged_bol_33_length_m_medium"
+"gc_roads_large_length_m","Tillgänglighet","Väglängd – kategorin large
+Indatamått: roads_simplified_gd_v_vej_road_merged_bol_33_length_m_large"
+"gc_ecology_connectivity_share","Vatten och natur","Ekologiska förbindelser
+Indatamått: ecology_connectivity_pdk_oekologiskforbindelse_bor_32_area_share"
+"gc_cultural_historical_conservation_share","Kulturmiljö","Kulturhistoriska bevarandevärden
+Indatamått: cultural_and_historical_conservation_values_kulturhistoriske_bevaringsvardier_pdk_kulturhistoriskebevaringsvardier_bor_32_area_share"
+"gc_fredskov_share","Skog","Fredskov
+Indatamått: fredskov_miljostyrelsen_gds_mat2_fredskov_bor_32_area_share"
+"gc_agricultural_land_share","Markanvändning","Jordbruksmark – Markblokke
+Indatamått: markblokke_2026_bornholm_area_share"
+"gc_relief_m","Terräng","Relief – höjdvariation
+Indatamått: dhm_hoejdekurver_relief_m"
+"gc_protected_watercourses_length_m","Vatten och natur","Skyddade vattendrag – längd
+Indatamått: protected_watercourses_miljostyrelsen_length_m"
+"gc_lake_share","Vatten och natur","Sjöar
+Indatamått: lake_gd_v_soe_lake_bol_33_area_share"
+"gc_wetland_share","Vatten och natur","Våtmarker
+Indatamått: wetland_gd_v_vaadomr_wetland_bol_33_area_share"
+"gc_moor_hede_share","Vatten och natur","Moor och hede
+Indatamått: moor_hede_gd_v_hede_moor_bol_33_area_share"
+"gc_forest_share","Skog","Skog
+Indatamått: forest_gd_v_skov_forest_bol_33_area_share"
+"gc_coastal_zone_share","Kust","Kustzon, 3 km
+Indatamått: coastal_zone_kystnarhedszonen_3_km_miljoministeriet_plst_pdk_kystnaerhedszone_polygon_bor_32_area_share"
+"gc_coastline_length_m","Kust","Kustlinjens längd
+Indatamått: coastline_gd_v_kyst_coast_line_bol_33_length_m"
+"gc_valuable_cultural_environment_share","Kulturmiljö","Värdefulla kulturmiljöer
+Indatamått: valuable_cultural_environment_slks_area_share"
+"gc_highest_point_m","Terräng","Högsta höjdkurvenivå
+Indatamått: dhm_hoejdekurver_highest_point_m"
+"gc_river_length_m","Vatten och natur","Vattendragslängd
+Indatamått: river_gd_v_vand_river_centre_bol_33_length_m"
+"gc_sand_dune_share","Kust","Sanddyner
+Indatamått: sandklit_gd_v_sandklit_sanddune_bol_33_area_share"
+"gc_bes_naturtyper_share","Vatten och natur","Skyddade naturtyper
+Indatamått: bes_naturtyper_area_share"
+"gc_mapped_nature_types_share","Vatten och natur","Karterade naturtyper
+Indatamått: kortlaeg_naturtyper_fl_area_share"
+"gc_industry_business_share","Befolkning och bebyggelse","Industri- och verksamhetsmark
+Indatamått: industry_business_gd_v_erhverv_business_industry_bol_33_area_share"
+"gc_built_centre_share","Befolkning och bebyggelse","Bebyggelsecentrum (Built centre)
+Indatamått: built_centre_gd_v_bykerne_built_centre_bol_33_area_share"
+"gc_buildings_high_share","Befolkning och bebyggelse","Byggnader/bebyggelse – Buildings high
+Indatamått: buildings_high_gd_v_buildings_high_bol_33_area_share"
+"gc_buildings_low_share","Befolkning och bebyggelse","Byggnader/bebyggelse – Buildings low
+Indatamått: buildings_low_gd_v_buildings_low_bol_33_area_share"
+"gc_strand_protection_share","Kust","Strandskydd (Strand protection)
+Indatamått: strandbeskyttelse_miljostyrelsen_gds_mat2_strandbeskyttelse_merge_bor_32_area_share"
+"gc_jordart_ml_moraeneler_share","Jordarter","ML – moränlera (Moræneler)
+Indatamått: jordart_25000_v7_1_area_share_ml_moraeneler"
+"gc_jordart_ms_moraensand_share","Jordarter","MS – moränsand (Morænsand)
+Indatamått: jordart_25000_v7_1_area_share_ms_moraensand"
+"gc_jordart_fp_ferskvandsgytje_share","Jordarter","FP – sötvattensgyttja (Ferskvandsgytje)
+Indatamått: jordart_25000_v7_1_area_share_fp_ferskvandsgytje"
+"gc_jordart_es_flyvesand_share","Jordarter","ES – flygsand (Flyvesand)
+Indatamått: jordart_25000_v7_1_area_share_es_flyvesand"
+"gc_jordart_ds_smeltevandssand_share","Jordarter","DS – smältvattenssand (Smeltevandssand)
+Indatamått: jordart_25000_v7_1_area_share_ds_smeltevandssand"
+"gc_jordart_pkv_prekvartart_lag_share","Jordarter","PKV – prekvartära lager (Prækvartært lag)
+Indatamått: jordart_25000_v7_1_area_share_pkv_prekvartart_lag"
+"gc_jordart_marina_sand_och_grus_ovrigt_share","Jordarter","Marin sand och grus – övrigt
+Indatamått: jordart_25000_v7_1_area_share_marina_sand_och_grus_ovrigt"
+"gc_jordart_farskvatten_organiskt_ovrigt_share","Jordarter","Sötvatten och organiskt material – övrigt
+Indatamått: jordart_25000_v7_1_area_share_farskvatten_organiskt_ovrigt"
+"gc_jordart_smaltvatten_ovrigt_share","Jordarter","Smältvattenavlagringar – övrigt
+Indatamått: jordart_25000_v7_1_area_share_smaltvatten_ovrigt"
+"gc_jordart_ovrigt_anlagt_okant_share","Jordarter","Övrigt, anlagt eller okänt
+Indatamått: jordart_25000_v7_1_area_share_ovrigt_anlagt_okant"
+"gc_prekvart_gnejs_share","Prekvartär geologi","Gnejs
+Indatamått: prekvart_bornholm_area_share_gnejs"
+"gc_prekvart_hammer_och_almindinge_share","Prekvartär geologi","Hammer och Almindinge
+Indatamått: prekvart_bornholm_area_share_hammer_och_almindinge"
+"gc_prekvart_gronne_skifre_share","Prekvartär geologi","Gröna skiffrar (Grønne Skifre)
+Indatamått: prekvart_bornholm_area_share_gronne_skifre"
+"gc_prekvart_vang_och_svaneke_gran_share","Prekvartär geologi","Vang- och Svanekegranit
+Indatamått: prekvart_bornholm_area_share_vang_och_svaneke_gran"
+"gc_prekvart_balka_sandsten_share","Prekvartär geologi","Balkasandsten
+Indatamått: prekvart_bornholm_area_share_balka_sandsten"
+"gc_prekvart_sandsten_gronsand_ovrigt_share","Prekvartär geologi","Sandsten och grönsand – övrigt
+Indatamått: prekvart_bornholm_area_share_sandsten_gronsand_ovrigt"
+"gc_prekvart_sedimentara_formationer_ovrigt_share","Prekvartär geologi","Sedimentära formationer – övrigt
+Indatamått: prekvart_bornholm_area_share_sedimentara_formationer_ovrigt"
+"gc_prekvart_skifrar_ovrigt_share","Prekvartär geologi","Skiffrar – övrigt
+Indatamått: prekvart_bornholm_area_share_skifrar_ovrigt"
+"gc_prekvart_kristallint_ovrigt_share","Prekvartär geologi","Kristallina bergarter – övrigt
+Indatamått: prekvart_bornholm_area_share_kristallint_ovrigt"
+"gc_prekvart_kalkbergarter_ovrigt_share","Prekvartär geologi","Kalkbergarter – övrigt
+Indatamått: prekvart_bornholm_area_share_kalkbergarter_ovrigt"
+"gc_prekvart_ovrigt_stratigrafiskt_share","Prekvartär geologi","Övrigt stratigrafiskt
+Indatamått: prekvart_bornholm_area_share_ovrigt_stratigrafiskt"
+"gc_protected_areas_share","Naturskydd","Fredade områden (Fredede områder)
+Indatamått: protected_areas_fredede_omrader_miljostyrelsen_st_mp_arealdata_fredede_omr_121224_diss_bor_32_area_share"
+"gc_natura_designated_land_share","Naturskydd","Natura 2000 – särskilt utpekade landområden
+Indatamått: natura_2000_specially_designated_land_areas_area_share"
+"gc_natura_bird_protection_share","Naturskydd","Natura 2000 – fågelskyddsområden
+Indatamått: natura_2000_bird_protection_area_share"
+"gc_natura_habitat_areas_share","Naturskydd","Natura 2000 – habitatområden
+Indatamått: natura_2000_habitat_areas_dai_area_share"
+"gc_natur_vildt_reservat_share","Naturskydd","Natur- och viltreservat
+Indatamått: natur_vildt_reservat_area_share"
+"gc_aviation_approach_share","Restriktioner","Flygets inflygningszoner
+Indatamått: aviation_approach_zones_tst_area_share"
+"gc_aviation_bird_collision_share","Restriktioner","Flygets fågelkollisionszoner
+Indatamått: aviation_bird_collision_zones_tst_area_share"
+"gc_military_areas_share","Restriktioner","Militära områden
+Indatamått: militara_omraden_plst_area_share"
+"gc_ferry_routes_length_m","Tillgänglighet","Färjerutter – längd
+Indatamått: ferry_routes_osm_route_ferry_extract101224_bol_ns_length_m"
+"gc_built_low_selection_share","Befolkning och bebyggelse","Särskilt urval av låg bebyggelse (Built low selection)
+Indatamått: built_low_gd_v_buildings_low_selection_by_bol_33_area_share"
+"gc_relief_flat_band","Terräng","Reliefklass: flack till svag
+Indatamått: dhm_relief_flat_band
+Bygger på: DHM-höjdkurvor → relief per hexagon."
+"gc_relief_rolling_band","Terräng","Reliefklass: böljande
+Indatamått: dhm_relief_rolling_band
+Bygger på: DHM-höjdkurvor → relief per hexagon."
+"gc_relief_strong_band","Terräng","Reliefklass: stark
+Indatamått: dhm_relief_strong_band
+Bygger på: DHM-höjdkurvor → relief per hexagon."
+"gc_highest_point_low_band","Terräng","Höjdklass: låg
+Indatamått: dhm_highest_point_low_band
+Bygger på: DHM-höjdkurvor → högsta höjdkurvenivå per hexagon."
+"gc_highest_point_mid_band","Terräng","Höjdklass: mellan
+Indatamått: dhm_highest_point_mid_band
+Bygger på: DHM-höjdkurvor → högsta höjdkurvenivå per hexagon."
+"gc_highest_point_high_band","Terräng","Höjdklass: hög
+Indatamått: dhm_highest_point_high_band
+Bygger på: DHM-höjdkurvor → högsta höjdkurvenivå per hexagon."
+"gc_contour_mean_elevation_m","Terräng","Medelhöjd från höjdkurvebaserad terrängmodell
+Indatamått: dem_contour_mean_elevation_m
+Bygger på: DHM-höjdkurvor → interpolerad terrängmodell."
+"gc_contour_mean_slope_deg","Terräng","Medellutning från höjdkurvebaserad terrängmodell
+Indatamått: dem_contour_mean_slope_deg
+Bygger på: DHM-höjdkurvor → interpolerad terrängmodell."
+"gc_contour_valley_depth_max_m","Terräng","Lokalt maximalt daldjup från höjdkurvebaserad terrängmodell
+Indatamått: dem_contour_valley_depth_max_m
+Bygger på: DHM-höjdkurvor → interpolerad terrängmodell."
+"gc_high_agri_plateau_proxy","Markanvändning","Proxy för högt belägen jordbruksplatå
+Indatamått: dem_high_agri_plateau_proxy
+Bygger på: Markblokke 2026 + medelhöjd och lutning från DHM-höjdkurvor."

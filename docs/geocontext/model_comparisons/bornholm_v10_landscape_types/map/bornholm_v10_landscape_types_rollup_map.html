@@ -586,11 +586,13 @@
       }
       if (activeView === "structure") {
         const meta = v9Meta[clusterKey(props)] || {};
-        return props.v9_cluster_fill || meta.color || "#999999";
+        return meta.color || "#999999";
       }
       const typeId = props.v10_type_id || props.landscape_type || "LT?";
       const meta = typeMeta[typeId] || {};
-      return props.landscape_type_fill || meta.color || "#999999";
+      // R9-R6 exports contain an older palette. Use the legend's class palette
+      // at every resolution; retain the existing class and geometry rollups.
+      return meta.color || "#999999";
     }
 
     function popupForFeature(feature) {

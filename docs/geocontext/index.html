@@ -429,6 +429,46 @@
           grid-template-columns: 1fr;
         }
       }
+
+      /* Prioritise the analysis; retain supporting tools as compact cards. */
+      .hero { grid-template-columns: minmax(0, 1.4fr) minmax(240px, .7fr); gap: 28px; }
+      h1 { max-width: 15ch; font-size: clamp(2.3rem, 4.5vw, 3.7rem); }
+      .hero-panel { min-height: 260px; border-radius: 24px; }
+      .hero-map-image { min-height: 260px; }
+      .featured-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .card-featured { min-height: 330px; padding: 26px; }
+      .card-featured h2 { font-size: clamp(1.7rem, 2.8vw, 2.25rem); max-width: none; }
+      .secondary-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .section-heading { margin: 32px 0 16px; font-size: 1.3rem; }
+      .card-compact { min-height: 0; padding: 18px; gap: 10px; border-radius: 16px; box-shadow: none; }
+      .card-compact h2 { font-size: 1.12rem; line-height: 1.25; }
+      .card-compact p { font-size: .88rem; line-height: 1.55; }
+      .card-compact .tag { font-size: .68rem; padding: 4px 8px; }
+      .card-compact .actions { gap: 7px; padding-top: 4px; }
+      .card-compact .button { font-size: .8rem; padding: 8px 10px; }
+      .archive-section { margin-top: 32px; padding: 20px; border: 1px solid var(--line); border-radius: 18px; background: rgba(255,255,255,.45); }
+      summary { cursor: pointer; }
+      .archive-section > summary { font-size: 1.2rem; font-weight: 700; color: var(--forest); }
+      .archive-count { margin-left: 10px; padding: 3px 8px; border-radius: 999px; background: var(--mist); font: .8rem system-ui, sans-serif; }
+      .archive-section > p { color: var(--muted); line-height: 1.6; }
+      .archive-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .technical-links { padding-top: 12px; border-top: 1px solid var(--line); font-size: .88rem; }
+      .technical-links summary { color: var(--forest); font-weight: 700; }
+      .technical-links p { margin: 10px 0; font-size: .85rem; }
+      .technical-links a { display: block; color: var(--forest); margin: 8px 0; line-height: 1.5; }
+      .button:focus-visible, summary:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
+      @media (max-width: 920px) {
+        .hero { grid-template-columns: 1fr; }
+        .hero-panel { display: none; }
+        .secondary-grid, .archive-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      }
+      @media (max-width: 600px) {
+        main { padding: 24px 14px 48px; }
+        .featured-grid, .secondary-grid, .archive-grid { grid-template-columns: 1fr; }
+        .card-featured { min-height: 0; padding: 22px; }
+        .archive-section { padding: 14px; }
+        .mini-note { margin-top: 16px; }
+      }
     </style>
   </head>
   <body>
@@ -455,8 +495,8 @@
             <span class="lang-en-text">This page gathers the Bornholm landscape structure analysis, potential apps, maps and earlier working versions. It is designed as a simple entry point: first understand the landscape structure, then use it in further analysis.</span>
           </p>
           <p class="mini-note">
-            <span class="lang-sv-text"><strong>Börja med den samlade rapporten</strong> eller gå direkt till stabila potentialapp v1 för Bornholm. V2 finns som Tröndelag-version.</span>
-            <span class="lang-en-text"><strong>Start with the integrated report</strong> or go straight to the stable potential app v1 for Bornholm. V2 is available as a Trøndelag version.</span>
+            <span class="lang-sv-text"><strong>Börja med landskapsanalysen eller v9-kartan.</strong> Faktorladdningarna visar hur GIS-underlagen hänger ihop med faktorerna.</span>
+            <span class="lang-en-text"><strong>Start with the landscape analysis or the v9 map.</strong> The factor loadings show how GIS inputs relate to the factors.</span>
           </p>
         </div>
 
@@ -465,8 +505,56 @@
         </div>
       </section>
 
-      <section class="featured-grid">
-        <article class="card card-featured card-scenario">
+      <section class="featured-grid" aria-label="Landskapsanalys och v9-karta">
+        <article class="card card-featured card-start">
+          <div class="tag soft">
+            <span class="lang-sv-text">Samlad rapport</span>
+            <span class="lang-en-text">Integrated report</span>
+          </div>
+          <h2>
+            <span class="lang-sv-text">Landskapsstruktur<wbr>analys</span>
+            <span class="lang-en-text">Landscape Structure Analysis</span>
+          </h2>
+          <p>
+            <span class="lang-sv-text">Samlad introduktion till Bornholms landskapstrukturanalys: metod, faktorer, v9-kluster, v10-landskapstyper och hur resultaten kan användas vidare.</span>
+            <span class="lang-en-text">Integrated introduction to the Bornholm landscape structure analysis: method, factors, v9 clusters, v10 landscape types and how the results can be used further.</span>
+          </p>
+          <div class="actions">
+            <a class="button primary" href="model_comparisons/bornholm_v10_landscape_types/report/bornholm_v10_landscape_types_report.html"><span class="lang-sv-text">Rapport</span><span class="lang-en-text">Report</span></a>
+            <a class="button secondary" href="model_comparisons/bornholm_v10_landscape_types/map/bornholm_v10_landscape_types_rollup_map.html"><span class="lang-sv-text">Kartan</span><span class="lang-en-text">Map</span></a>
+            <a class="button secondary js-lang-href" href="model_comparisons/bornholm_v10_landscape_types/report/bornholm_v10_landscape_types_report.md" data-href-sv="model_comparisons/bornholm_v10_landscape_types/report/bornholm_v10_landscape_types_report.md" data-href-en="model_comparisons/bornholm_v10_landscape_types/report/bornholm_v10_landscape_types_report_en.md" download><span class="lang-sv-text">Ladda ner rapport</span><span class="lang-en-text">Download report</span></a>
+            <a class="button secondary" href="model_comparisons/bornholm_factor_loadings.html"><span class="lang-sv-text">Faktorladdningar</span><span class="lang-en-text">Factor loadings</span></a>
+          </div>
+          <details class="technical-links">
+            <summary><span class="lang-sv-text">Tekniskt underlag v10</span><span class="lang-en-text">Technical material v10</span></summary>
+            <p><span class="lang-sv-text">Samma analys som rapporten ovan. V10 tolkar v9:s kluster till fem landskapstyper.</span><span class="lang-en-text">The same analysis as the report above. V10 interprets the v9 clusters as five landscape types.</span></p>
+            <a href="model_comparisons/bornholm_v10_landscape_types/model/bornholm_v10_landscape_types_crosswalk.csv"><span class="lang-sv-text">Översättning från kluster till landskapstyper (CSV)</span><span class="lang-en-text">Cluster-to-landscape-type crosswalk (CSV)</span></a>
+            <a href="model_comparisons/bornholm_v10_landscape_types/model/bornholm_v10_landscape_types_factor_loadings_from_v1.csv" download><span class="lang-sv-text">Originaldata för faktorladdningar (CSV)</span><span class="lang-en-text">Original factor loadings (CSV)</span></a>
+          </details>
+        </article>
+
+        <article class="card card-featured card-version">
+          <div class="tag primary">Demo v9</div>
+          <h2>
+            <span class="lang-sv-text">Bornholm v9: K=8 lagerkarta</span>
+            <span class="lang-en-text">Bornholm v9: K=8 layer map</span>
+          </h2>
+          <p>
+            <span class="lang-sv-text">Interaktiv demo med fast K=8, alla kluster, individuella klustertoggles, faktorlager och opacitetskontroll. Bygger på v3/v1-spåret.</span>
+            <span class="lang-en-text">Interactive demo with fixed K=8, all clusters, individual cluster toggles, factor layers and opacity control. Built from the v3/v1 track.</span>
+          </p>
+          <div class="actions">
+            <a class="button primary" href="model_comparisons/bornholm_v9_k8_interactive_layers/report/bornholm_v9_k8_interactive_layers_report.html"><span class="lang-sv-text">Rapport</span><span class="lang-en-text">Report</span></a>
+            <a class="button secondary" href="model_comparisons/bornholm_v9_k8_interactive_layers/map/bornholm_v9_k8_interactive_layers_map.html"><span class="lang-sv-text">Kartan</span><span class="lang-en-text">Map</span></a>
+            <a class="button secondary" href="model_comparisons/bornholm_v9_k8_interactive_layers/report/bornholm_v9_k8_interactive_layers_report.md" download><span class="lang-sv-text">Ladda ner rapport</span><span class="lang-en-text">Download report</span></a>
+            <a class="button secondary" href="model_comparisons/bornholm_factor_loadings.html"><span class="lang-sv-text">Faktorladdningar</span><span class="lang-en-text">Factor loadings</span></a>
+          </div>
+        </article>
+      </section>
+
+      <h2 class="section-heading"><span class="lang-sv-text">Projekt och potential</span><span class="lang-en-text">Projects and potential</span></h2>
+      <section class="cards secondary-grid" aria-label="Projekt och potential">
+        <article class="card card-compact card-scenario">
           <div class="tag primary">Potential v1</div>
           <h2>
             <span class="lang-sv-text">Sol- och vindpotential v1</span>
@@ -481,7 +569,7 @@
           </div>
         </article>
 
-        <article class="card card-featured card-version">
+        <article class="card card-compact card-version">
           <div class="tag primary">Potential v2</div>
           <h2>
             <span class="lang-sv-text">Sol- och vindpotential v2</span>
@@ -496,7 +584,7 @@
           </div>
         </article>
 
-        <article class="card card-featured card-start">
+        <article class="card card-compact card-start">
           <div class="tag soft">
             <span class="lang-sv-text">Projektportal</span>
             <span class="lang-en-text">Project portal</span>
@@ -513,31 +601,8 @@
             <a class="button primary" href="speedlocal-landskapspotential.html"><span class="lang-sv-text">Öppna sidan</span><span class="lang-en-text">Open page</span></a>
           </div>
         </article>
-      </section>
 
-      <section class="cards secondary-grid">
-        <article class="card card-start">
-          <div class="tag soft">
-            <span class="lang-sv-text">Samlad rapport</span>
-            <span class="lang-en-text">Integrated report</span>
-          </div>
-          <h2>
-            <span class="lang-sv-text">Landskapstrukturanalys</span>
-            <span class="lang-en-text">Landscape Structure Analysis</span>
-          </h2>
-          <p>
-            <span class="lang-sv-text">Samlad introduktion till Bornholms landskapstrukturanalys: metod, faktorer, v9-kluster, v10-landskapstyper och hur resultaten kan användas vidare.</span>
-            <span class="lang-en-text">Integrated introduction to the Bornholm landscape structure analysis: method, factors, v9 clusters, v10 landscape types and how the results can be used further.</span>
-          </p>
-          <div class="actions">
-            <a class="button primary" href="model_comparisons/bornholm_v10_landscape_types/report/bornholm_v10_landscape_types_report.html"><span class="lang-sv-text">Rapport</span><span class="lang-en-text">Report</span></a>
-            <a class="button secondary" href="model_comparisons/bornholm_v10_landscape_types/map/bornholm_v10_landscape_types_rollup_map.html"><span class="lang-sv-text">Kartan</span><span class="lang-en-text">Map</span></a>
-            <a class="button secondary js-lang-href" href="model_comparisons/bornholm_v10_landscape_types/report/bornholm_v10_landscape_types_report.md" data-href-sv="model_comparisons/bornholm_v10_landscape_types/report/bornholm_v10_landscape_types_report.md" data-href-en="model_comparisons/bornholm_v10_landscape_types/report/bornholm_v10_landscape_types_report_en.md" download><span class="lang-sv-text">Ladda ner rapport</span><span class="lang-en-text">Download report</span></a>
-            <a class="button secondary" href="model_comparisons/bornholm_v10_landscape_types/model/bornholm_v10_landscape_types_factor_loadings_from_v1.csv"><span class="lang-sv-text">Faktorladdningar</span><span class="lang-en-text">Factor loadings</span></a>
-          </div>
-        </article>
-
-        <article class="card card-potential">
+        <article class="card card-compact card-potential">
           <div class="tag alt">
             <span class="lang-sv-text">Metodsida</span>
             <span class="lang-en-text">Method page</span>
@@ -554,8 +619,81 @@
             <a class="button primary" href="sol-vindpotential/"><span class="lang-sv-text">Öppna sidan</span><span class="lang-en-text">Open page</span></a>
           </div>
         </article>
+      </section>
 
-        <article class="card card-start">
+      <details class="archive-section">
+        <summary><span class="lang-sv-text">Äldre versioner och övriga verktyg</span><span class="lang-en-text">Earlier versions and other tools</span><span class="archive-count">5</span></summary>
+        <p><span class="lang-sv-text">Rapporter, kartor och tidigare verktyg finns kvar som referensmaterial.</span><span class="lang-en-text">Reports, maps and earlier tools remain available as reference material.</span></p>
+        <section class="cards archive-grid" aria-label="Äldre versioner och verktyg">
+        <article class="card card-compact card-archive card-soon">
+          <div class="tag soft">
+            <span class="lang-sv-text">Snart</span>
+            <span class="lang-en-text">Soon</span>
+          </div>
+          <h2>
+            <span class="lang-sv-text">Solpotentialapp</span>
+            <span class="lang-en-text">Solar potential app</span>
+          </h2>
+          <p>
+            <span class="lang-sv-text">En separat app för solpotential kommer när lagret och arbetsflödet är färdigt.</span>
+            <span class="lang-en-text">A separate solar-potential app will be added when the layer and workflow are ready.</span>
+          </p>
+          <div class="actions">
+            <a class="button secondary disabled" href="#" aria-disabled="true"><span class="lang-sv-text">Kommer snart</span><span class="lang-en-text">Coming soon</span></a>
+          </div>
+        </article>
+
+        <article class="card card-compact card-archive card-scenario">
+          <div class="tag primary">
+            <span class="lang-sv-text">Avpublicerad</span>
+            <span class="lang-en-text">Unpublished</span>
+          </div>
+          <h2>
+            <span class="lang-sv-text">Scenarioapp för sol och vind</span>
+            <span class="lang-en-text">Solar and wind scenario app</span>
+          </h2>
+          <p>
+            <span class="lang-sv-text">Den tidigare förenklade scenarioappen för Bornholm är avpublicerad. Arkivposten finns kvar som dokumentation.</span>
+            <span class="lang-en-text">The earlier simplified Bornholm scenario app has been unpublished. This archive entry remains as documentation.</span>
+          </p>
+        </article>
+
+        <article class="card card-compact card-archive card-wind">
+          <div class="tag alt">
+            <span class="lang-sv-text">Vind</span>
+            <span class="lang-en-text">Wind</span>
+          </div>
+          <h2>
+            <span class="lang-sv-text">Vindpotential</span>
+            <span class="lang-en-text">Wind potential</span>
+          </h2>
+          <p>
+            <span class="lang-sv-text">Potentialramverket för vindkraft, med rapport, karta och app som bygger vidare på landskapsanalysen som underlag.</span>
+            <span class="lang-en-text">Wind-potential framework with report, map and app, using the landscape analysis as contextual input.</span>
+          </p>
+          <div class="actions">
+            <a class="button primary" href="acceptance_framework/bornholm_vindacceptans_stage1_v4_res9.html"><span class="lang-sv-text">Rapport</span><span class="lang-en-text">Report</span></a>
+            <a class="button secondary" href="acceptance_framework/maps/bornholm_vindacceptans_stage1_v4_res9_map.html"><span class="lang-sv-text">Karta</span><span class="lang-en-text">Map</span></a>
+          </div>
+        </article>
+
+        <article class="card card-compact card-archive card-version">
+          <div class="tag primary">
+            <span class="lang-sv-text">Testversion</span>
+            <span class="lang-en-text">Test version</span>
+          </div>
+          <h2>Bornholm v1: H3 res10</h2>
+          <p>
+            <span class="lang-sv-text">Granskningsversionen som prövade om nordvästra sprickdalslandskapet blev tydligare med mindre hexagoner.</span>
+            <span class="lang-en-text">Review version testing whether the northwestern fracture-valley landscape became clearer with smaller hexagons.</span>
+          </p>
+          <div class="actions">
+            <a class="button primary" href="model_comparisons/bornholm_v1_higher_h3_local_sprickdal/report/bornholm_v1_higher_h3_local_sprickdal_report.html"><span class="lang-sv-text">Rapport</span><span class="lang-en-text">Report</span></a>
+            <a class="button secondary" href="model_comparisons/bornholm_v1_higher_h3_local_sprickdal/map/bornholm_v1_higher_h3_local_sprickdal_combined_map.html"><span class="lang-sv-text">Kartan</span><span class="lang-en-text">Map</span></a>
+          </div>
+        </article>
+
+        <article class="card card-compact card-archive card-start">
           <div class="tag soft">
             <span class="lang-sv-text">Tidigare huvudrapport</span>
             <span class="lang-en-text">Previous main report</span>
@@ -575,114 +713,8 @@
             <a class="button secondary" href="published_report/tables/landskapsanalys_v4_factor_loadings_readable.xlsx"><span class="lang-sv-text">Faktorladdningar</span><span class="lang-en-text">Factor loadings</span></a>
           </div>
         </article>
-
-        <article class="card card-version">
-          <div class="tag primary">Demo v9</div>
-          <h2>
-            <span class="lang-sv-text">Bornholm v9: K=8 lagerkarta</span>
-            <span class="lang-en-text">Bornholm v9: K=8 layer map</span>
-          </h2>
-          <p>
-            <span class="lang-sv-text">Interaktiv demo med fast K=8, alla kluster, individuella klustertoggles, faktorlager och opacitetskontroll. Bygger på v3/v1-spåret.</span>
-            <span class="lang-en-text">Interactive demo with fixed K=8, all clusters, individual cluster toggles, factor layers and opacity control. Built from the v3/v1 track.</span>
-          </p>
-          <div class="actions">
-            <a class="button primary" href="model_comparisons/bornholm_v9_k8_interactive_layers/report/bornholm_v9_k8_interactive_layers_report.html"><span class="lang-sv-text">Rapport</span><span class="lang-en-text">Report</span></a>
-            <a class="button secondary" href="model_comparisons/bornholm_v9_k8_interactive_layers/map/bornholm_v9_k8_interactive_layers_map.html"><span class="lang-sv-text">Kartan</span><span class="lang-en-text">Map</span></a>
-            <a class="button secondary" href="model_comparisons/bornholm_v9_k8_interactive_layers/report/bornholm_v9_k8_interactive_layers_report.md" download><span class="lang-sv-text">Ladda ner rapport</span><span class="lang-en-text">Download report</span></a>
-            <a class="button secondary" href="model_comparisons/bornholm_v9_k8_interactive_layers/model/bornholm_v9_k8_interactive_layers_factor_loadings_from_v1.csv"><span class="lang-sv-text">Faktorladdningar</span><span class="lang-en-text">Factor loadings</span></a>
-          </div>
-        </article>
-
-        <article class="card card-wind">
-          <div class="tag alt">
-            <span class="lang-sv-text">Vind</span>
-            <span class="lang-en-text">Wind</span>
-          </div>
-          <h2>
-            <span class="lang-sv-text">Vindpotential</span>
-            <span class="lang-en-text">Wind potential</span>
-          </h2>
-          <p>
-            <span class="lang-sv-text">Potentialramverket för vindkraft, med rapport, karta och app som bygger vidare på landskapsanalysen som underlag.</span>
-            <span class="lang-en-text">Wind-potential framework with report, map and app, using the landscape analysis as contextual input.</span>
-          </p>
-          <div class="actions">
-            <a class="button primary" href="acceptance_framework/bornholm_vindacceptans_stage1_v4_res9.html"><span class="lang-sv-text">Rapport</span><span class="lang-en-text">Report</span></a>
-            <a class="button secondary" href="acceptance_framework/maps/bornholm_vindacceptans_stage1_v4_res9_map.html"><span class="lang-sv-text">Karta</span><span class="lang-en-text">Map</span></a>
-          </div>
-        </article>
-      </section>
-
-      <section class="cards archive-grid">
-        <article class="card card-archive card-version">
-          <div class="tag primary">
-            <span class="lang-sv-text">Testversion</span>
-            <span class="lang-en-text">Test version</span>
-          </div>
-          <h2>Bornholm v1: H3 res10</h2>
-          <p>
-            <span class="lang-sv-text">Granskningsversionen som prövade om nordvästra sprickdalslandskapet blev tydligare med mindre hexagoner.</span>
-            <span class="lang-en-text">Review version testing whether the northwestern fracture-valley landscape became clearer with smaller hexagons.</span>
-          </p>
-          <div class="actions">
-            <a class="button primary" href="model_comparisons/bornholm_v1_higher_h3_local_sprickdal/report/bornholm_v1_higher_h3_local_sprickdal_report.html"><span class="lang-sv-text">Rapport</span><span class="lang-en-text">Report</span></a>
-            <a class="button secondary" href="model_comparisons/bornholm_v1_higher_h3_local_sprickdal/map/bornholm_v1_higher_h3_local_sprickdal_combined_map.html"><span class="lang-sv-text">Kartan</span><span class="lang-en-text">Map</span></a>
-          </div>
-        </article>
-
-        <article class="card card-archive card-version">
-          <div class="tag primary">
-            <span class="lang-sv-text">Teknisk v10</span>
-            <span class="lang-en-text">Technical v10</span>
-          </div>
-          <h2>
-            <span class="lang-sv-text">Bornholm v10: landskapstyper</span>
-            <span class="lang-en-text">Bornholm v10: landscape types</span>
-          </h2>
-          <p>
-            <span class="lang-sv-text">Versionskortet för v10 med crosswalk, källor och faktorladdningar. Samma analys ligger nu som samlad rapport överst.</span>
-            <span class="lang-en-text">Version card for v10 with crosswalk, sources and factor loadings. The same analysis is now presented as the integrated report above.</span>
-          </p>
-          <div class="actions">
-            <a class="button primary" href="model_comparisons/bornholm_v10_landscape_types/report/bornholm_v10_landscape_types_report.html"><span class="lang-sv-text">Rapport</span><span class="lang-en-text">Report</span></a>
-            <a class="button secondary" href="model_comparisons/bornholm_v10_landscape_types/map/bornholm_v10_landscape_types_rollup_map.html"><span class="lang-sv-text">Kartan</span><span class="lang-en-text">Map</span></a>
-          </div>
-        </article>
-
-        <article class="card card-archive card-scenario">
-          <div class="tag primary">
-            <span class="lang-sv-text">Avpublicerad</span>
-            <span class="lang-en-text">Unpublished</span>
-          </div>
-          <h2>
-            <span class="lang-sv-text">Scenarioapp för sol och vind</span>
-            <span class="lang-en-text">Solar and wind scenario app</span>
-          </h2>
-          <p>
-            <span class="lang-sv-text">Den tidigare förenklade scenarioappen för Bornholm är avpublicerad. Arkivposten finns kvar som dokumentation.</span>
-            <span class="lang-en-text">The earlier simplified Bornholm scenario app has been unpublished. This archive entry remains as documentation.</span>
-          </p>
-        </article>
-
-        <article class="card card-archive card-soon">
-          <div class="tag soft">
-            <span class="lang-sv-text">Snart</span>
-            <span class="lang-en-text">Soon</span>
-          </div>
-          <h2>
-            <span class="lang-sv-text">Solpotentialapp</span>
-            <span class="lang-en-text">Solar potential app</span>
-          </h2>
-          <p>
-            <span class="lang-sv-text">En separat app för solpotential kommer när lagret och arbetsflödet är färdigt.</span>
-            <span class="lang-en-text">A separate solar-potential app will be added when the layer and workflow are ready.</span>
-          </p>
-          <div class="actions">
-            <a class="button secondary disabled" href="#" aria-disabled="true"><span class="lang-sv-text">Kommer snart</span><span class="lang-en-text">Coming soon</span></a>
-          </div>
-        </article>
-      </section>
+        </section>
+      </details>
 
       <script>
         let currentLang = localStorage.getItem("landskapsanalys-lang") === "en" ? "en" : "sv";
